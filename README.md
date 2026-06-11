@@ -33,6 +33,7 @@ py -3.11 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
 pip install -r backend/requirements.txt
+python backend/verify_env.py            # sanity check (expects "CUDA available: False" on laptop)
 uvicorn app.main:app --app-dir backend --reload
 
 # Frontend
