@@ -1,0 +1,22 @@
+{
+  "app": { "title": "RL Přehled" },
+  "status": {
+    "connecting": "Připojování…",
+    "online": "Backend online",
+    "offline": "Backend offline"
+  },
+  "topbar": {
+    "chips": {
+      "gen":  "Gen",
+      "iter": "Iter",
+      "best": "Nejlepší",
+      "pop":  "Pop"
+    }
+  },
+  "sidebar":   { "title": "Parametry" },
+  "envpreview":{ "title": "Prostředí",    "placeholder": "Náhled tréninku se zobrazí zde" },
+  "chart":     { "title": "Graf odměn",   "placeholder": "Živý graf se zobrazí zde" },
+  "leaderboard":{ "title": "Žebříček",    "placeholder": "Nejlepší běhy se zobrazí zde" },
+  "evolution": { "title": "Evoluce",      "placeholder": "Data evoluce se zobrazí zde" },
+  "saveload":  { "title": "Uložit / Načíst","placeholder": "Sloty pro checkpointy se zobrazí zde" }
+}

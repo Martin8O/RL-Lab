@@ -1,0 +1,22 @@
+{
+  "app": { "title": "RL Dashboard" },
+  "status": {
+    "connecting": "Connecting…",
+    "online": "Backend online",
+    "offline": "Backend offline"
+  },
+  "topbar": {
+    "chips": {
+      "gen":  "Gen",
+      "iter": "Iter",
+      "best": "Best",
+      "pop":  "Pop"
+    }
+  },
+  "sidebar":   { "title": "Parameters" },
+  "envpreview":{ "title": "Environment",   "placeholder": "Training preview will appear here" },
+  "chart":     { "title": "Reward Chart",  "placeholder": "Live reward chart will appear here" },
+  "leaderboard":{ "title": "Leaderboard",  "placeholder": "Top runs will appear here" },
+  "evolution": { "title": "Evolution Stats","placeholder": "Evolution data will appear here" },
+  "saveload":  { "title": "Save / Load",   "placeholder": "Checkpoint slots will appear here" }
+}

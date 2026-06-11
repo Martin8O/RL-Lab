@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>RL Dashboard</title>
+    <!-- Apply saved theme before React hydrates to prevent flash -->
+    <script>
+      try {
+        var s = JSON.parse(localStorage.getItem('rl-app-store') || '{}');
+        document.documentElement.dataset.theme = (s.state && s.state.theme) || 'dark';
+      } catch(e) {
+        document.documentElement.dataset.theme = 'dark';
+      }
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
