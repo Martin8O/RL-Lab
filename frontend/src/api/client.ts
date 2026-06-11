@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { useAppStore } from '../store/useAppStore'
+import type { EnvSpec } from './types'
 
 const API_BASE = (import.meta.env.VITE_API_BASE as string | undefined) ?? ''
 
@@ -67,4 +68,16 @@ export function createWsClient(
 
   connect()
   return { stop }
+}
+
+export async function fetchEnvs(): Promise<EnvSpec[]> {
+  const res = await fetch(`${API_BASE}/api/envs`)
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  return res.json() as Promise<EnvSpec[]>
+}
+
+export async function fetchEnv(id: string): Promise<EnvSpec> {
+  const res = await fetch(`${API_BASE}/api/envs/${encodeURIComponent(id)}`)
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  return res.json() as Promise<EnvSpec>
 }

@@ -13,7 +13,7 @@
       "pop":  "Pop"
     }
   },
-  "sidebar":   { "title": "Parametry" },
+  "sidebar":   { "title": "Parametry", "game_selector": "Hra / Prostředí", "loading_envs": "Načítání…" },
   "envpreview":{ "title": "Prostředí",    "placeholder": "Náhled tréninku se zobrazí zde" },
   "chart":     { "title": "Graf odměn",   "placeholder": "Živý graf se zobrazí zde" },
   "leaderboard":{ "title": "Žebříček",    "placeholder": "Nejlepší běhy se zobrazí zde" },

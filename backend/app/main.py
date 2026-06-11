@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.envs import router as envs_router
 from app.core.config import settings
 from app.core.logging import configure_logging, get_logger
 from app.services.connection_manager import manager
@@ -28,6 +29,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(envs_router)
 
 
 # ---------------------------------------------------------------------------

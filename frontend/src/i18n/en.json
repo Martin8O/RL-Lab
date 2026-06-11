@@ -13,7 +13,7 @@
       "pop":  "Pop"
     }
   },
-  "sidebar":   { "title": "Parameters" },
+  "sidebar":   { "title": "Parameters", "game_selector": "Game / Environment", "loading_envs": "Loading…" },
   "envpreview":{ "title": "Environment",   "placeholder": "Training preview will appear here" },
   "chart":     { "title": "Reward Chart",  "placeholder": "Live reward chart will appear here" },
   "leaderboard":{ "title": "Leaderboard",  "placeholder": "Top runs will appear here" },
