@@ -1,0 +1,48 @@
+# ──────────────────────────────────────────────────────────────
+#  Claude's private working area — NEVER sync to GitHub
+# ──────────────────────────────────────────────────────────────
+Local/
+
+# ── Python ──────────────────────────────────────────────────
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# ── Node / frontend ─────────────────────────────────────────
+node_modules/
+dist/
+build/
+.vite/
+*.local
+
+# ── ML artifacts (models, checkpoints, logs, videos) ────────
+*.zip
+*.npy
+*.pt
+*.pth
+*.ckpt
+models/
+checkpoints/
+runs/
+logs/
+tensorboard/
+videos/
+data/
+
+# ── Environment / secrets ───────────────────────────────────
+.env
+.env.*
+!.env.example
+
+# ── Editor / OS ─────────────────────────────────────────────
+.claude/settings.local.json
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
