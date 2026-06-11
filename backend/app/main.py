@@ -1,3 +1,4 @@
+import asyncio
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
@@ -5,9 +6,11 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.envs import router as envs_router
+from app.api.training import router as training_router
 from app.core.config import settings
 from app.core.logging import configure_logging, get_logger
 from app.services.connection_manager import manager
+from app.services.training_manager import training_manager
 
 configure_logging()
 logger = get_logger(__name__)
@@ -16,6 +19,8 @@ logger = get_logger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     logger.info("Backend starting (version %s)", settings.app_version)
+    # Let the trainer thread marshal metric/status broadcasts onto this loop.
+    training_manager.bind_loop(asyncio.get_running_loop())
     yield
     logger.info("Backend shutting down")
 
@@ -31,6 +36,7 @@ app.add_middleware(
 )
 
 app.include_router(envs_router)
+app.include_router(training_router)
 
 
 # ---------------------------------------------------------------------------
