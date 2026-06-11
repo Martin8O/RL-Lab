@@ -13,10 +13,46 @@
       "pop":  "Pop"
     }
   },
-  "sidebar":   { "title": "Parametry", "game_selector": "Hra / Prostředí", "loading_envs": "Načítání…" },
-  "envpreview":{ "title": "Prostředí",    "placeholder": "Náhled tréninku se zobrazí zde" },
-  "chart":     { "title": "Graf odměn",   "placeholder": "Živý graf se zobrazí zde" },
-  "leaderboard":{ "title": "Žebříček",    "placeholder": "Nejlepší běhy se zobrazí zde" },
-  "evolution": { "title": "Evoluce",      "placeholder": "Data evoluce se zobrazí zde" },
-  "saveload":  { "title": "Uložit / Načíst","placeholder": "Sloty pro checkpointy se zobrazí zde" }
+  "sidebar": {
+    "title": "Parametry",
+    "game_selector": "Hra / Prostředí",
+    "loading_envs": "Načítání…",
+    "params_title": "PPO Hyperparametry",
+    "learning_rate": "Rychlost učení",
+    "gamma": "Diskont γ",
+    "clip_range": "Ořez ε",
+    "ent_coef": "Entropie",
+    "n_hidden_layers": "Skryté vrstvy",
+    "neurons_per_layer": "Neurony / vrstva",
+    "activation": "Aktivace",
+    "seed": "Semeno",
+    "total_steps": "Celkem kroků",
+    "run": "Spustit",
+    "stop": "Zastavit",
+    "pause": "Pozastavit",
+    "resume": "Pokračovat",
+    "stopping": "Zastavuji…"
+  },
+  "stats": {
+    "episode": "Ep",
+    "score": "Skóre",
+    "steps": "Kroky",
+    "elapsed": "Čas",
+    "no_data": "Spusťte trénink pro živé statistiky"
+  },
+  "envpreview":  { "title": "Prostředí",      "placeholder": "Náhled tréninku se zobrazí zde" },
+  "chart": {
+    "title": "Graf odměn",
+    "placeholder": "Spusťte trénink pro živý graf",
+    "tab_reward": "Odměna",
+    "tab_loss": "Ztráta",
+    "tab_fitness": "Fitness",
+    "ema_alpha": "Vyhlazení",
+    "window": "Okno",
+    "window_all": "Vše",
+    "fitness_stub": "Fitness je dostupná ve fázi C"
+  },
+  "leaderboard": { "title": "Žebříček",       "placeholder": "Nejlepší běhy se zobrazí zde" },
+  "evolution":   { "title": "Evoluce",         "placeholder": "Data evoluce se zobrazí zde" },
+  "saveload":    { "title": "Uložit / Načíst", "placeholder": "Sloty pro checkpointy se zobrazí zde" }
 }

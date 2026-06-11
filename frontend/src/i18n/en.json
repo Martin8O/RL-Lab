@@ -13,10 +13,46 @@
       "pop":  "Pop"
     }
   },
-  "sidebar":   { "title": "Parameters", "game_selector": "Game / Environment", "loading_envs": "Loading…" },
-  "envpreview":{ "title": "Environment",   "placeholder": "Training preview will appear here" },
-  "chart":     { "title": "Reward Chart",  "placeholder": "Live reward chart will appear here" },
-  "leaderboard":{ "title": "Leaderboard",  "placeholder": "Top runs will appear here" },
-  "evolution": { "title": "Evolution Stats","placeholder": "Evolution data will appear here" },
-  "saveload":  { "title": "Save / Load",   "placeholder": "Checkpoint slots will appear here" }
+  "sidebar": {
+    "title": "Parameters",
+    "game_selector": "Game / Environment",
+    "loading_envs": "Loading…",
+    "params_title": "PPO Hyperparameters",
+    "learning_rate": "Learning Rate",
+    "gamma": "Discount γ",
+    "clip_range": "Clip ε",
+    "ent_coef": "Entropy",
+    "n_hidden_layers": "Hidden Layers",
+    "neurons_per_layer": "Neurons / Layer",
+    "activation": "Activation",
+    "seed": "Seed",
+    "total_steps": "Total Steps",
+    "run": "Run",
+    "stop": "Stop",
+    "pause": "Pause",
+    "resume": "Resume",
+    "stopping": "Stopping…"
+  },
+  "stats": {
+    "episode": "Ep",
+    "score": "Score",
+    "steps": "Steps",
+    "elapsed": "Time",
+    "no_data": "Start training to see live stats"
+  },
+  "envpreview":  { "title": "Environment",    "placeholder": "Training preview will appear here" },
+  "chart": {
+    "title": "Reward Chart",
+    "placeholder": "Start training to see the live chart",
+    "tab_reward": "Reward",
+    "tab_loss": "Loss",
+    "tab_fitness": "Fitness",
+    "ema_alpha": "Smooth",
+    "window": "Window",
+    "window_all": "All",
+    "fitness_stub": "Fitness tracking available in Phase C"
+  },
+  "leaderboard": { "title": "Leaderboard",   "placeholder": "Top runs will appear here" },
+  "evolution":   { "title": "Evolution Stats","placeholder": "Evolution data will appear here" },
+  "saveload":    { "title": "Save / Load",    "placeholder": "Checkpoint slots will appear here" }
 }

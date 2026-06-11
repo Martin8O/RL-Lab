@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAppStore } from './store/useAppStore'
-import { useHealthPoll, fetchEnvs } from './api/client'
+import { useHealthPoll, useTrainingWs, fetchEnvs } from './api/client'
 import TopBar from './components/TopBar'
 import Sidebar from './components/Sidebar'
 import EnvPreview from './components/EnvPreview'
@@ -33,6 +33,7 @@ export default function App() {
   }, [backendStatus, setEnvs, setSelectedEnvId])
 
   useHealthPoll()
+  useTrainingWs()
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>

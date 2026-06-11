@@ -1,8 +1,10 @@
 import { useEffect } from 'react'
 import { useAppStore } from '../store/useAppStore'
-import type { EnvSpec } from './types'
+import type { EnvSpec, TrainConfig, TrainStatus, TrainWsFrame } from './types'
 
 const API_BASE = (import.meta.env.VITE_API_BASE as string | undefined) ?? ''
+
+// ── Health ──────────────────────────────────────────────────────────────────
 
 export async function fetchHealth(): Promise<{ status: string; version: string }> {
   const res = await fetch(`${API_BASE}/api/health`)
@@ -33,6 +35,8 @@ export function useHealthPoll(intervalMs = 5000): void {
     }
   }, [setBackendStatus, intervalMs])
 }
+
+// ── WebSocket ───────────────────────────────────────────────────────────────
 
 const WS_BASE =
   (import.meta.env.VITE_WS_BASE as string | undefined) ??
@@ -70,6 +74,35 @@ export function createWsClient(
   return { stop }
 }
 
+/** React hook: opens the /ws connection and dispatches training frames to the store. */
+export function useTrainingWs(): void {
+  useEffect(() => {
+    const { stop } = createWsClient(
+      (data) => {
+        const frame = data as TrainWsFrame
+        if (frame.type === 'metrics') {
+          useAppStore.getState().addMetrics(frame)
+        } else if (frame.type === 'status') {
+          const prev = useAppStore.getState().trainState
+          useAppStore.getState().setTrainState(frame.state)
+          // Clear chart when a brand-new run starts (timesteps reset to 0)
+          if (
+            frame.state === 'running' &&
+            frame.timesteps === 0 &&
+            (prev === 'idle' || prev === 'stopped' || prev === 'finished' || prev === 'error')
+          ) {
+            useAppStore.getState().clearMetrics()
+          }
+        }
+      },
+      () => {},
+    )
+    return stop
+  }, [])
+}
+
+// ── Env catalog ─────────────────────────────────────────────────────────────
+
 export async function fetchEnvs(): Promise<EnvSpec[]> {
   const res = await fetch(`${API_BASE}/api/envs`)
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
@@ -81,3 +114,23 @@ export async function fetchEnv(id: string): Promise<EnvSpec> {
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
   return res.json() as Promise<EnvSpec>
 }
+
+// ── Training control ────────────────────────────────────────────────────────
+
+async function trainPost(path: string, body?: unknown): Promise<TrainStatus> {
+  const res = await fetch(`${API_BASE}/api/train/${path}`, {
+    method: 'POST',
+    headers: body !== undefined ? { 'Content-Type': 'application/json' } : undefined,
+    body:    body !== undefined ? JSON.stringify(body) : undefined,
+  })
+  if (!res.ok) {
+    const detail = ((await res.json().catch(() => ({}))) as { detail?: string }).detail
+    throw new Error(detail ?? `HTTP ${res.status}`)
+  }
+  return res.json() as Promise<TrainStatus>
+}
+
+export const startTraining  = (config: TrainConfig) => trainPost('start', config)
+export const stopTraining   = ()                     => trainPost('stop')
+export const pauseTraining  = ()                     => trainPost('pause')
+export const resumeTraining = ()                     => trainPost('resume')

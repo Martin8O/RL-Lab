@@ -41,8 +41,16 @@ function Chip({ label, value }: { label: string; value: string }) {
 }
 
 export default function TopBar() {
-  const { t } = useTranslation()
-  const { locale, theme, setLocale, setTheme } = useAppStore()
+  const { t }  = useTranslation()
+  const locale  = useAppStore((s) => s.locale)
+  const theme   = useAppStore((s) => s.theme)
+  const setLocale = useAppStore((s) => s.setLocale)
+  const setTheme  = useAppStore((s) => s.setTheme)
+
+  const metricsHistory = useAppStore((s) => s.metricsHistory)
+  const bestReward     = useAppStore((s) => s.bestReward)
+
+  const lastIter = metricsHistory.at(-1)?.iteration
 
   return (
     <header style={{
@@ -50,27 +58,21 @@ export default function TopBar() {
       display: 'flex', alignItems: 'center', gap: 12, padding: '0 16px',
       background: 'var(--surface)', borderBottom: '1px solid var(--border)',
     }}>
-      {/* Title */}
       <span style={{ fontWeight: 600, fontSize: 15, color: 'var(--text-h)', letterSpacing: '-0.2px', marginRight: 4 }}>
         {t('app.title')}
       </span>
 
-      {/* Status dot */}
       <StatusDot />
 
-      {/* Spacer */}
       <div style={{ flex: 1 }} />
 
-      {/* Metric chips */}
       <Chip label={t('topbar.chips.gen')}  value="—" />
-      <Chip label={t('topbar.chips.iter')} value="—" />
-      <Chip label={t('topbar.chips.best')} value="—" />
+      <Chip label={t('topbar.chips.iter')} value={lastIter !== undefined ? String(lastIter) : '—'} />
+      <Chip label={t('topbar.chips.best')} value={bestReward !== null ? bestReward.toFixed(1) : '—'} />
       <Chip label={t('topbar.chips.pop')}  value="—" />
 
-      {/* Divider */}
       <div style={{ width: 1, height: 20, background: 'var(--border)', margin: '0 4px' }} />
 
-      {/* Language toggle */}
       <button
         onClick={() => setLocale(locale === 'en' ? 'cz' : 'en')}
         style={{
@@ -83,7 +85,6 @@ export default function TopBar() {
         {locale === 'en' ? 'CZ' : 'EN'}
       </button>
 
-      {/* Theme toggle */}
       <button
         onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
         style={{
