@@ -113,6 +113,10 @@ function syncStoreFromStatus(status: TrainStatus): void {
     st.setHyperparams(status.config.hyperparams)
     if (status.config.evolution) st.setEvolutionParams(status.config.evolution)
   }
+  // D2.5: repopulate the evolution panels (leaderboard / stats / Fitness) from the retained
+  // snapshot so a reload mid-run — or a connect after a finished run — shows the latest
+  // generation immediately instead of empty panels. PPO uses last_metrics (stats row) instead.
+  if (status.last_evolution) st.seedEvolution(status.last_evolution)
 }
 
 /** React hook: opens the /ws connection and dispatches incoming frames. */

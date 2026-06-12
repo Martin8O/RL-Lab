@@ -90,7 +90,7 @@ def test_status_endpoint_shape() -> None:
     body = client.get("/api/train/status").json()
     for key in (
         "type", "state", "env_id", "algo", "seed",
-        "timesteps", "total_timesteps", "config", "last_metrics", "error",
+        "timesteps", "total_timesteps", "config", "last_metrics", "last_evolution", "error",
     ):
         assert key in body
     assert body["type"] == "status"

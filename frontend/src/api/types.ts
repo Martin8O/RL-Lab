@@ -224,6 +224,9 @@ export interface TrainStatus {
   total_timesteps: number
   config: TrainConfig | null
   last_metrics: TrainingMetrics | null
+  /** Latest neuroevolution frame, retained so a late-joining client can repopulate the
+   *  leaderboard / Evolution Stats / Fitness chart on reconnect. null for PPO runs. */
+  last_evolution: EvolutionMetrics | null
   error: string | null
 }
 

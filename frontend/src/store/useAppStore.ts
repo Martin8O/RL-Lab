@@ -94,6 +94,7 @@ interface AppState {
   addMetrics:         (m: TrainingMetrics)              => void
   setProgress:        (p: TrainingProgress)             => void
   addEvolution:       (e: EvolutionMetrics)             => void
+  seedEvolution:      (e: EvolutionMetrics)             => void
   setHighScore:       (hs: HighScore)                   => void
   setHighScores:      (list: HighScore[])               => void
   clearMetrics:       ()                                => void
@@ -181,6 +182,19 @@ export const useAppStore = create<AppState>()(
         set((s) => ({
           evolutionHistory: [...s.evolutionHistory, e].slice(-EVOLUTION_CAP),
           lastEvolution: e,
+          bestReward:
+            s.bestReward === null ? e.best_fitness : Math.max(s.bestReward, e.best_fitness),
+        })),
+
+      // Late-join reconcile (D2.5): seed the latest evolution frame from /api/train/status so
+      // the leaderboard / stats / Fitness panels repopulate on reconnect without waiting for the
+      // next generation. Only primes history when it's empty (a single point is enough for the
+      // leaderboard/stats; the Fitness curve refills as new frames stream in) — so a live frame
+      // that already arrived is never double-appended.
+      seedEvolution: (e) =>
+        set((s) => ({
+          lastEvolution: e,
+          evolutionHistory: s.evolutionHistory.length === 0 ? [e] : s.evolutionHistory,
           bestReward:
             s.bestReward === null ? e.best_fitness : Math.max(s.bestReward, e.best_fitness),
         })),

@@ -86,3 +86,29 @@ def test_manager_routes_to_evolution_and_stops_clean() -> None:
         mgr.stop()
         mgr.join(timeout=30)
     assert mgr.status().state == "stopped"
+
+
+def test_status_retains_last_evolution_after_run() -> None:
+    """D2.5: the latest evolution frame survives into the terminal status so a late-joining
+    client can repopulate the panels — and it round-trips through the pydantic contract."""
+    mgr = TrainingManager(manager)  # no loop bound → broadcasts are skipped
+    mgr.start(_tiny_config(generations=2))
+    mgr.join(timeout=30)
+
+    status = mgr.status()
+    assert status.state == "finished"
+    assert status.last_evolution is not None
+    assert status.last_evolution.generation == 2  # the final generation, not the first
+    # Survives serialization (what /api/train/status returns to a reconnecting client).
+    dumped = status.model_dump()
+    assert dumped["last_evolution"]["generation"] == 2
+    assert dumped["last_evolution"]["type"] == "evolution"
+
+    # A fresh run clears the previous run's snapshot until its first generation lands.
+    mgr2 = TrainingManager(manager)
+    running = mgr2.start(_tiny_config(generations=1000))
+    try:
+        assert running.last_evolution is None
+    finally:
+        mgr2.stop()
+        mgr2.join(timeout=30)

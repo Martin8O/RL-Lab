@@ -75,6 +75,10 @@ class TrainingManager:
         self._config: TrainConfig | None = None
         self._timesteps = 0
         self._last_metrics: TrainingMetrics | None = None
+        # Latest evolution frame, kept so a late-joining client reconciling via
+        # /api/train/status sees the current generation (leaderboard / stats / Fitness)
+        # without waiting for the next frame — and still sees it after the run finished.
+        self._last_evolution: EvolutionMetrics | None = None
         self._error: str | None = None
         # Latest model snapshot from the trainer + the run's metric frames — the raw material
         # "Save" persists into a checkpoint slot. Both reset when a fresh run launches.
@@ -113,6 +117,7 @@ class TrainingManager:
             self._config = config
             self._timesteps = 0
             self._last_metrics = None
+            self._last_evolution = None  # clear the previous run's evolution panels
             self._error = None
             self._snapshot = None  # don't let a previous run's model be saved as this one's
             self._metrics_log = []
@@ -313,6 +318,7 @@ class TrainingManager:
         frame = ev.model_dump()
         with self._lock:
             self._timesteps = ev.timesteps
+            self._last_evolution = ev
             self._metrics_log.append(frame)
             del self._metrics_log[:-_METRICS_LOG_CAP]
         self._broadcast(frame)
@@ -358,6 +364,7 @@ class TrainingManager:
             total_timesteps=cfg.total_timesteps if cfg else 0,
             config=cfg,
             last_metrics=self._last_metrics,
+            last_evolution=self._last_evolution,
             error=self._error,
         )
 

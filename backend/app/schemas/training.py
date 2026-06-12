@@ -140,4 +140,8 @@ class TrainStatus(BaseModel):
     total_timesteps: int = 0
     config: TrainConfig | None = None
     last_metrics: TrainingMetrics | None = None
+    # Latest neuroevolution frame, retained so a client that connects mid-run (or after a
+    # finished run) can repopulate the leaderboard / Evolution Stats / Fitness chart without
+    # waiting for the next generation. None for PPO runs (use ``last_metrics`` there).
+    last_evolution: EvolutionMetrics | None = None
     error: str | None = None
