@@ -347,6 +347,49 @@ export interface PlayActionMessage {
   action: number
 }
 
+// --- Play leaderboards (E2) -------------------------------------------------
+// Mirrors backend/app/schemas/play_scores.py — keep both sides in sync.
+
+/** Which board: the human (you, at the keyboard) or an AI (a checkpoint playing itself). */
+export type PlayCategory = 'human' | 'ai'
+
+/** One leaderboard row. `model_id`/`algo` are set only for AI rows (de-dup + badge). */
+export interface PlayScoreEntry {
+  name: string
+  score: number
+  steps: number
+  achieved_at: string
+  model_id?: string | null
+  algo?: string | null
+}
+
+/** Both boards for one env — returned by GET /api/playscores/{env_id}. */
+export interface PlayScores {
+  env_id: string
+  human: PlayScoreEntry[]
+  ai: PlayScoreEntry[]
+}
+
+/** Submit a finished session's score (POST /api/playscores/{env_id}). */
+export interface PlayScoreSubmit {
+  category: PlayCategory
+  name: string
+  score: number
+  steps?: number
+  model_id?: string | null
+  algo?: string | null
+}
+
+/** Result of a submit: updated boards + whether/where the entry landed. */
+export interface PlayScoreResult {
+  scores: PlayScores
+  qualified: boolean
+  rank: number | null
+}
+
+/** How many rows each board keeps (mirror of backend TOP_N) — used to pre-decide a name prompt. */
+export const PLAY_SCORE_TOP_N = 7
+
 /** Any frame the WS channel can push. */
 export type TrainWsFrame =
   | TrainingMetrics

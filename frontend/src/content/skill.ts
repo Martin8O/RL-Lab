@@ -1,8 +1,20 @@
 // Per-environment skill thresholds: map a run's Score → a skill band.
-// CartPole's Score is mean episode length (max 500), so the bands below are illustrative
-// and tunable. Phase E will move these to a backend evaluator served per environment.
+// CartPole's Score is mean episode length (max 500). As of E2 the live thresholds come from
+// the backend (`GET /api/skill/{env}` → `scaleFromEnvSkill`, single source of truth); the table
+// below is only a fallback used until that fetch lands (and a default for unknown envs).
+
+import type { EnvSkill, SkillBandId } from '../api/types'
 
 export type SkillKey = 'child' | 'below' | 'average' | 'above' | 'superhuman'
+
+// Backend band ids (schemas/skill.py) → the shorter frontend keys the i18n + UI already use.
+const BAND_ID_TO_KEY: Record<SkillBandId, SkillKey> = {
+  child:         'child',
+  below_average: 'below',
+  average:       'average',
+  above_average: 'above',
+  superhuman:    'superhuman',
+}
 
 export interface SkillBand {
   key: SkillKey
@@ -32,6 +44,15 @@ export const DEFAULT_SKILL_SCALE: SkillScale = SKILL_SCALES.cartpole
 
 export function skillScaleFor(envId: string | null): SkillScale {
   return (envId !== null && SKILL_SCALES[envId]) || DEFAULT_SKILL_SCALE
+}
+
+/** Convert the backend's per-env thresholds into the local SkillScale shape (the meter's
+ *  bands + the rating now share one source: the env's solved_score). */
+export function scaleFromEnvSkill(envSkill: EnvSkill): SkillScale {
+  return {
+    max: envSkill.max_score,
+    bands: envSkill.bands.map((b) => ({ key: BAND_ID_TO_KEY[b.id], min: b.min_score })),
+  }
 }
 
 /** The highest band whose threshold the score has reached. */

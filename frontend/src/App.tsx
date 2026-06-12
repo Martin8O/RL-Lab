@@ -1,15 +1,26 @@
 import { useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAppStore } from './store/useAppStore'
-import { useHealthPoll, useTrainingWs, fetchEnvs, fetchHighScores } from './api/client'
+import {
+  useHealthPoll,
+  useTrainingWs,
+  fetchEnvs,
+  fetchEnvSkill,
+  fetchHighScores,
+  fetchPlayScores,
+} from './api/client'
 import TopBar from './components/TopBar'
 import Sidebar from './components/Sidebar'
 import EnvPreview from './components/EnvPreview'
 import RewardChart from './components/RewardChart'
 import BottomPanels from './components/BottomPanels'
+import PlayScoreGate from './components/PlayScoreGate'
 
 export default function App() {
   const { locale, theme, backendStatus, setEnvs, setSelectedEnvId, setHighScores } = useAppStore()
+  const selectedEnvId = useAppStore((s) => s.selectedEnvId)
+  const setEnvSkill   = useAppStore((s) => s.setEnvSkill)
+  const setPlayScores = useAppStore((s) => s.setPlayScores)
   const { i18n } = useTranslation()
 
   useEffect(() => {
@@ -38,6 +49,18 @@ export default function App() {
     void fetchHighScores().then(setHighScores).catch(() => {})
   }, [backendStatus, setHighScores])
 
+  // Skill-band thresholds for the selected env (single source for the skill meter + play rating).
+  useEffect(() => {
+    if (backendStatus !== 'online' || !selectedEnvId) return
+    void fetchEnvSkill(selectedEnvId).then(setEnvSkill).catch(() => setEnvSkill(null))
+  }, [backendStatus, selectedEnvId, setEnvSkill])
+
+  // Play leaderboards (Human + AI) for the selected env — feeds the bottom boards + meter markers.
+  useEffect(() => {
+    if (backendStatus !== 'online' || !selectedEnvId) return
+    void fetchPlayScores(selectedEnvId).then(setPlayScores).catch(() => setPlayScores(null))
+  }, [backendStatus, selectedEnvId, setPlayScores])
+
   useHealthPoll()
   useTrainingWs()
 
@@ -54,6 +77,8 @@ export default function App() {
           <BottomPanels />
         </div>
       </div>
+      {/* Invisible: watches play results, auto-records AI scores, prompts a human for a name. */}
+      <PlayScoreGate />
     </div>
   )
 }

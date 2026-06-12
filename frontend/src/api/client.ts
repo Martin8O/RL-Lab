@@ -2,8 +2,15 @@ import { useEffect } from 'react'
 import { useAppStore } from '../store/useAppStore'
 import type {
   CheckpointMeta,
+  EnvSkill,
   EnvSpec,
   HighScore,
+  PlayConfig,
+  PlayFrame,
+  PlayScoreResult,
+  PlayScores,
+  PlayScoreSubmit,
+  PlayStatus,
   PreviewConfig,
   PreviewFrame,
   PreviewState,
@@ -56,6 +63,18 @@ const WS_BASE =
     ? `ws://${window.location.host}`
     : 'ws://localhost:8000')
 
+// The live socket, tracked module-side so play input can be sent outbound from anywhere
+// (EnvPreview's keyboard handler) without threading the socket through React.
+let activeSocket: WebSocket | null = null
+
+/** Send a human play action over WS: {type:"action", action:<int>} (CartPole: 0=left, 1=right).
+ *  No-op if the socket isn't open — the play session is latency-tolerant (holds the last action). */
+export function sendPlayAction(action: number): void {
+  if (activeSocket?.readyState === WebSocket.OPEN) {
+    activeSocket.send(JSON.stringify({ type: 'action', action }))
+  }
+}
+
 export function createWsClient(
   onMessage: (data: unknown) => void,
   onStatusChange: (connected: boolean) => void,
@@ -66,8 +85,9 @@ export function createWsClient(
 
   function connect() {
     ws = new WebSocket(`${WS_BASE}/ws`)
-    ws.onopen  = () => onStatusChange(true)
+    ws.onopen  = () => { activeSocket = ws; onStatusChange(true) }
     ws.onclose = () => {
+      if (activeSocket === ws) activeSocket = null
       onStatusChange(false)
       if (!stopped) reconnectTimer = setTimeout(connect, 3000)
     }
@@ -94,6 +114,17 @@ let frameHandler: FrameHandler | null = null
 
 export function setFrameHandler(handler: FrameHandler | null): void {
   frameHandler = handler
+}
+
+// Play frames (E2) get their own sink for the same reason: ≤30 fps base64 images drawn
+// straight to the EnvPreview canvas, bypassing React. A throttled copy of score/step still
+// goes to the store so the skill meter can climb live without re-rendering on every frame.
+type PlayFrameHandler = (frame: PlayFrame) => void
+let playFrameHandler: PlayFrameHandler | null = null
+let lastPlayScorePush = 0
+
+export function setPlayFrameHandler(handler: PlayFrameHandler | null): void {
+  playFrameHandler = handler
 }
 
 /** Seed the store from a REST status snapshot. Called on every WS (re)connect so the
@@ -150,12 +181,31 @@ export function useTrainingWs(): void {
           // Keep the toggle/slider in sync (e.g. across tabs); echoes our own changes.
           useAppStore.getState().setVisual(frame.visual)
           useAppStore.getState().setSpeed(frame.speed)
+        } else if (frame.type === 'play_frame') {
+          // Canvas draw bypasses React; the score/step copy is throttled (~8 Hz) so the meter
+          // updates live without one React render per streamed frame.
+          playFrameHandler?.(frame)
+          const now = performance.now()
+          if (now - lastPlayScorePush > 120) {
+            lastPlayScorePush = now
+            useAppStore.getState().setPlayProgress(frame.score, frame.step)
+          }
+        } else if (frame.type === 'play_status') {
+          useAppStore.getState().applyPlayStatus(frame)
+        } else if (frame.type === 'play_result') {
+          useAppStore.getState().setPlayResult(frame)
         }
       },
       (connected) => {
         // On every (re)connect, reconcile with the backend's authoritative run state so the
         // controls can't get stuck after a reload/HMR that missed the live 'status' frame.
-        if (connected) void fetchTrainStatus().then(syncStoreFromStatus).catch(() => {})
+        // Same reconcile for the play session (ADR-013 convention) so a reload mid-play recovers.
+        if (connected) {
+          void fetchTrainStatus().then(syncStoreFromStatus).catch(() => {})
+          void fetchPlayStatus()
+            .then((s) => useAppStore.getState().applyPlayStatus(s))
+            .catch(() => {})
+        }
       },
     )
     return stop
@@ -296,4 +346,64 @@ export async function setPreview(config: PreviewConfig): Promise<PreviewState> {
   })
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
   return res.json() as Promise<PreviewState>
+}
+
+// ── Play vs AI & skill (E2) ─────────────────────────────────────────────────────
+
+/** Start one interactive episode (human at the keyboard, or AI watch from a checkpoint).
+ *  Bad configs (unknown/non-playable env, missing/mismatched checkpoint) come back as an
+ *  HTTP error with the backend's detail message. */
+export async function startPlay(config: PlayConfig): Promise<PlayStatus> {
+  const res = await fetch(`${API_BASE}/api/play/start`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(config),
+  })
+  if (!res.ok) {
+    const detail = ((await res.json().catch(() => ({}))) as { detail?: string }).detail
+    throw new Error(detail ?? `HTTP ${res.status}`)
+  }
+  return res.json() as Promise<PlayStatus>
+}
+
+export async function stopPlay(): Promise<PlayStatus> {
+  const res = await fetch(`${API_BASE}/api/play/stop`, { method: 'POST' })
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  return res.json() as Promise<PlayStatus>
+}
+
+/** Authoritative play-session snapshot — fetched on WS (re)connect to reconcile the play UI. */
+export async function fetchPlayStatus(): Promise<PlayStatus> {
+  const res = await fetch(`${API_BASE}/api/play/status`)
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  return res.json() as Promise<PlayStatus>
+}
+
+/** The documented skill-band thresholds for an env (derived from its solved_score server-side).
+ *  Single source of truth for the skill meter's bands + the play-session rating. */
+export async function fetchEnvSkill(envId: string): Promise<EnvSkill> {
+  const res = await fetch(`${API_BASE}/api/skill/${encodeURIComponent(envId)}`)
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  return res.json() as Promise<EnvSkill>
+}
+
+/** The Human + AI play leaderboards for an env (top-N each, best first). */
+export async function fetchPlayScores(envId: string): Promise<PlayScores> {
+  const res = await fetch(`${API_BASE}/api/playscores/${encodeURIComponent(envId)}`)
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  return res.json() as Promise<PlayScores>
+}
+
+/** Submit a finished session's score; returns the updated boards + whether/where it landed. */
+export async function submitPlayScore(
+  envId: string,
+  body: PlayScoreSubmit,
+): Promise<PlayScoreResult> {
+  const res = await fetch(`${API_BASE}/api/playscores/${encodeURIComponent(envId)}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  return res.json() as Promise<PlayScoreResult>
 }

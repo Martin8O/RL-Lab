@@ -18,6 +18,17 @@ def _isolate_highscores(tmp_path, monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _isolate_play_scores(tmp_path, monkeypatch):
+    """Redirect the play-leaderboard singleton at a fresh tmp file so submit tests never touch
+    the real gitignored ``data/play_scores.json`` and never leak state between tests."""
+    from app.services import play_scores as ps
+
+    monkeypatch.setattr(ps.play_scores, "path", tmp_path / "play_scores.json")
+    monkeypatch.setattr(ps.play_scores, "_cache", None)
+    yield
+
+
+@pytest.fixture(autouse=True)
 def _isolate_checkpoints(tmp_path, monkeypatch):
     """Redirect the checkpoint store singleton at a fresh tmp dir so save tests (and the
     manager, which holds the same singleton) never touch the real gitignored data/checkpoints/.

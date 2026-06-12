@@ -2,10 +2,16 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type {
   Algo,
+  EnvSkill,
   EnvSpec,
   EvolutionHyperparams,
   EvolutionMetrics,
   HighScore,
+  PlayMode,
+  PlayResult,
+  PlayScores,
+  PlayState,
+  PlayStatus,
   PPOHyperparams,
   TrainingMetrics,
   TrainingProgress,
@@ -61,6 +67,9 @@ interface AppState {
   activeTab:       ChartTab
   visual:          boolean    // env-preview frame streaming on/off
   speed:           number     // playback speed multiplier (1×–20×)
+  playMode:        PlayMode   // E2: who plays — human at the keyboard ↔ AI watch
+  playSpeed:       number     // E2: play-session pacing (0.1×–20×; slow-mo for humans)
+  playerName:      string     // E2: last name used for a human leaderboard entry
 
   // ─ ephemeral (not persisted) ───────────────────────────────
   backendStatus:   BackendStatus
@@ -73,6 +82,17 @@ interface AppState {
   evolutionHistory: EvolutionMetrics[]  // per-generation frames — feeds the Fitness chart
   lastEvolution:   EvolutionMetrics | null
   highScores:      Record<string, HighScore>  // all-time best per env id
+
+  // ─ play vs AI (E2) ─────────────────────────────────────────
+  playState:        PlayState            // idle until a session starts
+  playScore:        number               // live score of the current/last session
+  playStep:         number
+  playResult:       PlayResult | null    // set once the episode ends (carries the rated band)
+  playError:        string | null
+  playCheckpointId: string | null        // selected checkpoint for AI watch mode
+  playCheckpointLabel: string | null     // its label — the AI's leaderboard identity on finish
+  envSkill:         EnvSkill | null       // backend skill thresholds for the selected env
+  playScores:       PlayScores | null     // Human + AI boards for the selected env
 
   // ─ actions ────────────────────────────────────────────────
   setLocale:          (l: Locale)                       => void
@@ -98,6 +118,18 @@ interface AppState {
   setHighScore:       (hs: HighScore)                   => void
   setHighScores:      (list: HighScore[])               => void
   clearMetrics:       ()                                => void
+
+  // play vs AI (E2)
+  setPlayMode:         (m: PlayMode)                    => void
+  setPlaySpeed:        (n: number)                      => void
+  setPlayerName:       (name: string)                  => void
+  setPlayCheckpointId: (id: string | null)             => void
+  setPlayCheckpointLabel: (label: string | null)       => void
+  applyPlayStatus:     (s: PlayStatus)                  => void
+  setPlayProgress:     (score: number, step: number)   => void
+  setPlayResult:       (r: PlayResult)                  => void
+  setEnvSkill:         (s: EnvSkill | null)             => void
+  setPlayScores:       (s: PlayScores | null)           => void
 }
 
 export const useAppStore = create<AppState>()(
@@ -116,6 +148,9 @@ export const useAppStore = create<AppState>()(
       activeTab:       'reward',
       visual:          true,
       speed:           1,
+      playMode:        'human',
+      playSpeed:       1,
+      playerName:      '',
 
       backendStatus:   'connecting',
       envs:            [],
@@ -127,6 +162,16 @@ export const useAppStore = create<AppState>()(
       evolutionHistory: [],
       lastEvolution:   null,
       highScores:      {},
+
+      playState:        'idle',
+      playScore:        0,
+      playStep:         0,
+      playResult:       null,
+      playError:        null,
+      playCheckpointId: null,
+      playCheckpointLabel: null,
+      envSkill:         null,
+      playScores:       null,
 
       setLocale:         (locale)         => set({ locale }),
       setTheme:          (theme)          => set({ theme }),
@@ -208,6 +253,34 @@ export const useAppStore = create<AppState>()(
           metricsHistory: [], progressHistory: [], lastProgress: null, bestReward: null,
           evolutionHistory: [], lastEvolution: null,
         }),
+
+      // ─ play vs AI (E2) ────────────────────────────────────────
+      setPlayMode:         (playMode)         => set({ playMode }),
+      setPlaySpeed:        (playSpeed)        => set({ playSpeed }),
+      setPlayerName:       (playerName)       => set({ playerName }),
+      setPlayCheckpointId: (playCheckpointId) => set({ playCheckpointId }),
+      setPlayCheckpointLabel: (playCheckpointLabel) => set({ playCheckpointLabel }),
+      setPlayScores:       (playScores)       => set({ playScores }),
+
+      // Lifecycle snapshot from a {type:"play_status"} frame or REST start/stop response.
+      // A fresh 'playing' status arrives with step/score 0 + result null, which resets the meter.
+      applyPlayStatus: (s) =>
+        set({
+          playState: s.state,
+          playScore: s.score,
+          playStep:  s.step,
+          playResult: s.result,
+          playError: s.error,
+        }),
+
+      // High-frequency per-frame update (throttled by the caller) so the skill meter climbs live.
+      setPlayProgress: (playScore, playStep) => set({ playScore, playStep }),
+
+      // Terminal {type:"play_result"} frame — carries the rated band + final score/steps.
+      setPlayResult: (r) =>
+        set({ playResult: r, playScore: r.score, playStep: r.steps }),
+
+      setEnvSkill: (envSkill) => set({ envSkill }),
     }),
     {
       name: 'rl-app-store',
@@ -225,6 +298,9 @@ export const useAppStore = create<AppState>()(
         activeTab:       s.activeTab,
         visual:          s.visual,
         speed:           s.speed,
+        playMode:        s.playMode,
+        playSpeed:       s.playSpeed,
+        playerName:      s.playerName,
       }),
     },
   ),

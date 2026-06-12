@@ -36,9 +36,10 @@ logger = get_logger(__name__)
 
 _SEND_FPS_CAP = 30.0  # max frames/sec sent over WS (anti-flood)
 _DEFAULT_RENDER_FPS = 30.0  # fallback if the env exposes no render_fps
-# Play allows slow-motion (down to 0.25×) — unlike the training preview (min 1×) — so a beginner
-# can actually balance CartPole at human reaction times. Upper bound matches the preview.
-_MIN_SPEED = 0.25
+# Play allows deep slow-motion (down to 0.1×) — unlike the training preview (min 1×) — so a
+# beginner can actually balance CartPole at human reaction times (even 0.25× steps ~12×/s).
+# Upper bound matches the preview.
+_MIN_SPEED = 0.1
 _MAX_SPEED = 20.0
 
 

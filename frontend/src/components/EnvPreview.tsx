@@ -1,7 +1,9 @@
 import { useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAppStore } from '../store/useAppStore'
-import { setFrameHandler, setPreview } from '../api/client'
+import { sendPlayAction, setFrameHandler, setPlayFrameHandler, setPreview } from '../api/client'
+import PlayControls from './PlayControls'
+import SkillMeter from './SkillMeter'
 
 const MIN_SPEED = 1
 const MAX_SPEED = 20
@@ -15,12 +17,18 @@ export default function EnvPreview() {
   const setSpeed      = useAppStore((s) => s.setSpeed)
   const trainState    = useAppStore((s) => s.trainState)
   const backendStatus = useAppStore((s) => s.backendStatus)
+  const playState     = useAppStore((s) => s.playState)
+  const playMode      = useAppStore((s) => s.playMode)
+  const playScore     = useAppStore((s) => s.playScore)
+  const playScores    = useAppStore((s) => s.playScores)
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const imgRef    = useRef<HTMLImageElement | null>(null)
 
-  const runLive    = trainState === 'running' || trainState === 'paused' || trainState === 'stopping'
-  const showCanvas = visual && runLive
+  const runLive     = trainState === 'running' || trainState === 'paused' || trainState === 'stopping'
+  // A play session keeps the canvas visible through finish/stop so the final frame lingers.
+  const playVisible = playState !== 'idle'
+  const showCanvas  = (visual && runLive) || playVisible
 
   // Sync persisted toggle/speed to the backend whenever it comes online (UI is source of truth).
   useEffect(() => {
@@ -29,7 +37,8 @@ export default function EnvPreview() {
     void setPreview({ visual: v, speed: s }).catch(() => {})
   }, [backendStatus])
 
-  // Register the frame sink once: draw incoming frames straight to the canvas (bypass React).
+  // Register both frame sinks once: training-preview and play frames draw straight to the same
+  // canvas (bypass React). They never overlap in time — play can't start while training is live.
   useEffect(() => {
     const img = new Image()
     imgRef.current = img
@@ -42,11 +51,25 @@ export default function EnvPreview() {
       }
       canvas.getContext('2d')?.drawImage(img, 0, 0)
     }
-    setFrameHandler((frame) => {
-      img.src = `data:image/jpeg;base64,${frame.image}`
-    })
-    return () => setFrameHandler(null)
+    const draw = (image: string) => { img.src = `data:image/jpeg;base64,${image}` }
+    setFrameHandler((frame) => draw(frame.image))
+    setPlayFrameHandler((frame) => draw(frame.image))
+    return () => { setFrameHandler(null); setPlayFrameHandler(null) }
   }, [])
+
+  // Keyboard control for human play: ← / A = left (0), → / D = right (1). Latency-tolerant —
+  // the backend holds the last action, so a single keydown suffices (auto-repeat is harmless).
+  useEffect(() => {
+    if (!(playState === 'playing' && playMode === 'human')) return
+    const onKey = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement | null)?.tagName
+      if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return
+      if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') { sendPlayAction(0); e.preventDefault() }
+      else if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') { sendPlayAction(1); e.preventDefault() }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [playState, playMode])
 
   function toggleVisual() {
     const next = !visual
@@ -77,6 +100,7 @@ export default function EnvPreview() {
 
       {/* Live canvas, or a graceful hint */}
       <div style={{
+        position: 'relative',
         flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
         background: 'var(--bg)', overflow: 'hidden', padding: 12,
       }}>
@@ -92,6 +116,16 @@ export default function EnvPreview() {
           <span style={{ color: 'var(--text-muted)', fontSize: 12, textAlign: 'center', padding: '0 16px' }}>
             {hint}
           </span>
+        )}
+        {playState === 'playing' && playMode === 'human' && (
+          <div style={{
+            position: 'absolute', top: 10, left: 10,
+            padding: '3px 9px', borderRadius: 14,
+            background: 'rgba(0,0,0,0.6)', color: '#fff',
+            fontSize: 11, fontWeight: 600, pointerEvents: 'none',
+          }}>
+            ⌨ {t('play.playing_hint')}
+          </div>
         )}
       </div>
 
@@ -144,6 +178,20 @@ export default function EnvPreview() {
           {speed}×
         </span>
       </div>
+
+      {/* Play vs AI (E2): controls + a skill meter that fills to the rated band once an episode
+          ends. The meter is shown the moment a session starts so it climbs live as you play. */}
+      <PlayControls />
+      {playVisible && (
+        <SkillMeter
+          score={playScore}
+          titleKey={playMode === 'ai' ? 'play.ai_skill' : 'play.your_skill'}
+          markers={{
+            human: playScores?.human[0]?.score ?? null,
+            ai: playScores?.ai[0]?.score ?? null,
+          }}
+        />
+      )}
     </section>
   )
 }
