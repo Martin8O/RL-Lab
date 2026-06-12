@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { useAppStore } from '../store/useAppStore'
 import { startTraining, stopTraining, pauseTraining, resumeTraining } from '../api/client'
 import type { PPOHyperparams } from '../api/types'
+import ParamInfo from './ParamInfo'
 
 // ── Param-level helpers ─────────────────────────────────────────────────────
 
@@ -61,7 +62,10 @@ function ParamSlider({ id, label, value, min, max, step, recommended, disabled, 
   return (
     <div style={{ marginBottom: 9 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2, alignItems: 'baseline' }}>
-        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{label}</span>
+        <span style={{ fontSize: 11, color: 'var(--text-muted)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+          {label}
+          <ParamInfo paramId={id} label={label} />
+        </span>
         <span style={{
           fontSize: 11, fontFamily: 'monospace',
           color: isRec ? 'var(--ok)' : 'var(--text)',
@@ -114,7 +118,10 @@ function ActivationToggle({ value, label, disabled, onChange }: {
   return (
     <div style={{ marginBottom: 9 }}>
       <div style={{ marginBottom: 4 }}>
-        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{label}</span>
+        <span style={{ fontSize: 11, color: 'var(--text-muted)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+          {label}
+          <ParamInfo paramId="activation" label={label} />
+        </span>
       </div>
       <div style={{ display: 'flex', gap: 5 }}>
         {(['tanh', 'relu'] as const).map((opt) => {
@@ -332,7 +339,10 @@ export default function Sidebar() {
 
         {/* Seed */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-          <label style={{ fontSize: 11, color: 'var(--text-muted)' }}>{t('sidebar.seed')}</label>
+          <label style={{ fontSize: 11, color: 'var(--text-muted)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+            {t('sidebar.seed')}
+            <ParamInfo paramId="seed" label={t('sidebar.seed')} />
+          </label>
           <input
             type="number"
             min={0} max={999999}
@@ -349,7 +359,10 @@ export default function Sidebar() {
 
         {/* Total Steps */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <label style={{ fontSize: 11, color: 'var(--text-muted)' }}>{t('sidebar.total_steps')}</label>
+          <label style={{ fontSize: 11, color: 'var(--text-muted)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+            {t('sidebar.total_steps')}
+            <ParamInfo paramId="total_steps" label={t('sidebar.total_steps')} />
+          </label>
           <select
             value={totalTimesteps}
             disabled={isActive}

@@ -1,0 +1,241 @@
+// Parameter info content (B5) — beginner-friendly, bilingual (CZ/EN) explanations
+// for every tunable in the sidebar. This is the data-driven "learning aid" feature:
+// each sidebar control opens a popup that reads its entry from here.
+//
+// Extensibility: adding a new parameter = adding one entry below (no UI/logic change).
+// Adding a new game = adding a `perEnv[<envId>]` note to each relevant parameter.
+//
+// Cross-checked against the source cookbook's recommended PPO defaults:
+//   lr 3e-4 · γ 0.99 · clip 0.2 · ent 0.0 · 2×64 net · tanh.
+
+import type { Bilingual } from '../api/types'
+
+export interface ParamInfo {
+  /** What it is, what moving it does, and when to touch it — the core explanation. */
+  general: Bilingual
+  /** Beginner-friendly guidance on the recommended value. Omit for read-only metrics. */
+  recommended?: Bilingual
+  /** Typical usable range, shown as a language-neutral string (e.g. "1e-5 – 1e-2"). Omit for metrics. */
+  range?: string
+  /** Per-environment note, keyed by env id (e.g. "cartpole"). Omit for env-agnostic concepts. */
+  perEnv?: Record<string, Bilingual>
+}
+
+export const PARAM_INFO: Record<string, ParamInfo> = {
+  learning_rate: {
+    general: {
+      en: 'How big a step the agent takes when it updates its strategy after each batch of experience. Too high and learning becomes unstable and "forgets" what worked; too low and it crawls, needing far more steps to improve.',
+      cz: 'Jak velký krok agent udělá při úpravě své strategie po každé dávce zkušeností. Příliš vysoká hodnota způsobí nestabilitu a „zapomínání“ toho, co fungovalo; příliš nízká učení zpomalí a vyžaduje mnohem více kroků.',
+    },
+    recommended: {
+      en: '3e-4 — a safe, steady default for PPO.',
+      cz: '3e-4 — bezpečná, stabilní výchozí hodnota pro PPO.',
+    },
+    range: '1e-5 – 1e-2',
+    perEnv: {
+      cartpole: {
+        en: 'CartPole is easy, so 3e-4 solves it in seconds. Pushing it higher can look faster but often collapses before reaching 500.',
+        cz: 'CartPole je snadný, takže 3e-4 ho vyřeší během vteřin. Vyšší hodnota může vypadat rychleji, ale často zkolabuje, než dosáhne 500.',
+      },
+    },
+  },
+
+  gamma: {
+    general: {
+      en: 'Discount factor — how much the agent values future rewards versus immediate ones. Near 1.0 it plans far ahead; lower values make it short-sighted, caring mostly about the next few steps.',
+      cz: 'Diskontní faktor — jak moc agent cení budoucí odměny oproti okamžitým. Blízko 1.0 plánuje daleko dopředu; nižší hodnoty ho dělají krátkozrakým, soustředí se hlavně na nejbližší kroky.',
+    },
+    recommended: {
+      en: '0.99 — the standard for most control tasks.',
+      cz: '0.99 — standard pro většinu řídicích úloh.',
+    },
+    range: '0.90 – 0.999',
+    perEnv: {
+      cartpole: {
+        en: 'Balancing the pole is all about the long run, so a high γ (0.99) works best. Too low and the agent won\'t "see" that a small lean now means a fall later.',
+        cz: 'Udržení tyče je hlavně o dlouhodobém výhledu, takže vysoké γ (0.99) funguje nejlépe. Při nízkém γ agent „neuvidí“, že malý náklon teď znamená pád později.',
+      },
+    },
+  },
+
+  clip_range: {
+    general: {
+      en: "PPO's safety rail. It limits how far the new strategy can move from the old one in a single update, preventing one bad batch from wrecking a good policy.",
+      cz: 'Bezpečnostní zábradlí PPO. Omezuje, jak daleko se nová strategie může v jedné aktualizaci vzdálit od staré, aby jedna špatná dávka nezničila dobrou strategii.',
+    },
+    recommended: {
+      en: '0.2 — the value from the PPO paper, rarely worth changing.',
+      cz: '0.2 — hodnota z původního článku o PPO, jen zřídka stojí za změnu.',
+    },
+    range: '0.1 – 0.4',
+    perEnv: {
+      cartpole: {
+        en: "0.2 is plenty for CartPole; there's little reason to touch it here.",
+        cz: 'Pro CartPole je 0.2 bohatě dostačující; není důvod ji zde měnit.',
+      },
+    },
+  },
+
+  ent_coef: {
+    general: {
+      en: 'Entropy bonus — rewards the agent for staying a bit random and exploring. Raise it if the agent settles too early on a mediocre habit; keep it near 0 when the task is simple enough to solve by exploiting what it learns.',
+      cz: 'Bonus za entropii — odměňuje agenta za to, že zůstane trochu náhodný a zkoumá. Zvyšte ho, pokud agent příliš brzy zapadne do průměrného návyku; nechte ho u 0, když je úloha dost jednoduchá na vyřešení tím, co se naučil.',
+    },
+    recommended: {
+      en: '0.0 — CartPole needs no extra exploration push.',
+      cz: '0.0 — CartPole nepotřebuje žádný extra tlak na zkoumání.',
+    },
+    range: '0.0 – 0.05',
+    perEnv: {
+      cartpole: {
+        en: "CartPole's two actions are easy to explore, so 0 is fine. A tiny value (0.01) rarely hurts if learning stalls.",
+        cz: 'Dvě akce CartPole se zkoumají snadno, takže 0 stačí. Drobná hodnota (0.01) málokdy uškodí, pokud učení uvázne.',
+      },
+    },
+  },
+
+  n_hidden_layers: {
+    general: {
+      en: "How many stacked layers the agent's neural network has — its \"depth\". More layers can capture more complex patterns but train slower and may overfit a simple task.",
+      cz: 'Kolik vrstev má neuronová síť agenta — její „hloubka“. Více vrstev zachytí složitější vzory, ale trénují se pomaleji a na jednoduché úloze se mohou přeučit.',
+    },
+    recommended: {
+      en: '2 — the standard small network for control tasks.',
+      cz: '2 — standardní malá síť pro řídicí úlohy.',
+    },
+    range: '1 – 4',
+    perEnv: {
+      cartpole: {
+        en: "CartPole's 4-number observation is simple; 2 layers is more than enough. Extra depth just slows things down.",
+        cz: 'Pozorování CartPole má jen 4 čísla; 2 vrstvy bohatě stačí. Větší hloubka jen vše zpomalí.',
+      },
+    },
+  },
+
+  neurons_per_layer: {
+    general: {
+      en: 'How wide each layer is — the number of neurons. Wider networks have more capacity but cost more compute; for tiny observations a narrow net learns just as well.',
+      cz: 'Jak široká je každá vrstva — počet neuronů. Širší sítě mají větší kapacitu, ale stojí více výpočtu; pro malá pozorování se úzká síť naučí stejně dobře.',
+    },
+    recommended: {
+      en: '64 — paired with 2 layers, the classic 2×64 network.',
+      cz: '64 — spolu s 2 vrstvami klasická síť 2×64.',
+    },
+    range: '16 – 256',
+    perEnv: {
+      cartpole: {
+        en: '64 neurons easily handle CartPole. Going wider gives no benefit and just uses more CPU.',
+        cz: '64 neuronů CartPole hravě zvládne. Více již nepřinese žádnou výhodu, jen spotřebuje více CPU.',
+      },
+    },
+  },
+
+  activation: {
+    general: {
+      en: 'The non-linear function each neuron applies, letting the network learn curved, non-trivial behaviour. tanh is smooth and stable (PPO\'s default); relu is faster and common in larger or vision networks.',
+      cz: 'Nelineární funkce, kterou každý neuron používá, aby se síť mohla naučit zakřivené, netriviální chování. tanh je hladká a stabilní (výchozí pro PPO); relu je rychlejší a běžná u větších či obrazových sítí.',
+    },
+    recommended: {
+      en: "tanh — SB3's PPO default, stable on control tasks.",
+      cz: 'tanh — výchozí pro PPO v SB3, stabilní u řídicích úloh.',
+    },
+    range: 'tanh / relu',
+    perEnv: {
+      cartpole: {
+        en: 'tanh is the proven choice for CartPole. relu works too but offers no real advantage on such a small net.',
+        cz: 'tanh je pro CartPole osvědčená volba. relu také funguje, ale na tak malé síti nepřináší skutečnou výhodu.',
+      },
+    },
+  },
+
+  seed: {
+    general: {
+      en: 'The starting point for all randomness — environment resets, network initialisation, action sampling. Fixing the seed makes a run reproducible: same seed + same settings = same result, which is essential for fair comparisons.',
+      cz: 'Výchozí bod pro veškerou náhodnost — resety prostředí, inicializaci sítě, výběr akcí. Pevné semeno zajistí reprodukovatelnost běhu: stejné semeno + stejná nastavení = stejný výsledek, což je klíčové pro férové porovnání.',
+    },
+    recommended: {
+      en: 'Any fixed integer (e.g. 42). Change it to see how much luck affects a run.',
+      cz: 'Libovolné pevné číslo (např. 42). Změňte ho, abyste viděli, jak moc běh ovlivní náhoda.',
+    },
+    range: '0 – 999999',
+    perEnv: {
+      cartpole: {
+        en: 'CartPole solves on most seeds, but some converge faster than others — handy for seeing run-to-run variance.',
+        cz: 'CartPole se vyřeší při většině semen, ale některá konvergují rychleji než jiná — užitečné pro sledování rozptylu mezi běhy.',
+      },
+    },
+  },
+
+  total_steps: {
+    general: {
+      en: 'The training budget — how many environment steps the agent gets to learn from before stopping. More steps mean more practice and usually a better policy, up to the point where it has mastered the task.',
+      cz: 'Tréninkový rozpočet — kolik kroků v prostředí agent dostane na učení, než se zastaví. Více kroků znamená více cviku a obvykle lepší strategii, dokud úlohu nezvládne.',
+    },
+    recommended: {
+      en: '50k — comfortably solves CartPole on CPU in well under a minute.',
+      cz: '50k — pohodlně vyřeší CartPole na CPU výrazně pod minutu.',
+    },
+    range: '10k – 200k',
+    perEnv: {
+      cartpole: {
+        en: 'CartPole is usually solved by ~30–50k steps. Beyond that the reward just sits at 500 — more steps won\'t help.',
+        cz: 'CartPole se obvykle vyřeší kolem 30–50k kroků. Dál už odměna jen sedí na 500 — více kroků nepomůže.',
+      },
+    },
+  },
+
+  // ── Chart concepts (B5 follow-up) ─────────────────────────────────────────
+  // The reward/loss/fitness tabs and the Smooth control. These describe what a
+  // curve means rather than a tunable, so most omit recommended/range.
+
+  reward: {
+    general: {
+      en: 'The average score the agent earns per episode — the headline number for how well it is playing. The agent\'s entire objective is to push this curve upward over training, so a rising reward means it is learning.',
+      cz: 'Průměrné skóre, které agent získá za epizodu — hlavní číslo udávající, jak dobře si vede. Celým cílem agenta je tuto křivku během tréninku tlačit nahoru, takže rostoucí odměna znamená, že se učí.',
+    },
+    perEnv: {
+      cartpole: {
+        en: 'CartPole gives +1 for every step the pole stays up, capped at 500. So reward ≈ 500 means solved — the curve should climb from roughly 20 toward 500.',
+        cz: 'CartPole dává +1 za každý krok, kdy tyč zůstane vzhůru, maximálně 500. Odměna ≈ 500 tedy znamená vyřešeno — křivka by měla stoupat zhruba z 20 k 500.',
+      },
+    },
+  },
+
+  loss: {
+    general: {
+      en: 'A training diagnostic — roughly how much the network adjusts itself on each update. Unlike reward, lower is not automatically better and it does not climb steadily; it wobbles as the agent learns. Use it to spot instability (wild spikes), not as a score.',
+      cz: 'Diagnostika tréninku — zhruba jak moc se síť při každé aktualizaci upraví. Na rozdíl od odměny zde nižší hodnota není automaticky lepší a neroste plynule; kolísá, jak se agent učí. Slouží k odhalení nestability (divoké výkyvy), ne jako skóre.',
+    },
+    perEnv: {
+      cartpole: {
+        en: 'For CartPole the loss just bounces around small values throughout — that is normal. Judge progress from the reward curve, not this one.',
+        cz: 'U CartPole se ztráta po celou dobu jen pohybuje kolem malých hodnot — to je normální. Postup posuzujte podle křivky odměny, ne podle ní.',
+      },
+    },
+  },
+
+  fitness: {
+    general: {
+      en: 'The neuroevolution counterpart of reward. Instead of one agent improving by gradient steps, a whole population is scored each generation and the best "genomes" are bred together. Fitness is that score — the chart shows best / average / worst across generations.',
+      cz: 'Protějšek odměny u neuroevoluce. Místo jednoho agenta, který se zlepšuje gradientními kroky, se každou generaci ohodnotí celá populace a nejlepší „genomy“ se zkříží. Fitness je toto skóre — graf ukazuje nejlepší / průměrnou / nejhorší hodnotu napříč generacemi.',
+    },
+    perEnv: {
+      cartpole: {
+        en: 'Same 0–500 scale as reward for CartPole. This tab comes to life once you train with the Neuroevolution algorithm (Phase C).',
+        cz: 'Stejná škála 0–500 jako odměna pro CartPole. Tato záložka ožije, jakmile trénujete algoritmem Neuroevoluce (fáze C).',
+      },
+    },
+  },
+
+  smooth: {
+    general: {
+      en: 'A display-only smoothing for the chart — it does not change training. The chart draws the raw values as a faint line and overlays a bold smoothed line (an exponential moving average). Lower the slider for a calmer, more readable trend; set it to 1.0 to see every noisy data point exactly.',
+      cz: 'Vyhlazení pouze pro zobrazení grafu — trénink nijak nemění. Graf kreslí surové hodnoty slabou čarou a překrývá je výraznou vyhlazenou čarou (exponenciální klouzavý průměr). Snižte posuvník pro klidnější, čitelnější trend; nastavte na 1.0, abyste viděli každý zašuměný bod přesně.',
+    },
+    recommended: {
+      en: 'Around 0.3 — smooth enough to read the trend without hiding real changes.',
+      cz: 'Kolem 0.3 — dost vyhlazené pro čtení trendu, aniž by se skryly skutečné změny.',
+    },
+    range: '0.05 – 1.0  (1.0 = raw, no smoothing)',
+  },
+}

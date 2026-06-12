@@ -41,6 +41,14 @@
     "elapsed": "Time",
     "no_data": "Start training to see live stats"
   },
+  "info": {
+    "general": "What it is",
+    "recommended": "Recommended",
+    "range": "Range",
+    "for_env": "For {{env}}",
+    "close": "Close",
+    "aria_open": "Info about {{param}}"
+  },
   "skill": {
     "title": "AI Skill",
     "child": "Child",

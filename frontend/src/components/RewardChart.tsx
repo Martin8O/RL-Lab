@@ -4,6 +4,7 @@ import { useAppStore } from '../store/useAppStore'
 import type { ChartTab } from '../store/useAppStore'
 import { skillScaleFor } from '../content/skill'
 import SkillMeter from './SkillMeter'
+import ParamInfo from './ParamInfo'
 
 // ── EMA ─────────────────────────────────────────────────────────────────────
 
@@ -269,6 +270,11 @@ export default function RewardChart() {
           </button>
         ))}
 
+        {/* Info for the currently-selected tab (Reward / Loss / Fitness) */}
+        <span style={{ display: 'inline-flex', alignItems: 'center', marginLeft: 2 }}>
+          <ParamInfo paramId={activeTab} label={t(`chart.tab_${activeTab}`)} />
+        </span>
+
         <div style={{ flex: 1, minWidth: 8 }} />
 
         {/* EMA smoothing */}
@@ -276,7 +282,12 @@ export default function RewardChart() {
           title={t('chart.ema_alpha')}
           style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, marginRight: 8 }}
         >
-          {!compactControls && <span style={{ color: 'var(--text-muted)' }}>{t('chart.ema_alpha')}</span>}
+          {!compactControls && (
+            <span style={{ color: 'var(--text-muted)', display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+              {t('chart.ema_alpha')}
+              <ParamInfo paramId="smooth" label={t('chart.ema_alpha')} />
+            </span>
+          )}
           <input
             type="range" min={0.05} max={1} step={0.05}
             value={emaAlpha}

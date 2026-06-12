@@ -41,6 +41,14 @@
     "elapsed": "Čas",
     "no_data": "Spusťte trénink pro živé statistiky"
   },
+  "info": {
+    "general": "Co to je",
+    "recommended": "Doporučeno",
+    "range": "Rozsah",
+    "for_env": "Pro {{env}}",
+    "close": "Zavřít",
+    "aria_open": "Informace o {{param}}"
+  },
   "skill": {
     "title": "Dovednost AI",
     "child": "Dítě",
