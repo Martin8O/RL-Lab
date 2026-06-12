@@ -259,6 +259,94 @@ export interface PreviewConfig {
   speed?: number
 }
 
+// --- Play vs AI & skill meter (E1) -----------------------------------------
+// Mirrors backend/app/schemas/skill.py + schemas/play.py — keep both sides in sync.
+
+/** The five fixed rating bands, weakest → strongest. The UI maps each id to a localized
+ *  label + meter colour; the backend deals only in ids + numeric thresholds. */
+export type SkillBandId =
+  | 'child'
+  | 'below_average'
+  | 'average'
+  | 'above_average'
+  | 'superhuman'
+
+/** One band: its id and the inclusive lower score bound that qualifies for it. */
+export interface SkillBand {
+  id: SkillBandId
+  min_score: number
+}
+
+/** Skill-band thresholds for one env — returned by GET /api/skill/{env_id}. */
+export interface EnvSkill {
+  env_id: string
+  max_score: number
+  bands: SkillBand[]
+}
+
+/** How a finished session scored. `ratio` (score/max_score, clamped 0..1) is a ready-made
+ *  fill fraction for the skill meter. */
+export interface SkillRating {
+  band: SkillBandId
+  score: number
+  max_score: number
+  ratio: number
+}
+
+/** Who controls the agent: a human at the keyboard, or a loaded checkpoint playing itself. */
+export type PlayMode = 'human' | 'ai'
+export type PlayState = 'idle' | 'playing' | 'finished' | 'stopped' | 'error'
+
+/** Start request for POST /api/play/start. `checkpoint_id` is required for mode "ai". */
+export interface PlayConfig {
+  env_id: string
+  mode: PlayMode
+  checkpoint_id?: string | null
+  seed?: number | null
+  speed: number
+}
+
+/** WS frame: {type:"play_result", ...} — the final score + skill rating of a finished episode. */
+export interface PlayResult {
+  type: 'play_result'
+  env_id: string
+  mode: PlayMode
+  score: number
+  steps: number
+  rating: SkillRating
+}
+
+/** Lifecycle snapshot: returned by /api/play/* and pushed as {type:"play_status", ...}. */
+export interface PlayStatus {
+  type: 'play_status'
+  state: PlayState
+  env_id: string | null
+  mode: PlayMode | null
+  checkpoint_id: string | null
+  seed: number | null
+  speed: number
+  step: number
+  score: number
+  result: PlayResult | null
+  error: string | null
+}
+
+/** WS frame: {type:"play_frame", ...} — one rendered episode image (base64 JPEG, no prefix). */
+export interface PlayFrame {
+  type: 'play_frame'
+  step: number
+  score: number
+  width: number
+  height: number
+  image: string
+}
+
+/** Outbound human input over WS: {type:"action", action:<int>} (CartPole: 0=left, 1=right). */
+export interface PlayActionMessage {
+  type: 'action'
+  action: number
+}
+
 /** Any frame the WS channel can push. */
 export type TrainWsFrame =
   | TrainingMetrics
@@ -268,3 +356,6 @@ export type TrainWsFrame =
   | PreviewState
   | PreviewFrame
   | HighScore
+  | PlayStatus
+  | PlayResult
+  | PlayFrame
