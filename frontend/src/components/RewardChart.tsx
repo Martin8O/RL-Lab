@@ -2,6 +2,7 @@ import { useRef, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAppStore } from '../store/useAppStore'
 import type { ChartTab } from '../store/useAppStore'
+import SkillMeter from './SkillMeter'
 
 // ── EMA ─────────────────────────────────────────────────────────────────────
 
@@ -178,6 +179,7 @@ export default function RewardChart() {
   const { t } = useTranslation()
 
   const metricsHistory = useAppStore((s) => s.metricsHistory)
+  const lastProgress   = useAppStore((s) => s.lastProgress)
   const emaAlpha       = useAppStore((s) => s.emaAlpha)
   const chartWindow    = useAppStore((s) => s.chartWindow)
   const activeTab      = useAppStore((s) => s.activeTab)
@@ -213,24 +215,38 @@ export default function RewardChart() {
     ema: emaY[i],
   }))
 
-  const last = metricsHistory.at(-1)
+  // Live stats: prefer the ~1 Hz progress frame for timesteps/throughput/elapsed/%;
+  // Score is a per-rollout figure so it comes from the latest metrics frame.
+  // On a narrow chart panel, drop the control text labels (slider/select stay usable via
+  // their tooltips) so the relocated Smooth/Window controls never clip out of the tab row.
+  const compactControls = size.w > 0 && size.w < 380
+
+  const lastMetrics = metricsHistory.at(-1)
+  const hasStats = !!lastProgress || !!lastMetrics
+  const ep      = lastProgress?.iteration ?? lastMetrics?.iteration
+  const total   = lastProgress?.total_timesteps ?? lastMetrics?.total_timesteps ?? 0
+  const steps   = lastProgress?.timesteps ?? lastMetrics?.timesteps
+  const pct     = total > 0 && steps != null ? (steps / total) * 100 : null
+  const score   = lastMetrics?.ep_rew_mean
+  const sps     = lastProgress?.steps_per_sec
+  const elapsed = lastProgress?.elapsed ?? lastMetrics?.elapsed
 
   return (
     <section style={{
       flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden',
       background: 'var(--bg)',
     }}>
-      {/* Tab bar */}
+      {/* Tab bar + chart controls (Smooth / Window moved here from the bottom) */}
       <div style={{
-        display: 'flex', borderBottom: '1px solid var(--border)',
-        background: 'var(--surface)', flexShrink: 0, padding: '0 4px',
+        display: 'flex', alignItems: 'center', borderBottom: '1px solid var(--border)',
+        background: 'var(--surface)', flexShrink: 0, padding: '0 10px 0 4px', minHeight: 35,
       }}>
         {TABS.map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
             style={{
-              padding: '7px 14px', border: 'none', cursor: 'pointer',
+              padding: '7px 10px', border: 'none', cursor: 'pointer',
               background: 'transparent', fontSize: 12,
               fontWeight: activeTab === tab ? 600 : 400,
               color: activeTab === tab ? 'var(--accent-h)' : 'var(--text-muted)',
@@ -240,6 +256,46 @@ export default function RewardChart() {
             {t(`chart.tab_${tab}`)}
           </button>
         ))}
+
+        <div style={{ flex: 1, minWidth: 8 }} />
+
+        {/* EMA smoothing */}
+        <label
+          title={t('chart.ema_alpha')}
+          style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, marginRight: 8 }}
+        >
+          {!compactControls && <span style={{ color: 'var(--text-muted)' }}>{t('chart.ema_alpha')}</span>}
+          <input
+            type="range" min={0.05} max={1} step={0.05}
+            value={emaAlpha}
+            onChange={(e) => setEmaAlpha(parseFloat(e.target.value))}
+            style={{ width: 44, cursor: 'pointer', accentColor: 'var(--accent)' }}
+            aria-label={t('chart.ema_alpha')}
+          />
+        </label>
+
+        {/* Window */}
+        <label
+          title={t('chart.window')}
+          style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11 }}
+        >
+          {!compactControls && <span style={{ color: 'var(--text-muted)' }}>{t('chart.window')}</span>}
+          <select
+            value={chartWindow}
+            onChange={(e) => setChartWindow(parseInt(e.target.value, 10))}
+            style={{
+              background: 'var(--surface-2)', color: 'var(--text)',
+              border: '1px solid var(--border)', borderRadius: 4,
+              fontSize: 11, padding: '2px 4px', cursor: 'pointer',
+            }}
+            aria-label={t('chart.window')}
+          >
+            <option value={0}>{t('chart.window_all')}</option>
+            <option value={25}>25</option>
+            <option value={50}>50</option>
+            <option value={100}>100</option>
+          </select>
+        </label>
       </div>
 
       {/* Chart area */}
@@ -264,60 +320,24 @@ export default function RewardChart() {
         display: 'flex', alignItems: 'center',
         minHeight: 46,
       }}>
-        {last ? (
+        {hasStats ? (
           <>
-            <StatChip label={t('stats.episode')} value={String(last.iteration)} />
-            <StatChip label={t('stats.score')}   value={last.ep_rew_mean !== null ? last.ep_rew_mean.toFixed(1) : '—'} />
-            <StatChip label={t('stats.steps')}   value={fmtSteps(last.timesteps)} />
-            <StatChip label={t('stats.elapsed')} value={fmtElapsed(last.elapsed)} />
+            <StatChip
+              label={t('stats.episode')}
+              value={ep != null ? (pct != null ? `${ep} (${Math.round(pct)}%)` : String(ep)) : '—'}
+            />
+            <StatChip label={t('stats.score')}        value={score != null ? score.toFixed(1) : '—'} />
+            <StatChip label={t('stats.steps')}        value={steps != null ? fmtSteps(steps) : '—'} />
+            <StatChip label={t('stats.steps_per_sec')} value={sps != null ? String(Math.round(sps)) : '—'} />
+            <StatChip label={t('stats.elapsed')}      value={elapsed != null ? fmtElapsed(elapsed) : '—'} />
           </>
         ) : (
           <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{t('stats.no_data')}</span>
         )}
       </div>
 
-      {/* Chart controls */}
-      <div style={{
-        flexShrink: 0, borderTop: '1px solid var(--border)',
-        background: 'var(--surface)', padding: '5px 12px',
-        display: 'flex', alignItems: 'center', gap: 18,
-      }}>
-        {/* EMA alpha */}
-        <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11 }}>
-          <span style={{ color: 'var(--text-muted)' }}>{t('chart.ema_alpha')}</span>
-          <input
-            type="range" min={0.05} max={1} step={0.05}
-            value={emaAlpha}
-            onChange={(e) => setEmaAlpha(parseFloat(e.target.value))}
-            style={{ width: 72, cursor: 'pointer', accentColor: 'var(--accent)' }}
-          />
-          <span style={{
-            color: 'var(--text)', fontVariantNumeric: 'tabular-nums',
-            minWidth: 26, fontFamily: 'monospace', fontSize: 11,
-          }}>
-            {emaAlpha.toFixed(2)}
-          </span>
-        </label>
-
-        {/* Window */}
-        <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11 }}>
-          <span style={{ color: 'var(--text-muted)' }}>{t('chart.window')}</span>
-          <select
-            value={chartWindow}
-            onChange={(e) => setChartWindow(parseInt(e.target.value, 10))}
-            style={{
-              background: 'var(--surface-2)', color: 'var(--text)',
-              border: '1px solid var(--border)', borderRadius: 4,
-              fontSize: 11, padding: '2px 4px', cursor: 'pointer',
-            }}
-          >
-            <option value={0}>{t('chart.window_all')}</option>
-            <option value={25}>25</option>
-            <option value={50}>50</option>
-            <option value={100}>100</option>
-          </select>
-        </label>
-      </div>
+      {/* AI skill meter (replaces the old chart controls, which moved to the tab row) */}
+      <SkillMeter score={score ?? null} />
     </section>
   )
 }

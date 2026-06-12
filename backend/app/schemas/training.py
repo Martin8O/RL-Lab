@@ -52,6 +52,21 @@ class TrainingMetrics(BaseModel):
     elapsed: float
 
 
+class TrainingProgress(BaseModel):
+    """Lightweight ~1 Hz progress frame, pushed over WS as {type:"progress", ...}.
+
+    Decoupled from the per-rollout :class:`TrainingMetrics` so the live stats (timesteps,
+    throughput, elapsed, % complete) refresh every second instead of once per rollout.
+    """
+
+    type: Literal["progress"] = "progress"
+    iteration: int
+    timesteps: int
+    total_timesteps: int
+    steps_per_sec: float
+    elapsed: float
+
+
 class TrainStatus(BaseModel):
     """Lifecycle snapshot — returned by /api/train/* and pushed as {type:"status", ...}."""
 

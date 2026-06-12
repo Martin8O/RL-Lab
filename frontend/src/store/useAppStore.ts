@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import type { EnvSpec, PPOHyperparams, TrainingMetrics, TrainState } from '../api/types'
+import type { EnvSpec, PPOHyperparams, TrainingMetrics, TrainingProgress, TrainState } from '../api/types'
 
 export type Locale        = 'cz' | 'en'
 export type Theme         = 'dark' | 'light'
@@ -30,12 +30,15 @@ interface AppState {
   emaAlpha:        number     // 1 = raw; 0.05 = heavy smoothing
   chartWindow:     number     // 0 = all; N = last N rollouts
   activeTab:       ChartTab
+  visual:          boolean    // env-preview frame streaming on/off
+  speed:           number     // playback speed multiplier (1×–20×)
 
   // ─ ephemeral (not persisted) ───────────────────────────────
   backendStatus:   BackendStatus
   envs:            EnvSpec[]
   trainState:      TrainState
   metricsHistory:  TrainingMetrics[]
+  lastProgress:    TrainingProgress | null
   bestReward:      number | null
 
   // ─ actions ────────────────────────────────────────────────
@@ -50,8 +53,11 @@ interface AppState {
   setEmaAlpha:        (a: number)                   => void
   setChartWindow:     (w: number)                   => void
   setActiveTab:       (t: ChartTab)                 => void
+  setVisual:          (v: boolean)                  => void
+  setSpeed:           (n: number)                   => void
   setTrainState:      (s: TrainState)               => void
   addMetrics:         (m: TrainingMetrics)          => void
+  setProgress:        (p: TrainingProgress)         => void
   clearMetrics:       ()                            => void
 }
 
@@ -67,11 +73,14 @@ export const useAppStore = create<AppState>()(
       emaAlpha:        0.3,
       chartWindow:     0,
       activeTab:       'reward',
+      visual:          true,
+      speed:           1,
 
       backendStatus:   'connecting',
       envs:            [],
       trainState:      'idle',
       metricsHistory:  [],
+      lastProgress:    null,
       bestReward:      null,
 
       setLocale:         (locale)         => set({ locale }),
@@ -85,6 +94,8 @@ export const useAppStore = create<AppState>()(
       setEmaAlpha:       (emaAlpha)       => set({ emaAlpha }),
       setChartWindow:    (chartWindow)    => set({ chartWindow }),
       setActiveTab:      (activeTab)      => set({ activeTab }),
+      setVisual:         (visual)         => set({ visual }),
+      setSpeed:          (speed)          => set({ speed }),
       setTrainState:     (trainState)     => set({ trainState }),
 
       addMetrics: (m) =>
@@ -101,7 +112,9 @@ export const useAppStore = create<AppState>()(
           }
         }),
 
-      clearMetrics: () => set({ metricsHistory: [], bestReward: null }),
+      setProgress: (p) => set({ lastProgress: p }),
+
+      clearMetrics: () => set({ metricsHistory: [], lastProgress: null, bestReward: null }),
     }),
     {
       name: 'rl-app-store',
@@ -115,6 +128,8 @@ export const useAppStore = create<AppState>()(
         emaAlpha:       s.emaAlpha,
         chartWindow:    s.chartWindow,
         activeTab:      s.activeTab,
+        visual:         s.visual,
+        speed:          s.speed,
       }),
     },
   ),

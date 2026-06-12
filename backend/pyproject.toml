@@ -18,3 +18,7 @@ exclude = ["^tests/"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
+filterwarnings = [
+    # Third-party: starlette's TestClient nudges toward httpx2; not actionable for us.
+    "ignore:Using `httpx` with `starlette.testclient` is deprecated",
+]

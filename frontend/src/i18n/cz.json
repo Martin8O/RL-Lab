@@ -37,10 +37,30 @@
     "episode": "Ep",
     "score": "Skóre",
     "steps": "Kroky",
+    "steps_per_sec": "Kroků/s",
     "elapsed": "Čas",
     "no_data": "Spusťte trénink pro živé statistiky"
   },
-  "envpreview":  { "title": "Prostředí",      "placeholder": "Náhled tréninku se zobrazí zde" },
+  "skill": {
+    "title": "Dovednost AI",
+    "child": "Dítě",
+    "below": "Podprůměr",
+    "average": "Průměr",
+    "above": "Nadprůměr",
+    "superhuman": "Nadčlověk",
+    "no_data": "—"
+  },
+  "envpreview": {
+    "title": "Prostředí",
+    "placeholder": "Náhled tréninku se zobrazí zde",
+    "visual": "Vizualizace",
+    "on": "ZAP",
+    "off": "VYP",
+    "speed": "Rychlost",
+    "visual_on_hint": "Živý náhled — vypněte pro rychlejší trénink",
+    "visual_off_hint": "Vizualizace vypnuta — trénink běží naplno",
+    "idle_hint": "Spusťte trénink a sledujte agenta"
+  },
   "chart": {
     "title": "Graf odměn",
     "placeholder": "Spusťte trénink pro živý graf",

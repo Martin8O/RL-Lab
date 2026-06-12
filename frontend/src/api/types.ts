@@ -82,6 +82,16 @@ export interface TrainingMetrics {
   elapsed: number
 }
 
+/** WS frame: {type:"progress", ...} pushed ~once per second during a run. */
+export interface TrainingProgress {
+  type: 'progress'
+  iteration: number
+  timesteps: number
+  total_timesteps: number
+  steps_per_sec: number
+  elapsed: number
+}
+
 /** Lifecycle snapshot: returned by /api/train/* and pushed as {type:"status", ...}. */
 export interface TrainStatus {
   type: 'status'
@@ -96,5 +106,39 @@ export interface TrainStatus {
   error: string | null
 }
 
-/** Any frame the training WS channel can push. */
-export type TrainWsFrame = TrainingMetrics | TrainStatus
+// --- Preview / frame streaming (B4) ----------------------------------------
+// Mirrors backend/app/schemas/preview.py — keep both sides in sync.
+
+/** Current preview settings: returned by /api/preview, pushed as {type:"preview"}. */
+export interface PreviewState {
+  type: 'preview'
+  visual: boolean
+  speed: number
+  active: boolean
+}
+
+/** WS frame: {type:"frame", ...} — one rendered env image. */
+export interface PreviewFrame {
+  type: 'frame'
+  episode: number
+  step: number
+  reward: number
+  width: number
+  height: number
+  /** base64-encoded JPEG, no data-URI prefix (the client prepends it). */
+  image: string
+}
+
+/** Partial preview update for POST /api/preview. */
+export interface PreviewConfig {
+  visual?: boolean
+  speed?: number
+}
+
+/** Any frame the WS channel can push. */
+export type TrainWsFrame =
+  | TrainingMetrics
+  | TrainingProgress
+  | TrainStatus
+  | PreviewState
+  | PreviewFrame

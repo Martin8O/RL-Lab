@@ -11,8 +11,15 @@ import threading
 
 from app.core.logging import get_logger
 from app.envs.registry import get_env
-from app.schemas.training import TrainConfig, TrainingMetrics, TrainState, TrainStatus
+from app.schemas.training import (
+    TrainConfig,
+    TrainingMetrics,
+    TrainingProgress,
+    TrainState,
+    TrainStatus,
+)
 from app.services.connection_manager import ConnectionManager, manager
+from app.services.preview_streamer import preview_streamer
 from app.services.train_control import TrainControl
 
 logger = get_logger(__name__)
@@ -77,6 +84,8 @@ class TrainingManager:
             daemon=True,
         )
         self._thread.start()
+        # Let the (decoupled) preview streamer begin watching this run, if visual is on.
+        preview_streamer.attach_run(spec.gym_id)
         return self.status()
 
     def pause(self) -> TrainStatus:
@@ -85,6 +94,7 @@ class TrainingManager:
                 return self._status_locked()
             self._control.pause()
             self._state = "paused"
+        preview_streamer.set_paused(True)  # freeze the live preview alongside training
         self._broadcast_status()
         return self.status()
 
@@ -94,6 +104,7 @@ class TrainingManager:
                 return self._status_locked()
             self._control.resume()
             self._state = "running"
+        preview_streamer.set_paused(False)  # unfreeze the live preview
         self._broadcast_status()
         return self.status()
 
@@ -118,7 +129,14 @@ class TrainingManager:
         from app.services.trainer_ppo import train_ppo  # lazy: loads torch/SB3
 
         try:
-            terminal = train_ppo(config, gym_id, control, self._emit_metrics)
+            terminal = train_ppo(
+                config,
+                gym_id,
+                control,
+                self._emit_metrics,
+                self._emit_progress,
+                self._publish_model,
+            )
             with self._lock:
                 self._state = terminal
         except Exception as exc:  # noqa: BLE001 — surface any trainer failure as state
@@ -126,13 +144,29 @@ class TrainingManager:
             with self._lock:
                 self._state = "error"
                 self._error = str(exc)
+        finally:
+            preview_streamer.detach_run()  # stop the preview + close its render env
         self._broadcast_status()
+
+    def _publish_model(self, model: object) -> None:
+        """Hand the preview streamer a deterministic predict fn over the live model."""
+
+        def predict(obs: object) -> object:
+            action, _ = model.predict(obs, deterministic=True)  # type: ignore[attr-defined]
+            return action
+
+        preview_streamer.set_policy(predict)
 
     def _emit_metrics(self, metrics: TrainingMetrics) -> None:
         with self._lock:
             self._last_metrics = metrics
             self._timesteps = metrics.timesteps
         self._broadcast(metrics.model_dump())
+
+    def _emit_progress(self, progress: TrainingProgress) -> None:
+        with self._lock:
+            self._timesteps = progress.timesteps
+        self._broadcast(progress.model_dump())
 
     # -- status / broadcast -----------------------------------------------------
 

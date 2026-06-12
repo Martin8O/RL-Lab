@@ -39,6 +39,7 @@ def test_train_ppo_reproducible_with_same_seed() -> None:
             "CartPole-v1",
             TrainControl(),
             lambda m: seen.append((m.timesteps, m.ep_rew_mean, m.ep_len_mean)),
+            lambda _p: None,  # progress sink unused (tiny run finishes under the 1s tick)
         )
         return seen
 
@@ -55,7 +56,7 @@ def test_train_ppo_stop_aborts_early() -> None:
         seen.append(metrics)
         control.request_stop()  # stop right after the first rollout
 
-    terminal = train_ppo(_tiny_config(total=4096), "CartPole-v1", control, sink)
+    terminal = train_ppo(_tiny_config(total=4096), "CartPole-v1", control, sink, lambda _p: None)
     assert terminal == "stopped"
     assert len(seen) == 1
 

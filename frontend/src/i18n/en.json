@@ -37,10 +37,30 @@
     "episode": "Ep",
     "score": "Score",
     "steps": "Steps",
+    "steps_per_sec": "Steps/s",
     "elapsed": "Time",
     "no_data": "Start training to see live stats"
   },
-  "envpreview":  { "title": "Environment",    "placeholder": "Training preview will appear here" },
+  "skill": {
+    "title": "AI Skill",
+    "child": "Child",
+    "below": "Below avg",
+    "average": "Average",
+    "above": "Above avg",
+    "superhuman": "Superhuman",
+    "no_data": "—"
+  },
+  "envpreview": {
+    "title": "Environment",
+    "placeholder": "Training preview will appear here",
+    "visual": "Visual",
+    "on": "ON",
+    "off": "OFF",
+    "speed": "Speed",
+    "visual_on_hint": "Live preview — turn off for faster training",
+    "visual_off_hint": "Visual off — training runs at full speed",
+    "idle_hint": "Start training to watch the agent play"
+  },
   "chart": {
     "title": "Reward Chart",
     "placeholder": "Start training to see the live chart",

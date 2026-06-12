@@ -1,6 +1,14 @@
 import { useEffect } from 'react'
 import { useAppStore } from '../store/useAppStore'
-import type { EnvSpec, TrainConfig, TrainStatus, TrainWsFrame } from './types'
+import type {
+  EnvSpec,
+  PreviewConfig,
+  PreviewFrame,
+  PreviewState,
+  TrainConfig,
+  TrainStatus,
+  TrainWsFrame,
+} from './types'
 
 const API_BASE = (import.meta.env.VITE_API_BASE as string | undefined) ?? ''
 
@@ -74,7 +82,17 @@ export function createWsClient(
   return { stop }
 }
 
-/** React hook: opens the /ws connection and dispatches training frames to the store. */
+// Env-preview frames are high-frequency (≤30 fps) and large; routing them through the
+// store would thrash React. Instead EnvPreview registers a handler that draws straight to
+// its canvas, and the WS dispatch calls it directly.
+type FrameHandler = (frame: PreviewFrame) => void
+let frameHandler: FrameHandler | null = null
+
+export function setFrameHandler(handler: FrameHandler | null): void {
+  frameHandler = handler
+}
+
+/** React hook: opens the /ws connection and dispatches incoming frames. */
 export function useTrainingWs(): void {
   useEffect(() => {
     const { stop } = createWsClient(
@@ -82,6 +100,8 @@ export function useTrainingWs(): void {
         const frame = data as TrainWsFrame
         if (frame.type === 'metrics') {
           useAppStore.getState().addMetrics(frame)
+        } else if (frame.type === 'progress') {
+          useAppStore.getState().setProgress(frame)
         } else if (frame.type === 'status') {
           const prev = useAppStore.getState().trainState
           useAppStore.getState().setTrainState(frame.state)
@@ -93,6 +113,12 @@ export function useTrainingWs(): void {
           ) {
             useAppStore.getState().clearMetrics()
           }
+        } else if (frame.type === 'frame') {
+          frameHandler?.(frame)
+        } else if (frame.type === 'preview') {
+          // Keep the toggle/slider in sync (e.g. across tabs); echoes our own changes.
+          useAppStore.getState().setVisual(frame.visual)
+          useAppStore.getState().setSpeed(frame.speed)
         }
       },
       () => {},
@@ -134,3 +160,21 @@ export const startTraining  = (config: TrainConfig) => trainPost('start', config
 export const stopTraining   = ()                     => trainPost('stop')
 export const pauseTraining  = ()                     => trainPost('pause')
 export const resumeTraining = ()                     => trainPost('resume')
+
+// ── Preview control (B4) ──────────────────────────────────────────────────────
+
+export async function fetchPreview(): Promise<PreviewState> {
+  const res = await fetch(`${API_BASE}/api/preview`)
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  return res.json() as Promise<PreviewState>
+}
+
+export async function setPreview(config: PreviewConfig): Promise<PreviewState> {
+  const res = await fetch(`${API_BASE}/api/preview`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(config),
+  })
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  return res.json() as Promise<PreviewState>
+}
