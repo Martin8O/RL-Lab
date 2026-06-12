@@ -114,6 +114,7 @@
     "best": "Best",
     "avg": "Avg",
     "worst": "Worst",
+    "solved": "Solved @",
     "mutation_dist": "Mutation spread"
   },
   "saveload": {
@@ -126,5 +127,16 @@
     "delete": "Delete",
     "nothing_to_save": "Start a run first — nothing to save yet",
     "confirm_delete": "Delete checkpoint \"{{label}}\"?"
+  },
+  "runs": {
+    "compare": "Compare",
+    "title": "Run history",
+    "empty": "No finished runs yet — train a run to compare it later",
+    "max_hint": "Overlay up to 3 past runs on the chart",
+    "clear": "Clear",
+    "delete": "Delete run",
+    "no_overlay": "Selected runs have no data for this tab",
+    "solved": "Steps / generations to reach 100% (solved)",
+    "confirm_delete": "Delete run \"{{label}}\"?"
   }
 }

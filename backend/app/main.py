@@ -9,6 +9,7 @@ from app.api.checkpoints import router as checkpoints_router
 from app.api.envs import router as envs_router
 from app.api.highscores import router as highscores_router
 from app.api.preview import router as preview_router
+from app.api.runs import router as runs_router
 from app.api.training import router as training_router
 from app.core.config import settings
 from app.core.logging import configure_logging, get_logger
@@ -46,6 +47,7 @@ app.include_router(training_router)
 app.include_router(preview_router)
 app.include_router(highscores_router)
 app.include_router(checkpoints_router)
+app.include_router(runs_router)
 
 
 # ---------------------------------------------------------------------------

@@ -1,8 +1,10 @@
-import { useRef, useEffect, useState } from 'react'
+import { useRef, useEffect, useState, useMemo, useCallback, type CSSProperties } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAppStore } from '../store/useAppStore'
 import type { ChartTab } from '../store/useAppStore'
 import { skillScaleFor } from '../content/skill'
+import { fetchRuns, fetchRun, deleteRun } from '../api/client'
+import type { RunDetail, RunMeta } from '../api/types'
 import SkillMeter from './SkillMeter'
 import ParamInfo from './ParamInfo'
 
@@ -68,12 +70,14 @@ function fmtTick(v: number): string {
 
 const PAD = { t: 10, r: 12, b: 30, l: 48 }
 
-interface Line {
-  values: (number | null)[]  // aligned with the shared x[]
+interface Series {
+  x: number[]                // this line's own x values (parallel to values)
+  values: (number | null)[]
   color: string
   width: number
   opacity?: number
   dot?: boolean              // draw a dot at the latest value
+  dash?: boolean             // dashed stroke (used for overlaid past runs)
 }
 
 function buildSvgPath(x: number[], values: (number | null)[], toX: (v: number) => number, toY: (v: number) => number): string {
@@ -90,29 +94,39 @@ function buildSvgPath(x: number[], values: (number | null)[], toX: (v: number) =
   return d
 }
 
-function lastDefined(values: (number | null)[]): number | null {
-  for (let i = values.length - 1; i >= 0; i--) {
-    if (values[i] !== null && values[i] !== undefined) return values[i]
+function lastPoint(s: Series): { x: number; y: number } | null {
+  for (let i = s.values.length - 1; i >= 0; i--) {
+    const y = s.values[i]
+    if (y !== null && y !== undefined) return { x: s.x[i], y }
   }
   return null
 }
 
-function LineChart({ x, lines, width, height, xFmt }: {
-  x: number[]; lines: Line[]; width: number; height: number; xFmt: (v: number) => string
+// A vertical "solved" marker: where a compared run first hit 100% of the goal.
+interface SolvedMarker { x: number; color: string; label: string }
+
+// Multi-series chart: each series carries its own x[], so live data and overlaid past runs
+// (with different step/generation ranges) share one auto-scaled domain.
+function LineChart({ series, markers = [], width, height, xFmt }: {
+  series: Series[]; markers?: SolvedMarker[]; width: number; height: number; xFmt: (v: number) => string
 }) {
-  if (x.length === 0 || width < 10 || height < 10) return null
+  const allX: number[] = []
+  const allY: number[] = []
+  for (const s of series) {
+    for (const xv of s.x) allX.push(xv)
+    for (const v of s.values) if (v !== null && v !== undefined) allY.push(v)
+  }
+  if (allX.length === 0 || width < 10 || height < 10) return null
 
   const chartW = width  - PAD.l - PAD.r
   const chartH = height - PAD.t - PAD.b
 
-  const all: number[] = []
-  for (const ln of lines) for (const v of ln.values) if (v !== null && v !== undefined) all.push(v)
-  const yMin = all.length ? Math.min(0, ...all) : 0
-  const yMax = all.length ? Math.max(1, ...all) : 1
+  const yMin = allY.length ? Math.min(0, ...allY) : 0
+  const yMax = allY.length ? Math.max(1, ...allY) : 1
   const yRange = yMax - yMin || 1
 
-  const xMin = x[0]
-  const xMax = x[x.length - 1]
+  const xMin = Math.min(...allX)
+  const xMax = Math.max(...allX)
   const xRange = xMax - xMin || 1
 
   const toX = (v: number) => PAD.l + ((v - xMin) / xRange) * chartW
@@ -147,27 +161,63 @@ function LineChart({ x, lines, width, height, xFmt }: {
       ))}
 
       {/* Lines */}
-      {lines.map((ln, i) => {
-        const d = buildSvgPath(x, ln.values, toX, toY)
+      {series.map((s, i) => {
+        const d = buildSvgPath(s.x, s.values, toX, toY)
         if (!d) return null
         return (
           <path
             key={i}
-            d={d} fill="none" stroke={ln.color} strokeWidth={ln.width}
-            opacity={ln.opacity ?? 1} strokeLinejoin="round" strokeLinecap="round"
+            d={d} fill="none" stroke={s.color} strokeWidth={s.width}
+            opacity={s.opacity ?? 1} strokeLinejoin="round" strokeLinecap="round"
+            strokeDasharray={s.dash ? '5 4' : undefined}
           />
         )
       })}
 
       {/* Latest-value dots */}
-      {lines.map((ln, i) => {
-        if (!ln.dot) return null
-        const y = lastDefined(ln.values)
-        if (y === null) return null
-        return <circle key={`dot-${i}`} cx={toX(x[x.length - 1])} cy={toY(y)} r={3.5} fill={ln.color} />
+      {series.map((s, i) => {
+        if (!s.dot) return null
+        const p = lastPoint(s)
+        if (p === null) return null
+        return <circle key={`dot-${i}`} cx={toX(p.x)} cy={toY(p.y)} r={3.5} fill={s.color} />
+      })}
+
+      {/* Solved markers: a coloured vertical line + the x-value labelled on the axis, so a
+          compared run's "steps/generations to solve" reads straight off the chart. */}
+      {markers.map((m, i) => {
+        if (m.x < xMin || m.x > xMax) return null
+        const mx = toX(m.x)
+        return (
+          <g key={`mk-${i}`}>
+            <line x1={mx} y1={PAD.t} x2={mx} y2={PAD.t + chartH} stroke={m.color} strokeWidth={1.5} strokeDasharray="2 3" opacity={0.65} />
+            <text x={mx} y={PAD.t + chartH + 28} textAnchor="middle" fontSize={9} fontWeight={700} fill={m.color}>
+              ✓ {m.label}
+            </text>
+          </g>
+        )
       })}
     </svg>
   )
+}
+
+// Categorical palette for overlaid past runs — mid-saturation so it reads on dark + light.
+const OVERLAY_COLORS = ['#e0a458', '#9b8cf0', '#4fb8d6']
+
+// Project a saved run's recorded frames onto the active tab's (x, y), or null if the run has
+// no data for that tab (e.g. an evolution run on the Reward tab).
+function runSeries(run: RunDetail, tab: ChartTab, color: string): Series | null {
+  const x: number[] = []
+  const values: (number | null)[] = []
+  for (const f of run.metrics) {
+    if (tab === 'fitness') {
+      if (f.type !== 'evolution') continue
+      x.push(f.generation); values.push(f.best_fitness)
+    } else if (f.type === 'metrics') {
+      x.push(f.timesteps); values.push(tab === 'loss' ? f.loss : f.ep_rew_mean)
+    }
+  }
+  if (x.length === 0) return null
+  return { x, values, color, width: 1.5, opacity: 0.9, dash: true }
 }
 
 // ── StatChip ─────────────────────────────────────────────────────────────────
@@ -192,6 +242,132 @@ function LegendDot({ color, label }: { color: string; label: string }) {
       <span style={{ width: 8, height: 8, borderRadius: 2, background: color, display: 'inline-block' }} />
       {label}
     </span>
+  )
+}
+
+// ── Run-history compare (D2) ────────────────────────────────────────────────────
+
+// A run row in the compare popover: toggles its overlay, shows its final reward, deletes it.
+// The swatch colour matches the overlay line so the chart and list read together.
+function RunRow({ run, color, selected, atCap, onToggle, onDelete }: {
+  run: RunMeta
+  color: string | null
+  selected: boolean
+  atCap: boolean
+  onToggle: (id: string) => void
+  onDelete: (run: RunMeta) => void
+}) {
+  const { t } = useTranslation()
+  const disabled = !selected && atCap
+  const ellipsis: CSSProperties = { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+      <button
+        onClick={() => onToggle(run.id)}
+        disabled={disabled}
+        title={disabled ? t('runs.max_hint') : run.label}
+        style={{
+          flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 6,
+          padding: '4px 6px', borderRadius: 4, border: 'none', textAlign: 'left',
+          background: selected ? 'var(--accent-soft)' : 'transparent',
+          cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.45 : 1,
+        }}
+      >
+        <span style={{
+          width: 10, height: 10, flexShrink: 0, borderRadius: 2,
+          background: selected && color ? color : 'transparent',
+          border: `1px solid ${selected && color ? color : 'var(--border)'}`,
+        }} />
+        <span style={{ ...ellipsis, flex: 1, minWidth: 0, fontSize: 11, color: 'var(--text-h)' }}>
+          {run.label}
+        </span>
+        {run.solved_at != null && (
+          <span
+            title={t('runs.solved')}
+            style={{ fontSize: 9, fontFamily: 'monospace', color: 'var(--accent-h)', flexShrink: 0 }}
+          >
+            ✓ {run.algo === 'neuroevolution' ? `g${fmtGen(run.solved_at)}` : fmtSteps(run.solved_at)}
+          </span>
+        )}
+        <span style={{ fontSize: 10, fontFamily: 'monospace', color: 'var(--ok)', flexShrink: 0 }}>
+          {run.final_reward != null ? run.final_reward.toFixed(1) : '—'}
+        </span>
+      </button>
+      <button
+        onClick={() => onDelete(run)}
+        title={t('runs.delete')}
+        style={{
+          flexShrink: 0, width: 20, height: 20, lineHeight: '18px', textAlign: 'center',
+          background: 'transparent', border: 'none', cursor: 'pointer',
+          color: 'var(--text-muted)', fontSize: 12, borderRadius: 4,
+        }}
+      >✕</button>
+    </div>
+  )
+}
+
+function ComparePopover({ runs, selectedOrder, onToggle, onDelete, onClear, onClose }: {
+  runs: RunMeta[]
+  selectedOrder: string[]   // selected ids in overlay order (drives swatch colour)
+  onToggle: (id: string) => void
+  onDelete: (run: RunMeta) => void
+  onClear: () => void
+  onClose: () => void
+}) {
+  const { t } = useTranslation()
+  const atCap = selectedOrder.length >= OVERLAY_COLORS.length
+  return (
+    <>
+      {/* Click-away backdrop */}
+      <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 30 }} />
+      <div style={{
+        position: 'absolute', top: 'calc(100% + 4px)', right: 0, zIndex: 31,
+        width: 290, maxHeight: 280, display: 'flex', flexDirection: 'column',
+        background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 6,
+        boxShadow: '0 8px 24px rgba(0,0,0,0.35)',
+      }}>
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          padding: '6px 10px', borderBottom: '1px solid var(--border)',
+          fontSize: 12, fontWeight: 600, color: 'var(--text-h)',
+        }}>
+          <span>{t('runs.title')}</span>
+          {selectedOrder.length > 0 && (
+            <button onClick={onClear} style={{
+              background: 'transparent', border: 'none', cursor: 'pointer',
+              color: 'var(--text-muted)', fontSize: 11,
+            }}>{t('runs.clear')}</button>
+          )}
+        </div>
+        {runs.length === 0 ? (
+          <div style={{ padding: 16, fontSize: 11, color: 'var(--text-muted)', textAlign: 'center' }}>
+            {t('runs.empty')}
+          </div>
+        ) : (
+          <>
+            <div style={{ padding: '5px 10px 2px', fontSize: 10, color: 'var(--text-muted)' }}>
+              {t('runs.max_hint')}
+            </div>
+            <div style={{ flex: 1, overflowY: 'auto', padding: '2px 6px 6px' }}>
+              {runs.map((run) => {
+                const idx = selectedOrder.indexOf(run.id)
+                return (
+                  <RunRow
+                    key={run.id}
+                    run={run}
+                    selected={idx >= 0}
+                    color={idx >= 0 ? OVERLAY_COLORS[idx % OVERLAY_COLORS.length] : null}
+                    atCap={atCap}
+                    onToggle={onToggle}
+                    onDelete={onDelete}
+                  />
+                )
+              })}
+            </div>
+          </>
+        )}
+      </div>
+    </>
   )
 }
 
@@ -229,49 +405,107 @@ export default function RewardChart() {
     return () => obs.disconnect()
   }, [])
 
+  // ── Run-history overlay (D2) ───────────────────────────────────────────────
+  const trainState = useAppStore((s) => s.trainState)
+  const [runs, setRuns] = useState<RunMeta[]>([])
+  const [selected, setSelected] = useState<RunDetail[]>([])  // insertion order = overlay order
+  const [showCompare, setShowCompare] = useState(false)
+
+  const refreshRuns = useCallback(() => {
+    void fetchRuns().then(setRuns).catch(() => {})
+  }, [])
+  useEffect(() => { refreshRuns() }, [refreshRuns])
+  // A finishing/stopped run is archived server-side; pull the freshened list in.
+  useEffect(() => {
+    if (trainState === 'finished' || trainState === 'stopped') refreshRuns()
+  }, [trainState, refreshRuns])
+
+  const selectedOrder = useMemo(() => selected.map((r) => r.meta.id), [selected])
+
+  const toggleRun = useCallback(async (id: string) => {
+    const exists = selected.some((r) => r.meta.id === id)
+    if (exists) {
+      setSelected((sel) => sel.filter((r) => r.meta.id !== id))
+      return
+    }
+    if (selected.length >= OVERLAY_COLORS.length) return  // cap overlays at the palette size
+    try {
+      const detail = await fetchRun(id)
+      setSelected((sel) => (sel.length >= OVERLAY_COLORS.length ? sel : [...sel, detail]))
+    } catch { /* ignore fetch failure */ }
+  }, [selected])
+
+  const removeRun = useCallback(async (run: RunMeta) => {
+    if (!window.confirm(t('runs.confirm_delete', { label: run.label }))) return
+    try {
+      await deleteRun(run.id)
+      setSelected((sel) => sel.filter((r) => r.meta.id !== run.id))
+      refreshRuns()
+    } catch { /* ignore */ }
+  }, [t, refreshRuns])
+
   const win = <T,>(arr: T[]): T[] => (chartWindow > 0 ? arr.slice(-chartWindow) : arr)
   const accent = 'var(--accent)'
 
-  // Build the active tab's shared x[] + lines.
-  let chartX: number[] = []
-  let lines: Line[] = []
+  // Build the active tab's live series (each shares this tab's x[]).
+  let liveSeries: Series[] = []
   let xFmt = fmtSteps
 
   if (activeTab === 'reward') {
     const v = win(progressHistory)
-    chartX = v.map((p) => p.timesteps)
+    const lx = v.map((p) => p.timesteps)
     const raw = v.map((p) => p.ep_rew_mean)
-    lines = [
-      { values: raw, color: accent, width: 1, opacity: 0.28 },
-      { values: computeEma(raw, emaAlpha), color: accent, width: 2, dot: true },
+    liveSeries = [
+      { x: lx, values: raw, color: accent, width: 1, opacity: 0.28 },
+      { x: lx, values: computeEma(raw, emaAlpha), color: accent, width: 2, dot: true },
     ]
   } else if (activeTab === 'loss') {
     const v = win(metricsHistory)
-    chartX = v.map((m) => m.timesteps)
+    const lx = v.map((m) => m.timesteps)
     const raw = v.map((m) => m.loss)
-    lines = [
-      { values: raw, color: accent, width: 1, opacity: 0.28 },
-      { values: computeEma(raw, emaAlpha), color: accent, width: 2, dot: true },
+    liveSeries = [
+      { x: lx, values: raw, color: accent, width: 1, opacity: 0.28 },
+      { x: lx, values: computeEma(raw, emaAlpha), color: accent, width: 2, dot: true },
     ]
   } else {
     // Fitness: best / gen-avg / worst across generations.
     const v = win(evolutionHistory)
-    chartX = v.map((e) => e.generation)
+    const lx = v.map((e) => e.generation)
     xFmt = fmtGen
     const best  = v.map((e) => e.best_fitness)
     const avg   = v.map((e) => e.avg_fitness)
     const worst = v.map((e) => e.worst_fitness)
-    lines = [
-      { values: worst, color: 'var(--err)', width: 1, opacity: 0.18 },
-      { values: computeEma(worst, emaAlpha), color: 'var(--err)', width: 2 },
-      { values: avg, color: accent, width: 1, opacity: 0.18 },
-      { values: computeEma(avg, emaAlpha), color: accent, width: 2 },
-      { values: best, color: 'var(--ok)', width: 1, opacity: 0.18 },
-      { values: computeEma(best, emaAlpha), color: 'var(--ok)', width: 2, dot: true },
+    liveSeries = [
+      { x: lx, values: worst, color: 'var(--err)', width: 1, opacity: 0.18 },
+      { x: lx, values: computeEma(worst, emaAlpha), color: 'var(--err)', width: 2 },
+      { x: lx, values: avg, color: accent, width: 1, opacity: 0.18 },
+      { x: lx, values: computeEma(avg, emaAlpha), color: accent, width: 2 },
+      { x: lx, values: best, color: 'var(--ok)', width: 1, opacity: 0.18 },
+      { x: lx, values: computeEma(best, emaAlpha), color: 'var(--ok)', width: 2, dot: true },
     ]
   }
 
-  const hasChart = chartX.length > 0
+  // Overlaid past runs: dashed, behind the live lines. A run with no data for this tab
+  // (e.g. an evolution run on the Reward tab) is skipped but stays selected for other tabs.
+  const overlays: { id: string; label: string; color: string }[] = []
+  const overlaySeries: Series[] = []
+  const markers: SolvedMarker[] = []
+  selected.forEach((run, i) => {
+    const color = OVERLAY_COLORS[i % OVERLAY_COLORS.length]
+    const s = runSeries(run, activeTab, color)
+    if (s) {
+      overlaySeries.push(s)
+      overlays.push({ id: run.meta.id, label: run.meta.label, color })
+      // solved_at is in this tab's x-unit (timesteps for PPO, generation for evolution),
+      // because a run only overlays on the tab matching its algorithm.
+      if (run.meta.solved_at != null) {
+        markers.push({ x: run.meta.solved_at, color, label: xFmt(run.meta.solved_at) })
+      }
+    }
+  })
+
+  const series = [...overlaySeries, ...liveSeries]
+  const hasChart = series.some((s) => s.x.length > 0)
   const emptyMsg = activeTab === 'fitness' ? t('chart.fitness_stub') : t('chart.placeholder')
 
   // Live stats are algorithm-aware: PPO reads the ~1 Hz progress frame (with the last
@@ -392,13 +626,40 @@ export default function RewardChart() {
             <option value={100}>100</option>
           </select>
         </label>
+
+        {/* Compare past runs (D2) */}
+        <div style={{ position: 'relative', marginLeft: 8 }}>
+          <button
+            onClick={() => setShowCompare((v) => !v)}
+            title={t('runs.title')}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 4, padding: '2px 8px',
+              borderRadius: 4, border: '1px solid var(--border)', cursor: 'pointer',
+              fontSize: 11, fontWeight: 600,
+              background: showCompare || selected.length > 0 ? 'var(--accent-soft)' : 'var(--surface-2)',
+              color: selected.length > 0 ? 'var(--accent-h)' : 'var(--text-muted)',
+            }}
+          >
+            ⊕ {compactControls ? '' : t('runs.compare')}{selected.length > 0 ? ` (${selected.length})` : ''}
+          </button>
+          {showCompare && (
+            <ComparePopover
+              runs={runs}
+              selectedOrder={selectedOrder}
+              onToggle={(id) => void toggleRun(id)}
+              onDelete={(run) => void removeRun(run)}
+              onClear={() => setSelected([])}
+              onClose={() => setShowCompare(false)}
+            />
+          )}
+        </div>
       </div>
 
       {/* Chart area */}
       <div ref={containerRef} style={{ flex: 1, overflow: 'hidden', position: 'relative' }}>
         {hasChart ? (
           <>
-            <LineChart x={chartX} lines={lines} width={size.w} height={size.h} xFmt={xFmt} />
+            <LineChart series={series} markers={markers} width={size.w} height={size.h} xFmt={xFmt} />
             {activeTab === 'fitness' && (
               <div style={{
                 position: 'absolute', top: 6, left: PAD.l, display: 'flex', gap: 10,
@@ -407,6 +668,25 @@ export default function RewardChart() {
                 <LegendDot color="var(--ok)"     label={t('chart.series_best')} />
                 <LegendDot color="var(--accent)" label={t('chart.series_avg')} />
                 <LegendDot color="var(--err)"    label={t('chart.series_worst')} />
+              </div>
+            )}
+            {/* Overlaid past-run legend (dashed lines) */}
+            {overlays.length > 0 && (
+              <div style={{
+                position: 'absolute', top: 6, right: PAD.r, display: 'flex', flexDirection: 'column',
+                gap: 2, fontSize: 10, color: 'var(--text-muted)', alignItems: 'flex-end',
+                maxWidth: '55%', pointerEvents: 'none',
+              }}>
+                {overlays.map((o) => (
+                  <span key={o.id} style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 4, maxWidth: '100%',
+                  }}>
+                    <span style={{
+                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                    }}>{o.label}</span>
+                    <span style={{ width: 14, height: 0, flexShrink: 0, borderTop: `2px dashed ${o.color}` }} />
+                  </span>
+                ))}
               </div>
             )}
           </>

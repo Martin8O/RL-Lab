@@ -7,6 +7,8 @@ import type {
   PreviewConfig,
   PreviewFrame,
   PreviewState,
+  RunDetail,
+  RunMeta,
   TrainConfig,
   TrainStatus,
   TrainWsFrame,
@@ -251,6 +253,27 @@ export async function deleteCheckpoint(id: string): Promise<void> {
 /** Browser-navigable URL that streams the slot's zip as a download. */
 export function checkpointExportUrl(id: string): string {
   return `${API_BASE}/api/checkpoints/${encodeURIComponent(id)}/export`
+}
+
+// ── Run history (D2) ───────────────────────────────────────────────────────────
+
+/** Finished runs, newest first (config + final reward; metrics fetched on demand). */
+export async function fetchRuns(): Promise<RunMeta[]> {
+  const res = await fetch(`${API_BASE}/api/runs`)
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  return res.json() as Promise<RunMeta[]>
+}
+
+/** One run in full (config + recorded metric frames) for the chart overlay. */
+export async function fetchRun(id: string): Promise<RunDetail> {
+  const res = await fetch(`${API_BASE}/api/runs/${encodeURIComponent(id)}`)
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  return res.json() as Promise<RunDetail>
+}
+
+export async function deleteRun(id: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/api/runs/${encodeURIComponent(id)}`, { method: 'DELETE' })
+  if (!res.ok && res.status !== 404) throw new Error(`HTTP ${res.status}`)
 }
 
 // ── Preview control (B4) ──────────────────────────────────────────────────────

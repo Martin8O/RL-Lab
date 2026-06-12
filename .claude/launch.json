@@ -7,6 +7,13 @@
       "runtimeArgs": ["run", "dev"],
       "cwd": "D:\\Projekty\\RL\\frontend",
       "port": 5173
+    },
+    {
+      "name": "backend",
+      "runtimeExecutable": "D:\\Projekty\\RL\\.venv\\Scripts\\python.exe",
+      "runtimeArgs": ["-m", "uvicorn", "app.main:app", "--app-dir", "backend", "--port", "8000", "--reload"],
+      "cwd": "D:\\Projekty\\RL",
+      "port": 8000
     }
   ]
 }

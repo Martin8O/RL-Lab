@@ -29,6 +29,9 @@ class EnvSpec(BaseModel):
     supported_algos: list[str]
     # algo_id -> param_id -> definition
     hyperparams: dict[str, dict[str, HyperparamDef]]
+    # Score that counts as "solved" (100% of the goal). Drives the run-history archive
+    # threshold (a run must reach ≥10% of this to be kept) and the "steps-to-solve" metric.
+    solved_score: float
     human_playable: bool
     competitive: bool
     difficulty: Literal["beginner", "intermediate", "advanced"]
@@ -129,6 +132,7 @@ register(
                 ),
             },
         },
+        solved_score=500.0,  # CartPole-v1 caps at 500; ≥10% (50) is kept in run history
         human_playable=True,
         competitive=False,
         difficulty="beginner",

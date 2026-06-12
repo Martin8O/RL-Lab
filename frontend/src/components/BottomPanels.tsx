@@ -173,9 +173,20 @@ function EvolutionStats() {
   const { t } = useTranslation()
   const algo          = useAppStore((s) => s.algo)
   const lastEvolution = useAppStore((s) => s.lastEvolution)
+  const evolutionHistory = useAppStore((s) => s.evolutionHistory)
+  const selectedEnvId = useAppStore((s) => s.selectedEnvId)
   const population     = useAppStore((s) => s.evolutionParams.population_size)
 
   const isEvo = algo === 'neuroevolution'
+
+  // Run-level "steps-to-solve" equivalent: the first generation whose best genome reached
+  // the solved score. Shown here (a run-level panel) rather than as a per-child leaderboard
+  // column, where it has no per-genome meaning.
+  const solveMax = skillScaleFor(selectedEnvId).max
+  let solvedGen: number | null = null
+  for (const e of evolutionHistory) {
+    if (e.best_fitness >= solveMax) { solvedGen = e.generation; break }
+  }
 
   let body: React.ReactNode
   if (!isEvo) {
@@ -194,6 +205,11 @@ function EvolutionStats() {
           <StatCell label={t('evolution.best')}  value={e.best_fitness.toFixed(1)}  color="var(--ok)" />
           <StatCell label={t('evolution.avg')}   value={e.avg_fitness.toFixed(1)} />
           <StatCell label={t('evolution.worst')} value={e.worst_fitness.toFixed(1)} color="var(--text-muted)" />
+          <StatCell
+            label={t('evolution.solved')}
+            value={solvedGen != null ? `gen ${solvedGen}` : '—'}
+            color={solvedGen != null ? 'var(--accent-h)' : undefined}
+          />
         </div>
         <MutationBars dist={e.mutation_dist} />
       </div>

@@ -179,6 +179,40 @@ export interface CheckpointMeta {
   artifact: string
 }
 
+// --- Run history (D2) ------------------------------------------------------
+// Mirrors backend/app/schemas/runs.py — keep both sides in sync.
+
+/** One finished training run. PPO fills timesteps/total_timesteps/iteration;
+ *  neuroevolution fills generation/total_generations. */
+export interface RunMeta {
+  id: string
+  label: string
+  env_id: string
+  algo: Algo
+  seed: number
+  created_at: string
+  finished_at: string
+  state: TrainState
+  final_reward: number | null
+  /** x where the run first hit the solved score: a timestep (PPO) or generation (evolution),
+   *  in the same unit as that algorithm's chart. null = never solved. */
+  solved_at: number | null
+  timesteps: number
+  total_timesteps: number
+  iteration: number | null
+  generation: number | null
+  total_generations: number | null
+  frames: number
+}
+
+/** A run read back in full for the chart overlay: listing row + reproducible config +
+ *  every recorded metric frame (each a TrainingMetrics or EvolutionMetrics dump). */
+export interface RunDetail {
+  meta: RunMeta
+  config: TrainConfig
+  metrics: (TrainingMetrics | EvolutionMetrics)[]
+}
+
 /** Lifecycle snapshot: returned by /api/train/* and pushed as {type:"status", ...}. */
 export interface TrainStatus {
   type: 'status'

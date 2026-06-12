@@ -9,6 +9,7 @@ can broadcast them. No ML imports here — the trainer (and torch) is imported l
 import asyncio
 import threading
 from collections.abc import Callable
+from datetime import UTC, datetime
 
 from app.core.logging import get_logger
 from app.envs.registry import get_env
@@ -25,6 +26,7 @@ from app.services.checkpoints import CheckpointArtifact, CheckpointStore, checkp
 from app.services.connection_manager import ConnectionManager, manager
 from app.services.highscores import HighScoreStore, highscores, make_meta
 from app.services.preview_streamer import preview_streamer
+from app.services.runs import RunStore, final_score, run_store, should_archive
 from app.services.train_control import TrainControl
 
 logger = get_logger(__name__)
@@ -58,10 +60,12 @@ class TrainingManager:
         connection_manager: ConnectionManager,
         hi_scores: HighScoreStore = highscores,
         checkpoints: CheckpointStore = checkpoint_store,
+        runs: RunStore = run_store,
     ) -> None:
         self._cm = connection_manager
         self._hi = hi_scores
         self._ckpt = checkpoints
+        self._runs = runs
         self._lock = threading.Lock()
         self._thread: threading.Thread | None = None
         self._control: TrainControl | None = None
@@ -76,6 +80,9 @@ class TrainingManager:
         # "Save" persists into a checkpoint slot. Both reset when a fresh run launches.
         self._snapshot: CheckpointArtifact | None = None
         self._metrics_log: list[dict] = []
+        # When the active run started (ISO-8601 UTC) — stamped onto its run-history record
+        # when it reaches a terminal state.
+        self._run_started_at: str | None = None
 
     # -- wiring -----------------------------------------------------------------
 
@@ -109,6 +116,7 @@ class TrainingManager:
             self._error = None
             self._snapshot = None  # don't let a previous run's model be saved as this one's
             self._metrics_log = []
+            self._run_started_at = datetime.now(UTC).isoformat()
             self._state = "running"
 
         self._broadcast_status()
@@ -240,7 +248,37 @@ class TrainingManager:
                 self._error = str(exc)
         finally:
             preview_streamer.detach_run()  # stop the preview + close its render env
+        self._persist_run()  # archive the finished run for history / comparison (D2)
         self._broadcast_status()
+
+    def _persist_run(self) -> None:
+        """Record a completed run (config + metric frames) for later comparison.
+
+        Only runs that finished/stopped *and* reached ≥10% of the env's solved score are
+        archived — sub-10% noise is dropped (see :func:`should_archive`). Best-effort: a
+        storage hiccup must never crash the worker thread or mask the run's terminal state.
+        """
+        with self._lock:
+            state = self._state
+            config = self._config
+            metrics = list(self._metrics_log)
+            started_at = self._run_started_at
+        if config is None or started_at is None or not metrics:
+            return
+        spec = get_env(config.env_id)
+        solved_score = spec.solved_score if spec is not None else 0.0
+        final = final_score(config, metrics)
+        if not should_archive(state, final, solved_score):
+            logger.info(
+                "Run not archived (state=%s, final=%s, <10%% of %s)", state, final, solved_score
+            )
+            return
+        try:
+            self._runs.save(
+                config, metrics, state=state, started_at=started_at, solved_score=solved_score
+            )
+        except Exception:  # noqa: BLE001 — never let history IO disturb the run lifecycle
+            logger.exception("Failed to record run history")
 
     def _on_snapshot(self, artifact: CheckpointArtifact) -> None:
         """Hold the trainer's latest serialized model so a Save can persist it."""
