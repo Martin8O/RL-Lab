@@ -106,6 +106,28 @@ register(
                     choices=["tanh", "relu"],
                 ),
             },
+            "neuroevolution": {
+                "population_size": HyperparamDef(
+                    type="int", default=50, recommended=50,
+                    min=10, max=200, step=10,
+                ),
+                "top_k_parents": HyperparamDef(
+                    type="int", default=10, recommended=10,
+                    min=2, max=50, step=1,
+                ),
+                "mutation_rate": HyperparamDef(
+                    type="float", default=0.1, recommended=0.1,
+                    min=0.01, max=1.0, step=0.01,
+                ),
+                "crossover_rate": HyperparamDef(
+                    type="float", default=0.5, recommended=0.5,
+                    min=0.0, max=1.0, step=0.05,
+                ),
+                "generations": HyperparamDef(
+                    type="int", default=30, recommended=30,
+                    min=5, max=200, step=5,
+                ),
+            },
         },
         human_playable=True,
         competitive=False,

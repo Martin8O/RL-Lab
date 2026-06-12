@@ -39,7 +39,7 @@ export interface EnvSpec {
 // --- Training (B2) ---------------------------------------------------------
 // Mirrors backend/app/schemas/training.py — keep both sides in sync.
 
-export type Algo = 'ppo'
+export type Algo = 'ppo' | 'neuroevolution'
 export type TrainState =
   | 'idle'
   | 'running'
@@ -61,12 +61,23 @@ export interface PPOHyperparams {
   activation: 'tanh' | 'relu'
 }
 
+export interface EvolutionHyperparams {
+  population_size: number
+  top_k_parents: number
+  mutation_rate: number
+  crossover_rate: number
+  generations: number
+  episodes: number
+}
+
 export interface TrainConfig {
   env_id: string
   algo: Algo
   seed: number
   total_timesteps: number
   hyperparams: PPOHyperparams
+  /** Present only for neuroevolution runs; null/omitted for PPO. */
+  evolution?: EvolutionHyperparams | null
 }
 
 /** WS frame: {type:"metrics", ...} pushed once per PPO rollout. */
@@ -92,6 +103,36 @@ export interface TrainingProgress {
   steps_per_sec: number
   ep_rew_mean: number | null
   ep_len_mean: number | null
+  elapsed: number
+}
+
+/** One ranked genome in a generation's Top-K leaderboard (C1). */
+export interface EvolutionChild {
+  id: number
+  total_reward: number
+  avg_reward: number
+  steps: number
+  seed: number
+}
+
+/** Histogram of the weight perturbations applied to breed a generation's offspring. */
+export interface MutationDist {
+  /** bin edges; length == counts.length + 1 */
+  bins: number[]
+  counts: number[]
+}
+
+/** WS frame: {type:"evolution", ...} pushed once per neuroevolution generation. */
+export interface EvolutionMetrics {
+  type: 'evolution'
+  generation: number
+  total_generations: number
+  best_fitness: number
+  avg_fitness: number
+  worst_fitness: number
+  children: EvolutionChild[]
+  mutation_dist: MutationDist
+  timesteps: number
   elapsed: number
 }
 
@@ -142,6 +183,7 @@ export interface PreviewConfig {
 export type TrainWsFrame =
   | TrainingMetrics
   | TrainingProgress
+  | EvolutionMetrics
   | TrainStatus
   | PreviewState
   | PreviewFrame

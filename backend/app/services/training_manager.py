@@ -8,10 +8,12 @@ can broadcast them. No ML imports here — the trainer (and torch) is imported l
 
 import asyncio
 import threading
+from collections.abc import Callable
 
 from app.core.logging import get_logger
 from app.envs.registry import get_env
 from app.schemas.training import (
+    EvolutionMetrics,
     TrainConfig,
     TrainingMetrics,
     TrainingProgress,
@@ -126,17 +128,24 @@ class TrainingManager:
     # -- worker thread ----------------------------------------------------------
 
     def _run(self, config: TrainConfig, gym_id: str, control: TrainControl) -> None:
-        from app.services.trainer_ppo import train_ppo  # lazy: loads torch/SB3
-
         try:
-            terminal = train_ppo(
-                config,
-                gym_id,
-                control,
-                self._emit_metrics,
-                self._emit_progress,
-                self._publish_model,
-            )
+            if config.algo == "neuroevolution":
+                from app.services.trainer_evolution import train_evolution  # lazy: numpy/gym
+
+                terminal = train_evolution(
+                    config, gym_id, control, self._emit_evolution, self._publish_predict
+                )
+            else:
+                from app.services.trainer_ppo import train_ppo  # lazy: loads torch/SB3
+
+                terminal = train_ppo(
+                    config,
+                    gym_id,
+                    control,
+                    self._emit_metrics,
+                    self._emit_progress,
+                    self._publish_model,
+                )
             with self._lock:
                 self._state = terminal
         except Exception as exc:  # noqa: BLE001 — surface any trainer failure as state
@@ -157,11 +166,20 @@ class TrainingManager:
 
         preview_streamer.set_policy(predict)
 
+    def _publish_predict(self, predict: Callable[[object], int]) -> None:
+        """Hand the preview streamer the evolution leader's predict fn directly."""
+        preview_streamer.set_policy(predict)
+
     def _emit_metrics(self, metrics: TrainingMetrics) -> None:
         with self._lock:
             self._last_metrics = metrics
             self._timesteps = metrics.timesteps
         self._broadcast(metrics.model_dump())
+
+    def _emit_evolution(self, ev: EvolutionMetrics) -> None:
+        with self._lock:
+            self._timesteps = ev.timesteps
+        self._broadcast(ev.model_dump())
 
     def _emit_progress(self, progress: TrainingProgress) -> None:
         with self._lock:

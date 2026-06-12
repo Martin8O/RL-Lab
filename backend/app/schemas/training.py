@@ -8,7 +8,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-Algo = Literal["ppo"]  # neuroevolution joins in Phase C
+Algo = Literal["ppo", "neuroevolution"]
 TrainState = Literal[
     "idle", "running", "paused", "stopping", "stopped", "finished", "error"
 ]
@@ -28,14 +28,34 @@ class PPOHyperparams(BaseModel):
     activation: Literal["tanh", "relu"] = "tanh"
 
 
+class EvolutionHyperparams(BaseModel):
+    """Tunable neuroevolution knobs. Defaults match the cookbook's ★ recommended values.
+
+    ``episodes`` (eval episodes per genome) is a non-UI knob — fitness is the *mean*
+    return over this many episodes, which steadies selection without a slider of its own.
+    """
+
+    population_size: int = 50
+    top_k_parents: int = 10
+    mutation_rate: float = 0.1
+    crossover_rate: float = 0.5
+    generations: int = 30
+    episodes: int = 3
+
+
 class TrainConfig(BaseModel):
-    """Full, reproducible description of a training run (echoed back in status)."""
+    """Full, reproducible description of a training run (echoed back in status).
+
+    ``hyperparams`` configures PPO; ``evolution`` configures neuroevolution. Exactly one
+    applies, selected by ``algo``; the other stays None so the recorded config is clean.
+    """
 
     env_id: str = "cartpole"
     algo: Algo = "ppo"
     seed: int = 42
     total_timesteps: int = 50_000
     hyperparams: PPOHyperparams = Field(default_factory=PPOHyperparams)
+    evolution: EvolutionHyperparams | None = None
 
 
 class TrainingMetrics(BaseModel):
@@ -68,6 +88,43 @@ class TrainingProgress(BaseModel):
     steps_per_sec: float
     ep_rew_mean: float | None = None
     ep_len_mean: float | None = None
+    elapsed: float
+
+
+class EvolutionChild(BaseModel):
+    """One ranked genome in a generation's Top-K leaderboard.
+
+    ``avg_reward`` is the genome's fitness (mean episode return). ``seed`` is the
+    deterministic env seed it was scored with — surfaced (instead of a meaningless γ/α)
+    so a child's run can be reproduced exactly.
+    """
+
+    id: int  # unique + increasing across the run: (generation-1)*population + rank
+    total_reward: float
+    avg_reward: float
+    steps: int
+    seed: int
+
+
+class MutationDist(BaseModel):
+    """Histogram of the weight perturbations applied to breed this generation's offspring."""
+
+    bins: list[float]  # bin edges; len == len(counts) + 1
+    counts: list[int]
+
+
+class EvolutionMetrics(BaseModel):
+    """One per-generation frame, pushed over WS as {type:"evolution", ...}."""
+
+    type: Literal["evolution"] = "evolution"
+    generation: int
+    total_generations: int
+    best_fitness: float
+    avg_fitness: float
+    worst_fitness: float
+    children: list[EvolutionChild]  # Top-5
+    mutation_dist: MutationDist
+    timesteps: int  # cumulative env steps simulated so far (across all generations)
     elapsed: float
 
 
