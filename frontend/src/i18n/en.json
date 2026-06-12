@@ -34,7 +34,7 @@
     "stopping": "Stopping…"
   },
   "stats": {
-    "episode": "Ep",
+    "progress": "Progress",
     "score": "Score",
     "steps": "Steps",
     "steps_per_sec": "Steps/s",

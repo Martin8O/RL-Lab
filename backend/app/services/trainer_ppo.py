@@ -4,10 +4,12 @@ Imported lazily by the training manager so that torch/SB3 are only loaded when a
 actually starts (keeps /health, /envs and the WS echo torch-free and fast to boot).
 """
 
+import threading
 import time
 from collections.abc import Callable
 
 from stable_baselines3 import PPO
+from stable_baselines3.common.base_class import BaseAlgorithm
 from stable_baselines3.common.callbacks import BaseCallback
 from torch import nn
 
@@ -26,6 +28,26 @@ MetricsSink = Callable[[TrainingMetrics], None]
 ProgressSink = Callable[[TrainingProgress], None]
 
 
+def _ep_means(model: BaseAlgorithm) -> tuple[float | None, float | None]:
+    """Mean reward/length over SB3's recent-episode buffer, or ``(None, None)``.
+
+    Read from the progress-ticker thread while ``learn()`` runs on another thread. The
+    buffer is a deque that ``learn`` appends to, so we snapshot defensively and treat a
+    rare concurrent mutation as "no update this tick".
+    """
+    buf = getattr(model, "ep_info_buffer", None)
+    if not buf:
+        return None, None
+    try:
+        episodes = list(buf)  # snapshot; may raise if mutated mid-iteration
+    except RuntimeError:
+        return None, None
+    if not episodes:
+        return None, None
+    n = len(episodes)
+    return sum(e["r"] for e in episodes) / n, sum(e["l"] for e in episodes) / n
+
+
 class _MetricsCallback(BaseCallback):
     """Emits a metrics frame after each PPO rollout and honours pause/stop."""
 
@@ -33,59 +55,24 @@ class _MetricsCallback(BaseCallback):
         self,
         control: TrainControl,
         on_metrics: MetricsSink,
-        on_progress: ProgressSink,
         total_timesteps: int,
         started_at: float,
     ) -> None:
         super().__init__()
         self._control = control
         self._on_metrics = on_metrics
-        self._on_progress = on_progress
         self._total = total_timesteps
         self._started_at = started_at
-        self._iteration = 0
-        self._last_progress_t = started_at
-        self._last_progress_steps = 0
-        self._sps_ema: float | None = None
+        self.iteration_count = 0  # read by the progress ticker (a separate thread)
 
     def _on_step(self) -> bool:
         # Park here while paused; wake and abort if a stop was requested.
         self._control.wait_if_paused()
-        if self._control.stop_requested:
-            return False
-        # Emit a live progress frame ~once per second (timesteps/throughput/elapsed),
-        # independent of the per-rollout metrics so the UI stats refresh smoothly.
-        now = time.monotonic()
-        dt = now - self._last_progress_t
-        if dt >= _PROGRESS_INTERVAL:
-            steps = int(self.model.num_timesteps)
-            # EMA-smooth throughput: the per-rollout update phase (no env steps) would
-            # otherwise make the raw rate lurch between the collection rate and ~0.
-            instant = (steps - self._last_progress_steps) / dt
-            self._sps_ema = (
-                instant if self._sps_ema is None else 0.3 * instant + 0.7 * self._sps_ema
-            )
-            self._on_progress(
-                TrainingProgress(
-                    iteration=self._iteration,
-                    timesteps=steps,
-                    total_timesteps=self._total,
-                    steps_per_sec=self._sps_ema,
-                    elapsed=now - self._started_at,
-                )
-            )
-            self._last_progress_t = now
-            self._last_progress_steps = steps
-        return True
+        return not self._control.stop_requested
 
     def _on_rollout_end(self) -> None:
-        self._iteration += 1
-        buf = self.model.ep_info_buffer
-        if buf:
-            ep_rew_mean: float | None = sum(e["r"] for e in buf) / len(buf)
-            ep_len_mean: float | None = sum(e["l"] for e in buf) / len(buf)
-        else:
-            ep_rew_mean = ep_len_mean = None
+        self.iteration_count += 1
+        ep_rew_mean, ep_len_mean = _ep_means(self.model)
 
         # loss / lr are recorded during the previous update; absent on the first rollout.
         recorded = self.model.logger.name_to_value
@@ -94,7 +81,7 @@ class _MetricsCallback(BaseCallback):
 
         self._on_metrics(
             TrainingMetrics(
-                iteration=self._iteration,
+                iteration=self.iteration_count,
                 timesteps=int(self.model.num_timesteps),
                 total_timesteps=self._total,
                 ep_rew_mean=ep_rew_mean,
@@ -104,6 +91,64 @@ class _MetricsCallback(BaseCallback):
                 elapsed=time.monotonic() - self._started_at,
             )
         )
+
+
+def _progress_ticker(
+    model: PPO,
+    callback: _MetricsCallback,
+    control: TrainControl,
+    on_progress: ProgressSink,
+    total_timesteps: int,
+    started_at: float,
+    stop_event: threading.Event,
+) -> None:
+    """Emit a progress frame every ``_PROGRESS_INTERVAL`` seconds until stopped.
+
+    Decoupled from SB3's per-step callback (which is dormant during the PPO update phase),
+    so the live stats refresh at a steady ~1 Hz regardless of training phase. Mirrors the
+    decoupled preview streamer (ADR-008). Reads model counters/buffers only — it never
+    mutates model state — so it cannot affect training reproducibility.
+    """
+    last_t = started_at
+    last_steps = 0
+    sps_ema: float | None = None
+    last_rew: float | None = None
+    last_len: float | None = None
+
+    while not stop_event.wait(_PROGRESS_INTERVAL):
+        now = time.monotonic()
+        if control.paused:
+            # Hold steady while paused (the preview is frozen too); keep the throughput
+            # baseline fresh so steps/s doesn't lurch on resume.
+            last_t, last_steps = now, int(model.num_timesteps)
+            continue
+
+        steps = int(model.num_timesteps)
+        dt = now - last_t
+        gained = steps - last_steps
+        # Update the throughput EMA only when steps actually advanced, so the displayed
+        # rate stays at the collection speed instead of dropping to ~0 during the (step-less)
+        # update phase — while still emitting a frame every tick so the UI keeps refreshing.
+        if dt > 0 and gained > 0:
+            instant = gained / dt
+            sps_ema = instant if sps_ema is None else 0.3 * instant + 0.7 * sps_ema
+
+        rew, length = _ep_means(model)
+        if rew is not None:
+            last_rew, last_len = rew, length
+
+        on_progress(
+            TrainingProgress(
+                iteration=callback.iteration_count,
+                timesteps=steps,
+                total_timesteps=total_timesteps,
+                steps_per_sec=sps_ema or 0.0,
+                ep_rew_mean=last_rew,
+                ep_len_mean=last_len,
+                elapsed=now - started_at,
+            )
+        )
+        last_t, last_steps = now, steps
 
 
 def _build_model(config: TrainConfig, gym_id: str) -> PPO:
@@ -142,16 +187,35 @@ def train_ppo(
 
     Blocks the calling thread; the manager runs this off the event loop. ``on_model_ready``
     (if given) is called once the model is built so the preview streamer can read its policy.
+    A daemon ticker thread emits ~1 Hz progress frames for the duration of ``learn()``.
     """
     model = _build_model(config, gym_id)
     if on_model_ready is not None:
         on_model_ready(model)
-    callback = _MetricsCallback(
-        control, on_metrics, on_progress, config.total_timesteps, time.monotonic()
+
+    started_at = time.monotonic()
+    callback = _MetricsCallback(control, on_metrics, config.total_timesteps, started_at)
+    stop_event = threading.Event()
+    ticker = threading.Thread(
+        target=_progress_ticker,
+        args=(
+            model,
+            callback,
+            control,
+            on_progress,
+            config.total_timesteps,
+            started_at,
+            stop_event,
+        ),
+        name="ppo-progress",
+        daemon=True,
     )
+    ticker.start()
     try:
         model.learn(total_timesteps=config.total_timesteps, callback=callback)
     finally:
+        stop_event.set()  # wake + retire the ticker
+        ticker.join(timeout=2.0)
         if model.env is not None:
             model.env.close()
     return "stopped" if control.stop_requested else "finished"

@@ -55,8 +55,10 @@ class TrainingMetrics(BaseModel):
 class TrainingProgress(BaseModel):
     """Lightweight ~1 Hz progress frame, pushed over WS as {type:"progress", ...}.
 
-    Decoupled from the per-rollout :class:`TrainingMetrics` so the live stats (timesteps,
-    throughput, elapsed, % complete) refresh every second instead of once per rollout.
+    Emitted by a decoupled ticker thread (not SB3's per-step callback, which is dormant
+    during the PPO update phase) so the live stats refresh at a steady ~1 Hz regardless of
+    training phase. Carries the rolling reward/length means too, so the reward chart can be
+    plotted at ~1 Hz instead of only once per rollout.
     """
 
     type: Literal["progress"] = "progress"
@@ -64,6 +66,8 @@ class TrainingProgress(BaseModel):
     timesteps: int
     total_timesteps: int
     steps_per_sec: float
+    ep_rew_mean: float | None = None
+    ep_len_mean: float | None = None
     elapsed: float
 
 

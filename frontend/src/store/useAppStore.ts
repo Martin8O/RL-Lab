@@ -7,6 +7,10 @@ export type Theme         = 'dark' | 'light'
 export type BackendStatus = 'connecting' | 'online' | 'offline'
 export type ChartTab      = 'reward' | 'loss' | 'fitness'
 
+// Cap on retained ~1 Hz progress frames (3 h of training); the chart's window control
+// still slices this down for display.
+const PROGRESS_CAP = 10_800
+
 const DEFAULT_HYPERPARAMS: PPOHyperparams = {
   learning_rate:   3e-4,
   gamma:           0.99,
@@ -38,6 +42,7 @@ interface AppState {
   envs:            EnvSpec[]
   trainState:      TrainState
   metricsHistory:  TrainingMetrics[]
+  progressHistory: TrainingProgress[]   // ~1 Hz frames — feeds the reward chart
   lastProgress:    TrainingProgress | null
   bestReward:      number | null
 
@@ -80,6 +85,7 @@ export const useAppStore = create<AppState>()(
       envs:            [],
       trainState:      'idle',
       metricsHistory:  [],
+      progressHistory: [],
       lastProgress:    null,
       bestReward:      null,
 
@@ -112,9 +118,23 @@ export const useAppStore = create<AppState>()(
           }
         }),
 
-      setProgress: (p) => set({ lastProgress: p }),
+      // lastProgress always updates (stats refresh ~1 Hz); only append a chart point when
+      // timesteps actually advanced, so the step-less update-phase ticks don't pile up
+      // duplicate-x points. Capped to keep very long runs from growing without bound.
+      setProgress: (p) =>
+        set((s) => {
+          const last = s.progressHistory.at(-1)
+          const advanced = !last || p.timesteps > last.timesteps
+          return {
+            lastProgress: p,
+            progressHistory: advanced
+              ? [...s.progressHistory, p].slice(-PROGRESS_CAP)
+              : s.progressHistory,
+          }
+        }),
 
-      clearMetrics: () => set({ metricsHistory: [], lastProgress: null, bestReward: null }),
+      clearMetrics: () =>
+        set({ metricsHistory: [], progressHistory: [], lastProgress: null, bestReward: null }),
     }),
     {
       name: 'rl-app-store',

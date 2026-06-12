@@ -2,6 +2,7 @@ import { useRef, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAppStore } from '../store/useAppStore'
 import type { ChartTab } from '../store/useAppStore'
+import { skillScaleFor } from '../content/skill'
 import SkillMeter from './SkillMeter'
 
 // ── EMA ─────────────────────────────────────────────────────────────────────
@@ -178,14 +179,16 @@ const TABS: ChartTab[] = ['reward', 'loss', 'fitness']
 export default function RewardChart() {
   const { t } = useTranslation()
 
-  const metricsHistory = useAppStore((s) => s.metricsHistory)
-  const lastProgress   = useAppStore((s) => s.lastProgress)
-  const emaAlpha       = useAppStore((s) => s.emaAlpha)
-  const chartWindow    = useAppStore((s) => s.chartWindow)
-  const activeTab      = useAppStore((s) => s.activeTab)
-  const setEmaAlpha    = useAppStore((s) => s.setEmaAlpha)
-  const setChartWindow = useAppStore((s) => s.setChartWindow)
-  const setActiveTab   = useAppStore((s) => s.setActiveTab)
+  const metricsHistory  = useAppStore((s) => s.metricsHistory)
+  const progressHistory = useAppStore((s) => s.progressHistory)
+  const lastProgress    = useAppStore((s) => s.lastProgress)
+  const selectedEnvId   = useAppStore((s) => s.selectedEnvId)
+  const emaAlpha        = useAppStore((s) => s.emaAlpha)
+  const chartWindow     = useAppStore((s) => s.chartWindow)
+  const activeTab       = useAppStore((s) => s.activeTab)
+  const setEmaAlpha     = useAppStore((s) => s.setEmaAlpha)
+  const setChartWindow  = useAppStore((s) => s.setChartWindow)
+  const setActiveTab    = useAppStore((s) => s.setActiveTab)
 
   const containerRef = useRef<HTMLDivElement>(null)
   const [size, setSize] = useState({ w: 400, h: 200 })
@@ -200,34 +203,43 @@ export default function RewardChart() {
     return () => obs.disconnect()
   }, [])
 
-  const visible = chartWindow > 0 ? metricsHistory.slice(-chartWindow) : metricsHistory
+  // Reward refreshes at ~1 Hz from progress frames (denser); loss only exists per PPO
+  // update, so it stays one-point-per-rollout from the metrics frames.
+  const series: { x: number; y: number | null }[] =
+    activeTab === 'reward' ? progressHistory.map((p) => ({ x: p.timesteps, y: p.ep_rew_mean }))
+    : activeTab === 'loss' ? metricsHistory.map((m) => ({ x: m.timesteps, y: m.loss }))
+    : []
 
-  const rawY: (number | null)[] = visible.map((m) =>
-    activeTab === 'reward' ? m.ep_rew_mean :
-    activeTab === 'loss'   ? m.loss :
-    null
-  )
-  const emaY = computeEma(rawY, emaAlpha)
+  const visible = chartWindow > 0 ? series.slice(-chartWindow) : series
+  const rawY    = visible.map((p) => p.y)
+  const emaY    = computeEma(rawY, emaAlpha)
 
-  const chartData: ChartPoint[] = visible.map((m, i) => ({
-    x: m.timesteps,
-    raw: rawY[i],
+  const chartData: ChartPoint[] = visible.map((p, i) => ({
+    x: p.x,
+    raw: p.y,
     ema: emaY[i],
   }))
 
-  // Live stats: prefer the ~1 Hz progress frame for timesteps/throughput/elapsed/%;
-  // Score is a per-rollout figure so it comes from the latest metrics frame.
+  // Live stats all come from the ~1 Hz progress frame (with the last metrics frame as a
+  // fallback) so the whole row refreshes every second.
   // On a narrow chart panel, drop the control text labels (slider/select stay usable via
   // their tooltips) so the relocated Smooth/Window controls never clip out of the tab row.
   const compactControls = size.w > 0 && size.w < 380
 
   const lastMetrics = metricsHistory.at(-1)
   const hasStats = !!lastProgress || !!lastMetrics
-  const ep      = lastProgress?.iteration ?? lastMetrics?.iteration
   const total   = lastProgress?.total_timesteps ?? lastMetrics?.total_timesteps ?? 0
   const steps   = lastProgress?.timesteps ?? lastMetrics?.timesteps
-  const pct     = total > 0 && steps != null ? (steps / total) * 100 : null
-  const score   = lastMetrics?.ep_rew_mean
+  // Training progress: how far through the planned step budget (reaches 100% when the run
+  // ends). Clamped because SB3 finishes the rollout that crosses the budget, so the final
+  // timestep count slightly overshoots total_timesteps (e.g. 51200/50000).
+  const trainPct = total > 0 && steps != null ? Math.min(100, (steps / total) * 100) : null
+  const score   = lastProgress?.ep_rew_mean ?? lastMetrics?.ep_rew_mean ?? null
+  // Solve progress: Score relative to the env's solve score (CartPole = 500) — reaches 100%
+  // when the agent masters the game. Differs per env (same scale the skill meter uses).
+  const solveMax = skillScaleFor(selectedEnvId).max
+  const solvePct =
+    score != null && solveMax > 0 ? Math.max(0, Math.min(100, (score / solveMax) * 100)) : null
   const sps     = lastProgress?.steps_per_sec
   const elapsed = lastProgress?.elapsed ?? lastMetrics?.elapsed
 
@@ -323,10 +335,19 @@ export default function RewardChart() {
         {hasStats ? (
           <>
             <StatChip
-              label={t('stats.episode')}
-              value={ep != null ? (pct != null ? `${ep} (${Math.round(pct)}%)` : String(ep)) : '—'}
+              label={t('stats.progress')}
+              value={trainPct != null ? `${Math.round(trainPct)}%` : '—'}
             />
-            <StatChip label={t('stats.score')}        value={score != null ? score.toFixed(1) : '—'} />
+            <StatChip
+              label={t('stats.score')}
+              value={
+                score != null
+                  ? solvePct != null
+                    ? `${score.toFixed(1)} (${Math.round(solvePct)}%)`
+                    : score.toFixed(1)
+                  : '—'
+              }
+            />
             <StatChip label={t('stats.steps')}        value={steps != null ? fmtSteps(steps) : '—'} />
             <StatChip label={t('stats.steps_per_sec')} value={sps != null ? String(Math.round(sps)) : '—'} />
             <StatChip label={t('stats.elapsed')}      value={elapsed != null ? fmtElapsed(elapsed) : '—'} />

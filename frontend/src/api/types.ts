@@ -82,13 +82,16 @@ export interface TrainingMetrics {
   elapsed: number
 }
 
-/** WS frame: {type:"progress", ...} pushed ~once per second during a run. */
+/** WS frame: {type:"progress", ...} pushed at a steady ~1 Hz during a run.
+ *  Carries the rolling reward/length means so the reward chart can plot at ~1 Hz. */
 export interface TrainingProgress {
   type: 'progress'
   iteration: number
   timesteps: number
   total_timesteps: number
   steps_per_sec: number
+  ep_rew_mean: number | null
+  ep_len_mean: number | null
   elapsed: number
 }
 

@@ -34,7 +34,7 @@
     "stopping": "Zastavuji…"
   },
   "stats": {
-    "episode": "Ep",
+    "progress": "Postup",
     "score": "Skóre",
     "steps": "Kroky",
     "steps_per_sec": "Kroků/s",
