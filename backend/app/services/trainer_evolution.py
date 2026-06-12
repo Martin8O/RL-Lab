@@ -15,6 +15,7 @@ CartPole-v1 — selection uses no γ. (Surfacing a γ per child would only misle
 audience this tool is for, so the leaderboard reports the reproducible per-child seed.)
 """
 
+import io
 import time
 from collections.abc import Callable
 from typing import Any
@@ -29,10 +30,12 @@ from app.schemas.training import (
     TrainConfig,
     TrainState,
 )
+from app.services.checkpoints import CheckpointArtifact
 from app.services.train_control import TrainControl
 
 EvolutionSink = Callable[[EvolutionMetrics], None]
 PredictPublisher = Callable[[Callable[[object], int]], None]
+SnapshotSink = Callable[[CheckpointArtifact], None]
 
 _HIDDEN = 16  # single hidden layer — ample for CartPole, fast to evolve
 _INIT_SCALE = 0.5  # std of the initial random weights
@@ -130,23 +133,77 @@ def _breed(
     return next_pop, MutationDist(bins=edges.tolist(), counts=counts.tolist())
 
 
+def _snapshot(
+    population: np.ndarray,
+    obs_dim: int,
+    act_dim: int,
+    generation: int,
+    total_generations: int,
+    best_fitness: float,
+    total_steps: int,
+) -> CheckpointArtifact:
+    """Serialize the bred population to an in-memory ``population.npz`` for the store.
+
+    The saved ``generation`` is the one that just finished, so resume continues at
+    ``generation + 1`` evaluating this already-bred population. ``population[0]`` is the
+    elite (champion) carried over by :func:`_breed`.
+    """
+    buf = io.BytesIO()
+    np.savez(
+        buf, population=population, obs_dim=obs_dim, act_dim=act_dim,
+        hidden=_HIDDEN, generation=generation,
+    )
+    return CheckpointArtifact(
+        algo="neuroevolution",
+        blob=buf.getvalue(),
+        artifact_name="population.npz",
+        reward=best_fitness,
+        timesteps=total_steps,
+        total_timesteps=0,
+        generation=generation,
+        total_generations=total_generations,
+    )
+
+
+def _load_population(resume_blob: bytes, dim: int) -> tuple[np.ndarray, int]:
+    """Read a saved ``population.npz``; returns ``(population, start_generation)``.
+
+    Raises ``ValueError`` if the genome width no longer matches the env (e.g. the env's
+    observation/action space changed) — the manager surfaces this as a clear error.
+    """
+    data = np.load(io.BytesIO(resume_blob))
+    population = np.asarray(data["population"], dtype=np.float64)
+    if population.ndim != 2 or population.shape[1] != dim:
+        raise ValueError(
+            "Checkpoint genome size does not match this environment — cannot resume."
+        )
+    return population, int(data["generation"])
+
+
 def train_evolution(
     config: TrainConfig,
     gym_id: str,
     control: TrainControl,
     on_metrics: EvolutionSink,
     on_policy: PredictPublisher,
+    on_snapshot: SnapshotSink | None = None,
+    resume_blob: bytes | None = None,
 ) -> TrainState:
     """Evolve a population to completion (or until stopped). Returns the terminal state.
 
     Blocks the calling thread; the manager runs this off the event loop. Emits one
     :class:`EvolutionMetrics` frame per generation. ``on_policy`` publishes each
     generation's best genome so the decoupled preview streamer can render the leader.
+
+    ``resume_blob`` continues from a saved ``population.npz`` (generation numbering, child
+    ids and seeds pick up where the checkpoint left off; the RNG is re-seeded deterministically
+    from the run seed + that generation, so a resumed run is reproducible from the checkpoint
+    but not bit-identical to an uninterrupted one). ``on_snapshot`` receives the bred
+    population each generation so the checkpoint store can persist it.
     """
     import gymnasium as gym  # lazy: keep gym out of startup
 
     hp = config.evolution or EvolutionHyperparams()
-    rng = np.random.default_rng(config.seed)
 
     env: Any = gym.make(gym_id)
     started_at = time.monotonic()
@@ -155,9 +212,19 @@ def train_evolution(
         obs_dim = int(env.observation_space.shape[0])
         act_dim = int(env.action_space.n)
         dim = _genome_size(obs_dim, _HIDDEN, act_dim)
-        population = rng.standard_normal((hp.population_size, dim)) * _INIT_SCALE
 
-        for generation in range(1, hp.generations + 1):
+        if resume_blob is not None:
+            population, start_generation = _load_population(resume_blob, dim)
+            rng = np.random.default_rng(config.seed + start_generation)
+        else:
+            start_generation = 0
+            rng = np.random.default_rng(config.seed)
+            population = rng.standard_normal((hp.population_size, dim)) * _INIT_SCALE
+
+        total_generations = start_generation + hp.generations
+
+        for local in range(1, hp.generations + 1):
+            generation = start_generation + local
             avg_rewards = np.empty(hp.population_size)
             totals = np.empty(hp.population_size)
             steps = np.empty(hp.population_size, dtype=int)
@@ -195,13 +262,14 @@ def train_evolution(
                 for rank, gi in enumerate(order[:_TOP_CHILDREN])
             ]
 
+            best_fitness = float(avg_rewards[order[0]])
             population, mutation_dist = _breed(population, order, hp, rng, dim)
 
             on_metrics(
                 EvolutionMetrics(
                     generation=generation,
-                    total_generations=hp.generations,
-                    best_fitness=float(avg_rewards[order[0]]),
+                    total_generations=total_generations,
+                    best_fitness=best_fitness,
                     avg_fitness=float(avg_rewards.mean()),
                     worst_fitness=float(avg_rewards[order[-1]]),
                     children=children,
@@ -210,6 +278,14 @@ def train_evolution(
                     elapsed=time.monotonic() - started_at,
                 )
             )
+            # Snapshot the bred population so "Save" can persist (and later resume) this run.
+            if on_snapshot is not None:
+                on_snapshot(
+                    _snapshot(
+                        population, obs_dim, act_dim, generation,
+                        total_generations, best_fitness, total_steps,
+                    )
+                )
         return "finished"
     finally:
         env.close()

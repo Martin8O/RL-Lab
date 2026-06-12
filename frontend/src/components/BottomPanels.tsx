@@ -1,9 +1,16 @@
-import type { CSSProperties } from 'react'
+import { useCallback, useEffect, useState, type CSSProperties } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAppStore } from '../store/useAppStore'
 import { skillScaleFor } from '../content/skill'
+import {
+  checkpointExportUrl,
+  deleteCheckpoint,
+  fetchCheckpoints,
+  loadCheckpoint,
+  saveCheckpoint,
+} from '../api/client'
 import ParamInfo from './ParamInfo'
-import type { EvolutionChild, MutationDist } from '../api/types'
+import type { CheckpointMeta, EvolutionChild, MutationDist } from '../api/types'
 
 // ── Shell ────────────────────────────────────────────────────────────────────
 
@@ -203,13 +210,179 @@ function EvolutionStats() {
   )
 }
 
-// ── Save / Load (placeholder until Phase D) ───────────────────────────────────
+// ── Save / Load (D1: checkpoint slots) ────────────────────────────────────────
+
+// A run has a saveable model once it has started; the backend still validates and rejects
+// with a clear message if no snapshot exists yet.
+const SAVEABLE = new Set(['running', 'paused', 'stopped', 'finished'])
+
+function slotProgress(s: CheckpointMeta): { frac: number; text: string } {
+  if (s.algo === 'neuroevolution') {
+    const total = s.total_generations ?? 0
+    const frac = total > 0 ? (s.generation ?? 0) / total : 0
+    return { frac, text: `gen ${s.generation ?? 0}/${total}` }
+  }
+  const frac = s.total_timesteps > 0 ? s.timesteps / s.total_timesteps : 0
+  const k = (n: number) => (n >= 1000 ? `${Math.round(n / 1000)}k` : String(n))
+  return { frac, text: `${k(s.timesteps)}/${k(s.total_timesteps)}` }
+}
+
+function SlotAction({ label, color, onClick, href }: {
+  label: string
+  color?: string
+  onClick?: () => void
+  href?: string
+}) {
+  const style: CSSProperties = {
+    flex: 1, padding: '3px 0', textAlign: 'center',
+    background: 'var(--surface-2)', color: color ?? 'var(--text-muted)',
+    border: '1px solid var(--border)', borderRadius: 4,
+    fontSize: 10, fontWeight: 600, cursor: 'pointer', textDecoration: 'none',
+  }
+  return href
+    ? <a href={href} style={style}>{label}</a>
+    : <button onClick={onClick} style={{ ...style }}>{label}</button>
+}
+
+function Slot({ slot, onLoad, onDelete }: {
+  slot: CheckpointMeta
+  onLoad: (s: CheckpointMeta) => void
+  onDelete: (s: CheckpointMeta) => void
+}) {
+  const { t } = useTranslation()
+  const { frac, text } = slotProgress(slot)
+  return (
+    <div style={{
+      border: '1px solid var(--border)', borderRadius: 6, padding: '5px 7px',
+      marginTop: 4, background: 'var(--surface-2)', display: 'flex', flexDirection: 'column', gap: 3,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 6 }}>
+        <span style={{
+          fontSize: 11, fontWeight: 600, color: 'var(--text-h)',
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+        }} title={slot.label}>
+          {slot.label}
+        </span>
+        {slot.reward != null && (
+          <span style={{ fontSize: 11, fontFamily: 'monospace', color: 'var(--ok)', flexShrink: 0 }}>
+            {slot.reward.toFixed(1)}
+          </span>
+        )}
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
+        <span style={{ fontSize: 9, color: 'var(--text-muted)' }}>
+          {slot.algo === 'neuroevolution' ? t('sidebar.algo_evo') : t('sidebar.algo_ppo')} · {t('sidebar.seed')} {slot.seed}
+        </span>
+        <span style={{ fontSize: 9, color: 'var(--text-muted)', fontFamily: 'monospace' }}>{text}</span>
+      </div>
+      <div style={{ height: 2, background: 'var(--border)', borderRadius: 1 }}>
+        <div style={{ width: `${Math.min(1, frac) * 100}%`, height: '100%', background: 'var(--accent)', borderRadius: 1 }} />
+      </div>
+      <div style={{ display: 'flex', gap: 4, marginTop: 1 }}>
+        <SlotAction label={t('saveload.load')} color="var(--accent)" onClick={() => onLoad(slot)} />
+        <SlotAction label={t('saveload.export')} href={checkpointExportUrl(slot.id)} />
+        <SlotAction label={t('saveload.delete')} color="var(--err)" onClick={() => onDelete(slot)} />
+      </div>
+    </div>
+  )
+}
 
 function SaveLoad() {
   const { t } = useTranslation()
+  const trainState = useAppStore((s) => s.trainState)
+
+  const [slots, setSlots] = useState<CheckpointMeta[]>([])
+  const [error, setError] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
+
+  const refresh = useCallback(() => {
+    void fetchCheckpoints().then(setSlots).catch(() => {})
+  }, [])
+  useEffect(() => { refresh() }, [refresh])
+
+  const canSave = SAVEABLE.has(trainState)
+
+  async function handleSave() {
+    setSaving(true)
+    setError(null)
+    try {
+      await saveCheckpoint()
+      refresh()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleLoad(slot: CheckpointMeta) {
+    setError(null)
+    try {
+      const status = await loadCheckpoint(slot.id)
+      // Mirror the resumed run into the sidebar so the controls match what's training.
+      const st = useAppStore.getState()
+      st.clearMetrics()
+      st.setSelectedEnvId(slot.env_id)
+      st.setAlgo(slot.algo)
+      if (status.config) {
+        st.setSeed(status.config.seed)
+        st.setTotalTimesteps(status.config.total_timesteps)
+        st.setHyperparams(status.config.hyperparams)
+        if (status.config.evolution) st.setEvolutionParams(status.config.evolution)
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    }
+  }
+
+  async function handleDelete(slot: CheckpointMeta) {
+    if (!window.confirm(t('saveload.confirm_delete', { label: slot.label }))) return
+    setError(null)
+    try {
+      await deleteCheckpoint(slot.id)
+      refresh()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    }
+  }
+
+  const saveBtn = (
+    <button
+      onClick={handleSave}
+      disabled={!canSave || saving}
+      title={canSave ? undefined : t('saveload.nothing_to_save')}
+      style={{
+        marginLeft: 6, padding: '2px 8px', borderRadius: 4,
+        border: '1px solid var(--border)',
+        background: canSave && !saving ? 'var(--accent)' : 'var(--surface-2)',
+        color: canSave && !saving ? '#fff' : 'var(--text-muted)',
+        fontSize: 10, fontWeight: 700,
+        cursor: canSave && !saving ? 'pointer' : 'not-allowed',
+      }}
+    >
+      {saving ? t('saveload.saving') : `＋ ${t('saveload.save')}`}
+    </button>
+  )
+
+  let body: React.ReactNode
+  if (slots.length === 0 && !error) {
+    body = <Empty text={t('saveload.empty')} />
+  } else {
+    body = (
+      <div style={{ flex: 1, overflowY: 'auto', padding: '2px 8px 6px' }}>
+        {error && (
+          <div style={{ fontSize: 10, color: 'var(--err)', padding: '4px 2px' }}>{error}</div>
+        )}
+        {slots.map((s) => (
+          <Slot key={s.id} slot={s} onLoad={handleLoad} onDelete={handleDelete} />
+        ))}
+      </div>
+    )
+  }
+
   return (
-    <PanelShell title={t('saveload.title')} borderRight={false}>
-      <Empty text={t('saveload.placeholder')} />
+    <PanelShell title={t('saveload.title')} right={saveBtn} borderRight={false}>
+      {body}
     </PanelShell>
   )
 }

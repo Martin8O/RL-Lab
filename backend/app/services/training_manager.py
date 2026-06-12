@@ -12,6 +12,7 @@ from collections.abc import Callable
 
 from app.core.logging import get_logger
 from app.envs.registry import get_env
+from app.schemas.checkpoints import CheckpointMeta
 from app.schemas.training import (
     EvolutionMetrics,
     TrainConfig,
@@ -20,12 +21,17 @@ from app.schemas.training import (
     TrainState,
     TrainStatus,
 )
+from app.services.checkpoints import CheckpointArtifact, CheckpointStore, checkpoint_store
 from app.services.connection_manager import ConnectionManager, manager
 from app.services.highscores import HighScoreStore, highscores, make_meta
 from app.services.preview_streamer import preview_streamer
 from app.services.train_control import TrainControl
 
 logger = get_logger(__name__)
+
+# Cap on metric frames retained for a checkpoint's metrics.json (per-rollout / per-generation
+# frames only — the high-frequency progress ticks are not logged). Generous for any CartPole run.
+_METRICS_LOG_CAP = 10_000
 
 
 class AlreadyRunningError(RuntimeError):
@@ -36,14 +42,26 @@ class InvalidConfigError(ValueError):
     """Raised when the requested env/algo is unknown or unsupported."""
 
 
+class CheckpointNotFoundError(RuntimeError):
+    """Raised when a load/save targets a checkpoint id that does not exist."""
+
+
+class NothingToSaveError(RuntimeError):
+    """Raised when a save is attempted before any model snapshot exists."""
+
+
 class TrainingManager:
     """Owns the single active training run and mirrors its state over WebSocket."""
 
     def __init__(
-        self, connection_manager: ConnectionManager, hi_scores: HighScoreStore = highscores
+        self,
+        connection_manager: ConnectionManager,
+        hi_scores: HighScoreStore = highscores,
+        checkpoints: CheckpointStore = checkpoint_store,
     ) -> None:
         self._cm = connection_manager
         self._hi = hi_scores
+        self._ckpt = checkpoints
         self._lock = threading.Lock()
         self._thread: threading.Thread | None = None
         self._control: TrainControl | None = None
@@ -54,6 +72,10 @@ class TrainingManager:
         self._timesteps = 0
         self._last_metrics: TrainingMetrics | None = None
         self._error: str | None = None
+        # Latest model snapshot from the trainer + the run's metric frames — the raw material
+        # "Save" persists into a checkpoint slot. Both reset when a fresh run launches.
+        self._snapshot: CheckpointArtifact | None = None
+        self._metrics_log: list[dict] = []
 
     # -- wiring -----------------------------------------------------------------
 
@@ -71,7 +93,12 @@ class TrainingManager:
             raise InvalidConfigError(
                 f"Environment '{config.env_id}' does not support algo '{config.algo}'"
             )
+        return self._launch(config, spec.gym_id, resume=None)
 
+    def _launch(
+        self, config: TrainConfig, gym_id: str, resume: bytes | None
+    ) -> TrainStatus:
+        """Spin up a worker thread for a fresh or resumed run (shared by start + load)."""
         with self._lock:
             if self._state in ("running", "paused", "stopping"):
                 raise AlreadyRunningError("A training run is already active")
@@ -80,19 +107,59 @@ class TrainingManager:
             self._timesteps = 0
             self._last_metrics = None
             self._error = None
+            self._snapshot = None  # don't let a previous run's model be saved as this one's
+            self._metrics_log = []
             self._state = "running"
 
         self._broadcast_status()
         self._thread = threading.Thread(
             target=self._run,
-            args=(config, spec.gym_id, self._control),
+            args=(config, gym_id, self._control, resume),
             name="ppo-trainer",
             daemon=True,
         )
         self._thread.start()
         # Let the (decoupled) preview streamer begin watching this run, if visual is on.
-        preview_streamer.attach_run(spec.gym_id)
+        preview_streamer.attach_run(gym_id)
         return self.status()
+
+    # -- checkpoints ------------------------------------------------------------
+
+    def save_checkpoint(self, label: str | None = None) -> CheckpointMeta:
+        """Persist the latest model snapshot + config + metrics into a new slot."""
+        with self._lock:
+            snapshot = self._snapshot
+            config = self._config
+            metrics = list(self._metrics_log)
+        if snapshot is None or config is None:
+            raise NothingToSaveError("No trained model to save yet — start a run first")
+        return self._ckpt.save(config, snapshot, metrics, label)
+
+    def load_checkpoint(self, checkpoint_id: str) -> TrainStatus:
+        """Resume training from a saved checkpoint (PPO continues; evolution continues)."""
+        loaded = self._ckpt.load(checkpoint_id)
+        if loaded is None:
+            raise CheckpointNotFoundError(f"Checkpoint '{checkpoint_id}' not found")
+
+        spec = get_env(loaded.config.env_id)
+        if spec is None:
+            raise InvalidConfigError(
+                f"Checkpoint environment '{loaded.config.env_id}' is no longer available"
+            )
+        if loaded.config.algo not in spec.supported_algos:
+            raise InvalidConfigError(
+                f"Environment '{loaded.config.env_id}' does not support algo "
+                f"'{loaded.config.algo}'"
+            )
+
+        config = loaded.config
+        # PPO continues the global step counter, so target an additional full budget on top of
+        # where the checkpoint left off. Evolution continues by generation (handled in-trainer).
+        if config.algo == "ppo":
+            config = config.model_copy(
+                update={"total_timesteps": loaded.meta.timesteps + loaded.config.total_timesteps}
+            )
+        return self._launch(config, spec.gym_id, resume=loaded.blob)
 
     def pause(self) -> TrainStatus:
         with self._lock:
@@ -131,13 +198,25 @@ class TrainingManager:
 
     # -- worker thread ----------------------------------------------------------
 
-    def _run(self, config: TrainConfig, gym_id: str, control: TrainControl) -> None:
+    def _run(
+        self,
+        config: TrainConfig,
+        gym_id: str,
+        control: TrainControl,
+        resume: bytes | None = None,
+    ) -> None:
         try:
             if config.algo == "neuroevolution":
                 from app.services.trainer_evolution import train_evolution  # lazy: numpy/gym
 
                 terminal = train_evolution(
-                    config, gym_id, control, self._emit_evolution, self._publish_predict
+                    config,
+                    gym_id,
+                    control,
+                    self._emit_evolution,
+                    self._publish_predict,
+                    self._on_snapshot,
+                    resume,
                 )
             else:
                 from app.services.trainer_ppo import train_ppo  # lazy: loads torch/SB3
@@ -149,6 +228,8 @@ class TrainingManager:
                     self._emit_metrics,
                     self._emit_progress,
                     self._publish_model,
+                    self._on_snapshot,
+                    resume,
                 )
             with self._lock:
                 self._state = terminal
@@ -160,6 +241,11 @@ class TrainingManager:
         finally:
             preview_streamer.detach_run()  # stop the preview + close its render env
         self._broadcast_status()
+
+    def _on_snapshot(self, artifact: CheckpointArtifact) -> None:
+        """Hold the trainer's latest serialized model so a Save can persist it."""
+        with self._lock:
+            self._snapshot = artifact
 
     def _publish_model(self, model: object) -> None:
         """Hand the preview streamer a deterministic predict fn over the live model."""
@@ -175,17 +261,23 @@ class TrainingManager:
         preview_streamer.set_policy(predict)
 
     def _emit_metrics(self, metrics: TrainingMetrics) -> None:
+        frame = metrics.model_dump()
         with self._lock:
             self._last_metrics = metrics
             self._timesteps = metrics.timesteps
-        self._broadcast(metrics.model_dump())
+            self._metrics_log.append(frame)
+            del self._metrics_log[:-_METRICS_LOG_CAP]
+        self._broadcast(frame)
         if metrics.ep_rew_mean is not None:
             self._record_highscore(metrics.ep_rew_mean, iteration=metrics.iteration)
 
     def _emit_evolution(self, ev: EvolutionMetrics) -> None:
+        frame = ev.model_dump()
         with self._lock:
             self._timesteps = ev.timesteps
-        self._broadcast(ev.model_dump())
+            self._metrics_log.append(frame)
+            del self._metrics_log[:-_METRICS_LOG_CAP]
+        self._broadcast(frame)
         self._record_highscore(ev.best_fitness, generation=ev.generation)
 
     def _record_highscore(

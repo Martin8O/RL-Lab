@@ -4,6 +4,7 @@ Imported lazily by the training manager so that torch/SB3 are only loaded when a
 actually starts (keeps /health, /envs and the WS echo torch-free and fast to boot).
 """
 
+import io
 import threading
 import time
 from collections.abc import Callable
@@ -19,6 +20,7 @@ from app.schemas.training import (
     TrainingProgress,
     TrainState,
 )
+from app.services.checkpoints import CheckpointArtifact
 from app.services.train_control import TrainControl
 
 _ACTIVATIONS: dict[str, type[nn.Module]] = {"tanh": nn.Tanh, "relu": nn.ReLU}
@@ -26,6 +28,29 @@ _PROGRESS_INTERVAL = 1.0  # seconds between live progress frames
 
 MetricsSink = Callable[[TrainingMetrics], None]
 ProgressSink = Callable[[TrainingProgress], None]
+SnapshotSink = Callable[[CheckpointArtifact], None]
+
+
+def _snapshot(model: BaseAlgorithm, total_timesteps: int, iteration: int) -> CheckpointArtifact:
+    """Serialize the model to an in-memory ``model.zip`` for the checkpoint store.
+
+    Called at a rollout boundary (or after ``learn`` returns) — both quiescent points on the
+    trainer thread — so it never races SB3's optimizer. CartPole's net is tiny, so doing this
+    each rollout is negligible; for heavy GPU envs (Phase G) this would move to an on-demand
+    barrier snapshot instead.
+    """
+    rew, _ = _ep_means(model)
+    buf = io.BytesIO()
+    model.save(buf)
+    return CheckpointArtifact(
+        algo="ppo",
+        blob=buf.getvalue(),
+        artifact_name="model.zip",
+        reward=rew,
+        timesteps=int(model.num_timesteps),
+        total_timesteps=total_timesteps,
+        iteration=iteration,
+    )
 
 
 def _ep_means(model: BaseAlgorithm) -> tuple[float | None, float | None]:
@@ -57,10 +82,12 @@ class _MetricsCallback(BaseCallback):
         on_metrics: MetricsSink,
         total_timesteps: int,
         started_at: float,
+        on_snapshot: SnapshotSink | None = None,
     ) -> None:
         super().__init__()
         self._control = control
         self._on_metrics = on_metrics
+        self._on_snapshot = on_snapshot
         self._total = total_timesteps
         self._started_at = started_at
         self.iteration_count = 0  # read by the progress ticker (a separate thread)
@@ -91,6 +118,10 @@ class _MetricsCallback(BaseCallback):
                 elapsed=time.monotonic() - self._started_at,
             )
         )
+        # Capture a snapshot at this rollout boundary so "Save" can persist the live model
+        # mid-run (the terminal snapshot below captures the final/stopped model).
+        if self._on_snapshot is not None:
+            self._on_snapshot(_snapshot(self.model, self._total, self.iteration_count))
 
 
 def _progress_ticker(
@@ -175,6 +206,20 @@ def _build_model(config: TrainConfig, gym_id: str) -> PPO:
     )
 
 
+def _load_model(gym_id: str, resume_blob: bytes) -> PPO:
+    """Rebuild a PPO model from a saved ``model.zip`` and attach a fresh env.
+
+    ``PPO.load`` runs ``check_for_correct_spaces`` against the env, so loading a checkpoint
+    whose observation/action space no longer matches the env raises (surfaced as a clear
+    error by the manager). ``num_timesteps`` is restored, so ``reset_num_timesteps=False``
+    continues the global step counter.
+    """
+    import gymnasium as gym  # lazy: keep gym out of startup
+
+    env = gym.make(gym_id)
+    return PPO.load(io.BytesIO(resume_blob), env=env, device="cpu")
+
+
 def train_ppo(
     config: TrainConfig,
     gym_id: str,
@@ -182,19 +227,33 @@ def train_ppo(
     on_metrics: MetricsSink,
     on_progress: ProgressSink,
     on_model_ready: Callable[[PPO], None] | None = None,
+    on_snapshot: SnapshotSink | None = None,
+    resume_blob: bytes | None = None,
 ) -> TrainState:
     """Train PPO to completion (or until stopped). Returns the terminal state.
 
     Blocks the calling thread; the manager runs this off the event loop. ``on_model_ready``
     (if given) is called once the model is built so the preview streamer can read its policy.
     A daemon ticker thread emits ~1 Hz progress frames for the duration of ``learn()``.
+
+    ``resume_blob`` resumes from a saved ``model.zip`` (continuing the timestep counter, so
+    ``config.total_timesteps`` is the *absolute* target). ``on_snapshot`` receives a
+    serialized model at each rollout boundary and once more after ``learn`` returns, so the
+    checkpoint store can persist the current (or final) model.
     """
-    model = _build_model(config, gym_id)
+    resuming = resume_blob is not None
+    model = (
+        _load_model(gym_id, resume_blob)
+        if resume_blob is not None
+        else _build_model(config, gym_id)
+    )
     if on_model_ready is not None:
         on_model_ready(model)
 
     started_at = time.monotonic()
-    callback = _MetricsCallback(control, on_metrics, config.total_timesteps, started_at)
+    callback = _MetricsCallback(
+        control, on_metrics, config.total_timesteps, started_at, on_snapshot
+    )
     stop_event = threading.Event()
     ticker = threading.Thread(
         target=_progress_ticker,
@@ -212,10 +271,18 @@ def train_ppo(
     )
     ticker.start()
     try:
-        model.learn(total_timesteps=config.total_timesteps, callback=callback)
+        model.learn(
+            total_timesteps=config.total_timesteps,
+            callback=callback,
+            reset_num_timesteps=not resuming,
+        )
     finally:
         stop_event.set()  # wake + retire the ticker
         ticker.join(timeout=2.0)
+        # Terminal snapshot — captures the final (or stopped) model accurately, even if the
+        # last rollout-boundary snapshot predated the final update phase.
+        if on_snapshot is not None:
+            on_snapshot(_snapshot(model, config.total_timesteps, callback.iteration_count))
         if model.env is not None:
             model.env.close()
     return "stopped" if control.stop_requested else "finished"

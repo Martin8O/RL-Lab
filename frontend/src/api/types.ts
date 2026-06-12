@@ -157,6 +157,28 @@ export interface HighScore {
   meta: HighScoreMeta
 }
 
+// --- Checkpoints (D1) ------------------------------------------------------
+// Mirrors backend/app/schemas/checkpoints.py — keep both sides in sync.
+
+/** One saved checkpoint slot. PPO fills timesteps/total_timesteps/iteration;
+ *  neuroevolution fills generation/total_generations. */
+export interface CheckpointMeta {
+  id: string
+  label: string
+  env_id: string
+  algo: Algo
+  seed: number
+  created_at: string
+  reward: number | null
+  timesteps: number
+  total_timesteps: number
+  iteration: number | null
+  generation: number | null
+  total_generations: number | null
+  /** on-disk model filename: "model.zip" (PPO) | "population.npz" (evolution) */
+  artifact: string
+}
+
 /** Lifecycle snapshot: returned by /api/train/* and pushed as {type:"status", ...}. */
 export interface TrainStatus {
   type: 'status'

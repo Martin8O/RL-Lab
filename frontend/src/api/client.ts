@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { useAppStore } from '../store/useAppStore'
 import type {
+  CheckpointMeta,
   EnvSpec,
   HighScore,
   PreviewConfig,
@@ -93,6 +94,25 @@ export function setFrameHandler(handler: FrameHandler | null): void {
   frameHandler = handler
 }
 
+/** Seed the store from a REST status snapshot. Called on every WS (re)connect so the
+ *  Run/Stop controls recover the live run after a page reload, Vite HMR, or WS reconnect
+ *  that missed the one-shot 'status' frame (the backend only broadcasts status on lifecycle
+ *  changes, so without this the controls desync to "idle" while a run is still active). */
+function syncStoreFromStatus(status: TrainStatus): void {
+  const st = useAppStore.getState()
+  st.setTrainState(status.state)
+  // Re-adopt the active run's identity so the sidebar + controls match what's training.
+  const active = status.state === 'running' || status.state === 'paused' || status.state === 'stopping'
+  if (active && status.config) {
+    if (status.env_id) st.setSelectedEnvId(status.env_id)
+    if (status.algo) st.setAlgo(status.algo)
+    st.setSeed(status.config.seed)
+    st.setTotalTimesteps(status.config.total_timesteps)
+    st.setHyperparams(status.config.hyperparams)
+    if (status.config.evolution) st.setEvolutionParams(status.config.evolution)
+  }
+}
+
 /** React hook: opens the /ws connection and dispatches incoming frames. */
 export function useTrainingWs(): void {
   useEffect(() => {
@@ -126,7 +146,11 @@ export function useTrainingWs(): void {
           useAppStore.getState().setSpeed(frame.speed)
         }
       },
-      () => {},
+      (connected) => {
+        // On every (re)connect, reconcile with the backend's authoritative run state so the
+        // controls can't get stuck after a reload/HMR that missed the live 'status' frame.
+        if (connected) void fetchTrainStatus().then(syncStoreFromStatus).catch(() => {})
+      },
     )
     return stop
   }, [])
@@ -174,6 +198,60 @@ export const startTraining  = (config: TrainConfig) => trainPost('start', config
 export const stopTraining   = ()                     => trainPost('stop')
 export const pauseTraining  = ()                     => trainPost('pause')
 export const resumeTraining = ()                     => trainPost('resume')
+
+/** Authoritative run snapshot — fetched on WS (re)connect to reconcile the controls. */
+export async function fetchTrainStatus(): Promise<TrainStatus> {
+  const res = await fetch(`${API_BASE}/api/train/status`)
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  return res.json() as Promise<TrainStatus>
+}
+
+// ── Checkpoints (D1) ──────────────────────────────────────────────────────────
+
+/** Saved checkpoint slots, newest first. */
+export async function fetchCheckpoints(): Promise<CheckpointMeta[]> {
+  const res = await fetch(`${API_BASE}/api/checkpoints`)
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  return res.json() as Promise<CheckpointMeta[]>
+}
+
+/** Save the current run's latest model snapshot into a new slot. */
+export async function saveCheckpoint(label?: string): Promise<CheckpointMeta> {
+  const res = await fetch(`${API_BASE}/api/checkpoints`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ label: label ?? null }),
+  })
+  if (!res.ok) {
+    const detail = ((await res.json().catch(() => ({}))) as { detail?: string }).detail
+    throw new Error(detail ?? `HTTP ${res.status}`)
+  }
+  return res.json() as Promise<CheckpointMeta>
+}
+
+/** Resume training from a saved checkpoint; returns the new run's status. */
+export async function loadCheckpoint(id: string): Promise<TrainStatus> {
+  const res = await fetch(`${API_BASE}/api/checkpoints/${encodeURIComponent(id)}/load`, {
+    method: 'POST',
+  })
+  if (!res.ok) {
+    const detail = ((await res.json().catch(() => ({}))) as { detail?: string }).detail
+    throw new Error(detail ?? `HTTP ${res.status}`)
+  }
+  return res.json() as Promise<TrainStatus>
+}
+
+export async function deleteCheckpoint(id: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/api/checkpoints/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  })
+  if (!res.ok && res.status !== 404) throw new Error(`HTTP ${res.status}`)
+}
+
+/** Browser-navigable URL that streams the slot's zip as a download. */
+export function checkpointExportUrl(id: string): string {
+  return `${API_BASE}/api/checkpoints/${encodeURIComponent(id)}/export`
+}
 
 // ── Preview control (B4) ──────────────────────────────────────────────────────
 

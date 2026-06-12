@@ -15,3 +15,14 @@ def _isolate_highscores(tmp_path, monkeypatch):
     monkeypatch.setattr(hs.highscores, "path", tmp_path / "highscores.json")
     monkeypatch.setattr(hs.highscores, "_scores", None)  # drop any cached map
     yield
+
+
+@pytest.fixture(autouse=True)
+def _isolate_checkpoints(tmp_path, monkeypatch):
+    """Redirect the checkpoint store singleton at a fresh tmp dir so save tests (and the
+    manager, which holds the same singleton) never touch the real gitignored data/checkpoints/.
+    """
+    from app.services import checkpoints as ck
+
+    monkeypatch.setattr(ck.checkpoint_store, "root", tmp_path / "checkpoints")
+    yield

@@ -116,5 +116,15 @@
     "worst": "Worst",
     "mutation_dist": "Mutation spread"
   },
-  "saveload":    { "title": "Save / Load",    "placeholder": "Checkpoint slots will appear here" }
+  "saveload": {
+    "title": "Save / Load",
+    "empty": "No saved checkpoints yet",
+    "save": "Save",
+    "saving": "Saving…",
+    "load": "Load",
+    "export": "Export",
+    "delete": "Delete",
+    "nothing_to_save": "Start a run first — nothing to save yet",
+    "confirm_delete": "Delete checkpoint \"{{label}}\"?"
+  }
 }
