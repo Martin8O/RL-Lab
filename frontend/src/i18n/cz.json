@@ -11,13 +11,19 @@
       "iter": "Iter",
       "best": "Nejlepší",
       "pop":  "Pop"
-    }
+    },
+    "best_alltime": "Nejlepší všech dob pro {{env}} — přetrvá restart",
+    "best_session": "Nejlepší v této relaci"
   },
   "sidebar": {
     "title": "Parametry",
     "game_selector": "Hra / Prostředí",
     "loading_envs": "Načítání…",
+    "algorithm": "Algoritmus",
+    "algo_ppo": "PPO",
+    "algo_evo": "Neuroevoluce",
     "params_title": "PPO Hyperparametry",
+    "evo_params_title": "Nastavení evoluce",
     "learning_rate": "Rychlost učení",
     "gamma": "Diskont γ",
     "clip_range": "Ořez ε",
@@ -25,6 +31,11 @@
     "n_hidden_layers": "Skryté vrstvy",
     "neurons_per_layer": "Neurony / vrstva",
     "activation": "Aktivace",
+    "population_size": "Velikost populace",
+    "top_k_parents": "Top-K rodičů",
+    "mutation_rate": "Míra mutace",
+    "crossover_rate": "Míra křížení",
+    "generations": "Generace",
     "seed": "Semeno",
     "total_steps": "Celkem kroků",
     "run": "Spustit",
@@ -78,9 +89,32 @@
     "ema_alpha": "Vyhlazení",
     "window": "Okno",
     "window_all": "Vše",
-    "fitness_stub": "Fitness je dostupná ve fázi C"
+    "fitness_stub": "Přepněte na Neuroevoluci a spusťte pro zobrazení fitness",
+    "series_best": "Nejlepší",
+    "series_avg": "Průměr gen.",
+    "series_worst": "Nejhorší"
   },
-  "leaderboard": { "title": "Žebříček",       "placeholder": "Nejlepší běhy se zobrazí zde" },
-  "evolution":   { "title": "Evoluce",         "placeholder": "Data evoluce se zobrazí zde" },
+  "leaderboard": {
+    "title": "Top-5 dětí",
+    "placeholder": "Nejlepší běhy se zobrazí zde",
+    "evo_hint": "Spusťte Neuroevoluci pro naplnění žebříčku",
+    "col_id": "ID",
+    "col_total": "Celkem",
+    "col_avg": "Průměr",
+    "col_steps": "Kroky",
+    "col_seed": "Semeno",
+    "best_row": "Aktuálně nejlepší — zobrazen v živém náhledu"
+  },
+  "evolution": {
+    "title": "Statistiky evoluce",
+    "placeholder": "Data evoluce se zobrazí zde",
+    "evo_hint": "Spusťte Neuroevoluci pro živé statistiky",
+    "generation": "Generace",
+    "total_iters": "Celkem iterací",
+    "best": "Nejlepší",
+    "avg": "Průměr",
+    "worst": "Nejhorší",
+    "mutation_dist": "Rozptyl mutací"
+  },
   "saveload":    { "title": "Uložit / Načíst", "placeholder": "Sloty pro checkpointy se zobrazí zde" }
 }

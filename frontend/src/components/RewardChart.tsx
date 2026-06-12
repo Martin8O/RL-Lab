@@ -30,6 +30,10 @@ function fmtSteps(n: number): string {
   return String(n)
 }
 
+function fmtGen(n: number): string {
+  return String(Math.round(n))
+}
+
 function fmtElapsed(s: number): string {
   if (s < 60) return `${Math.round(s)}s`
   const m = Math.floor(s / 60)
@@ -60,101 +64,108 @@ function fmtTick(v: number): string {
   return String(v)
 }
 
-// ── SVG chart ────────────────────────────────────────────────────────────────
+// ── SVG chart (multi-line) ────────────────────────────────────────────────────
 
 const PAD = { t: 10, r: 12, b: 30, l: 48 }
 
-interface ChartPoint { x: number; raw: number | null; ema: number | null }
+interface Line {
+  values: (number | null)[]  // aligned with the shared x[]
+  color: string
+  width: number
+  opacity?: number
+  dot?: boolean              // draw a dot at the latest value
+}
 
-function buildSvgPath(points: { x: number; y: number | null }[], toX: (v: number) => number, toY: (v: number) => number): string {
+function buildSvgPath(x: number[], values: (number | null)[], toX: (v: number) => number, toY: (v: number) => number): string {
   let d = ''
   let pen = false
-  for (const p of points) {
-    if (p.y === null) { pen = false; continue }
-    const px = toX(p.x).toFixed(1)
-    const py = toY(p.y).toFixed(1)
+  for (let i = 0; i < x.length; i++) {
+    const y = values[i]
+    if (y === null || y === undefined) { pen = false; continue }
+    const px = toX(x[i]).toFixed(1)
+    const py = toY(y).toFixed(1)
     d += pen ? `L${px},${py}` : `M${px},${py}`
     pen = true
   }
   return d
 }
 
-function SvgChart({ data, width, height }: { data: ChartPoint[]; width: number; height: number }) {
-  if (data.length === 0 || width < 10 || height < 10) return null
+function lastDefined(values: (number | null)[]): number | null {
+  for (let i = values.length - 1; i >= 0; i--) {
+    if (values[i] !== null && values[i] !== undefined) return values[i]
+  }
+  return null
+}
+
+function LineChart({ x, lines, width, height, xFmt }: {
+  x: number[]; lines: Line[]; width: number; height: number; xFmt: (v: number) => string
+}) {
+  if (x.length === 0 || width < 10 || height < 10) return null
 
   const chartW = width  - PAD.l - PAD.r
   const chartH = height - PAD.t - PAD.b
 
-  const allRaw = data.map((d) => d.raw).filter((v): v is number => v !== null)
-  const yMin = allRaw.length ? Math.min(0, ...allRaw) : 0
-  const yMax = allRaw.length ? Math.max(1, ...allRaw) : 1
+  const all: number[] = []
+  for (const ln of lines) for (const v of ln.values) if (v !== null && v !== undefined) all.push(v)
+  const yMin = all.length ? Math.min(0, ...all) : 0
+  const yMax = all.length ? Math.max(1, ...all) : 1
   const yRange = yMax - yMin || 1
 
-  const xMin = data[0].x
-  const xMax = data[data.length - 1].x
+  const xMin = x[0]
+  const xMax = x[x.length - 1]
   const xRange = xMax - xMin || 1
 
   const toX = (v: number) => PAD.l + ((v - xMin) / xRange) * chartW
   const toY = (v: number) => PAD.t + (1 - (v - yMin) / yRange) * chartH
 
-  const rawPath = buildSvgPath(data.map((d) => ({ x: d.x, y: d.raw })), toX, toY)
-  const emaPath = buildSvgPath(data.map((d) => ({ x: d.x, y: d.ema })), toX, toY)
-
   const yTicks = niceTicks(yMin, yMax, 4)
   const xTicks = niceTicks(xMin, xMax, 3)
-
-  const latest = data[data.length - 1]
 
   return (
     <svg
       width={width} height={height}
       style={{ display: 'block', overflow: 'visible' }}
-      aria-label="Training reward chart"
+      aria-label="Training chart"
     >
       {/* Horizontal grid */}
       {yTicks.map((v) => (
-        <line
-          key={v}
-          x1={PAD.l} y1={toY(v)} x2={PAD.l + chartW} y2={toY(v)}
-          stroke="var(--border)" strokeWidth={1}
-        />
+        <line key={v} x1={PAD.l} y1={toY(v)} x2={PAD.l + chartW} y2={toY(v)} stroke="var(--border)" strokeWidth={1} />
       ))}
 
       {/* Y axis labels */}
       {yTicks.map((v) => (
-        <text key={v} x={PAD.l - 5} y={toY(v) + 4}
-          textAnchor="end" fontSize={9} fill="var(--text-muted)"
-        >
+        <text key={v} x={PAD.l - 5} y={toY(v) + 4} textAnchor="end" fontSize={9} fill="var(--text-muted)">
           {fmtTick(v)}
         </text>
       ))}
 
       {/* X axis labels */}
       {xTicks.map((v) => (
-        <text key={v} x={toX(v)} y={PAD.t + chartH + 18}
-          textAnchor="middle" fontSize={9} fill="var(--text-muted)"
-        >
-          {fmtSteps(v)}
+        <text key={v} x={toX(v)} y={PAD.t + chartH + 18} textAnchor="middle" fontSize={9} fill="var(--text-muted)">
+          {xFmt(v)}
         </text>
       ))}
 
-      {/* Raw data (faded) */}
-      {rawPath && (
-        <path d={rawPath} fill="none" stroke="var(--accent)" strokeWidth={1} opacity={0.28} />
-      )}
+      {/* Lines */}
+      {lines.map((ln, i) => {
+        const d = buildSvgPath(x, ln.values, toX, toY)
+        if (!d) return null
+        return (
+          <path
+            key={i}
+            d={d} fill="none" stroke={ln.color} strokeWidth={ln.width}
+            opacity={ln.opacity ?? 1} strokeLinejoin="round" strokeLinecap="round"
+          />
+        )
+      })}
 
-      {/* EMA line */}
-      {emaPath && (
-        <path d={emaPath} fill="none" stroke="var(--accent)" strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
-      )}
-
-      {/* Latest-value dot */}
-      {latest?.ema !== null && (
-        <circle
-          cx={toX(latest.x)} cy={toY(latest.ema!)}
-          r={3.5} fill="var(--accent)"
-        />
-      )}
+      {/* Latest-value dots */}
+      {lines.map((ln, i) => {
+        if (!ln.dot) return null
+        const y = lastDefined(ln.values)
+        if (y === null) return null
+        return <circle key={`dot-${i}`} cx={toX(x[x.length - 1])} cy={toY(y)} r={3.5} fill={ln.color} />
+      })}
     </svg>
   )
 }
@@ -173,6 +184,17 @@ function StatChip({ label, value }: { label: string; value: string }) {
   )
 }
 
+// ── Fitness legend ─────────────────────────────────────────────────────────────
+
+function LegendDot({ color, label }: { color: string; label: string }) {
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+      <span style={{ width: 8, height: 8, borderRadius: 2, background: color, display: 'inline-block' }} />
+      {label}
+    </span>
+  )
+}
+
 // ── RewardChart ───────────────────────────────────────────────────────────────
 
 const TABS: ChartTab[] = ['reward', 'loss', 'fitness']
@@ -180,9 +202,12 @@ const TABS: ChartTab[] = ['reward', 'loss', 'fitness']
 export default function RewardChart() {
   const { t } = useTranslation()
 
+  const algo            = useAppStore((s) => s.algo)
   const metricsHistory  = useAppStore((s) => s.metricsHistory)
   const progressHistory = useAppStore((s) => s.progressHistory)
   const lastProgress    = useAppStore((s) => s.lastProgress)
+  const evolutionHistory = useAppStore((s) => s.evolutionHistory)
+  const lastEvolution   = useAppStore((s) => s.lastEvolution)
   const selectedEnvId   = useAppStore((s) => s.selectedEnvId)
   const emaAlpha        = useAppStore((s) => s.emaAlpha)
   const chartWindow     = useAppStore((s) => s.chartWindow)
@@ -204,52 +229,100 @@ export default function RewardChart() {
     return () => obs.disconnect()
   }, [])
 
-  // Reward refreshes at ~1 Hz from progress frames (denser); loss only exists per PPO
-  // update, so it stays one-point-per-rollout from the metrics frames.
-  const series: { x: number; y: number | null }[] =
-    activeTab === 'reward' ? progressHistory.map((p) => ({ x: p.timesteps, y: p.ep_rew_mean }))
-    : activeTab === 'loss' ? metricsHistory.map((m) => ({ x: m.timesteps, y: m.loss }))
-    : []
+  const win = <T,>(arr: T[]): T[] => (chartWindow > 0 ? arr.slice(-chartWindow) : arr)
+  const accent = 'var(--accent)'
 
-  const visible = chartWindow > 0 ? series.slice(-chartWindow) : series
-  const rawY    = visible.map((p) => p.y)
-  const emaY    = computeEma(rawY, emaAlpha)
+  // Build the active tab's shared x[] + lines.
+  let chartX: number[] = []
+  let lines: Line[] = []
+  let xFmt = fmtSteps
 
-  const chartData: ChartPoint[] = visible.map((p, i) => ({
-    x: p.x,
-    raw: p.y,
-    ema: emaY[i],
-  }))
+  if (activeTab === 'reward') {
+    const v = win(progressHistory)
+    chartX = v.map((p) => p.timesteps)
+    const raw = v.map((p) => p.ep_rew_mean)
+    lines = [
+      { values: raw, color: accent, width: 1, opacity: 0.28 },
+      { values: computeEma(raw, emaAlpha), color: accent, width: 2, dot: true },
+    ]
+  } else if (activeTab === 'loss') {
+    const v = win(metricsHistory)
+    chartX = v.map((m) => m.timesteps)
+    const raw = v.map((m) => m.loss)
+    lines = [
+      { values: raw, color: accent, width: 1, opacity: 0.28 },
+      { values: computeEma(raw, emaAlpha), color: accent, width: 2, dot: true },
+    ]
+  } else {
+    // Fitness: best / gen-avg / worst across generations.
+    const v = win(evolutionHistory)
+    chartX = v.map((e) => e.generation)
+    xFmt = fmtGen
+    const best  = v.map((e) => e.best_fitness)
+    const avg   = v.map((e) => e.avg_fitness)
+    const worst = v.map((e) => e.worst_fitness)
+    lines = [
+      { values: worst, color: 'var(--err)', width: 1, opacity: 0.18 },
+      { values: computeEma(worst, emaAlpha), color: 'var(--err)', width: 2 },
+      { values: avg, color: accent, width: 1, opacity: 0.18 },
+      { values: computeEma(avg, emaAlpha), color: accent, width: 2 },
+      { values: best, color: 'var(--ok)', width: 1, opacity: 0.18 },
+      { values: computeEma(best, emaAlpha), color: 'var(--ok)', width: 2, dot: true },
+    ]
+  }
 
-  // Live stats all come from the ~1 Hz progress frame (with the last metrics frame as a
-  // fallback) so the whole row refreshes every second.
-  // On a narrow chart panel, drop the control text labels (slider/select stay usable via
-  // their tooltips) so the relocated Smooth/Window controls never clip out of the tab row.
+  const hasChart = chartX.length > 0
+  const emptyMsg = activeTab === 'fitness' ? t('chart.fitness_stub') : t('chart.placeholder')
+
+  // Live stats are algorithm-aware: PPO reads the ~1 Hz progress frame (with the last
+  // metrics frame as a fallback); neuroevolution reads the per-generation frame.
+  const isEvo = algo === 'neuroevolution'
+  const lastMetrics = metricsHistory.at(-1)
   const compactControls = size.w > 0 && size.w < 380
 
-  const lastMetrics = metricsHistory.at(-1)
-  const hasStats = !!lastProgress || !!lastMetrics
-  const total   = lastProgress?.total_timesteps ?? lastMetrics?.total_timesteps ?? 0
-  const steps   = lastProgress?.timesteps ?? lastMetrics?.timesteps
-  // Training progress: how far through the planned step budget (reaches 100% when the run
-  // ends). Clamped because SB3 finishes the rollout that crosses the budget, so the final
-  // timestep count slightly overshoots total_timesteps (e.g. 51200/50000).
-  const trainPct = total > 0 && steps != null ? Math.min(100, (steps / total) * 100) : null
-  const score   = lastProgress?.ep_rew_mean ?? lastMetrics?.ep_rew_mean ?? null
-  // Solve progress: Score relative to the env's solve score (CartPole = 500) — reaches 100%
-  // when the agent masters the game. Differs per env (same scale the skill meter uses).
+  let hasStats: boolean
+  let trainPct: number | null
+  let score: number | null
+  let steps: number | undefined
+  let sps: number | undefined
+  let elapsed: number | undefined
+
+  if (isEvo) {
+    const e = lastEvolution
+    hasStats = !!e
+    trainPct = e ? Math.min(100, (e.generation / e.total_generations) * 100) : null
+    score = e ? e.best_fitness : null
+    steps = e?.timesteps
+    elapsed = e?.elapsed
+    // steps/s from the two most recent generation frames (no intra-generation frames).
+    if (evolutionHistory.length >= 2) {
+      const a = evolutionHistory[evolutionHistory.length - 2]
+      const b = evolutionHistory[evolutionHistory.length - 1]
+      const dt = b.elapsed - a.elapsed
+      if (dt > 0) sps = (b.timesteps - a.timesteps) / dt
+    }
+  } else {
+    hasStats = !!lastProgress || !!lastMetrics
+    const total = lastProgress?.total_timesteps ?? lastMetrics?.total_timesteps ?? 0
+    steps = lastProgress?.timesteps ?? lastMetrics?.timesteps
+    trainPct = total > 0 && steps != null ? Math.min(100, (steps / total) * 100) : null
+    score = lastProgress?.ep_rew_mean ?? lastMetrics?.ep_rew_mean ?? null
+    sps = lastProgress?.steps_per_sec
+    elapsed = lastProgress?.elapsed ?? lastMetrics?.elapsed
+  }
+
+  // Solve progress: Score relative to the env's solved score (CartPole = 500). Same scale
+  // for PPO reward and evolution fitness, so the skill meter + % reads consistently.
   const solveMax = skillScaleFor(selectedEnvId).max
   const solvePct =
     score != null && solveMax > 0 ? Math.max(0, Math.min(100, (score / solveMax) * 100)) : null
-  const sps     = lastProgress?.steps_per_sec
-  const elapsed = lastProgress?.elapsed ?? lastMetrics?.elapsed
 
   return (
     <section style={{
       flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden',
       background: 'var(--bg)',
     }}>
-      {/* Tab bar + chart controls (Smooth / Window moved here from the bottom) */}
+      {/* Tab bar + chart controls (Smooth / Window) */}
       <div style={{
         display: 'flex', alignItems: 'center', borderBottom: '1px solid var(--border)',
         background: 'var(--surface)', flexShrink: 0, padding: '0 10px 0 4px', minHeight: 35,
@@ -323,16 +396,28 @@ export default function RewardChart() {
 
       {/* Chart area */}
       <div ref={containerRef} style={{ flex: 1, overflow: 'hidden', position: 'relative' }}>
-        {activeTab === 'fitness' || chartData.length === 0 ? (
+        {hasChart ? (
+          <>
+            <LineChart x={chartX} lines={lines} width={size.w} height={size.h} xFmt={xFmt} />
+            {activeTab === 'fitness' && (
+              <div style={{
+                position: 'absolute', top: 6, left: PAD.l, display: 'flex', gap: 10,
+                fontSize: 10, color: 'var(--text-muted)',
+              }}>
+                <LegendDot color="var(--ok)"     label={t('chart.series_best')} />
+                <LegendDot color="var(--accent)" label={t('chart.series_avg')} />
+                <LegendDot color="var(--err)"    label={t('chart.series_worst')} />
+              </div>
+            )}
+          </>
+        ) : (
           <div style={{
             position: 'absolute', inset: 0,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             color: 'var(--text-muted)', fontSize: 12, textAlign: 'center', padding: 16,
           }}>
-            {activeTab === 'fitness' ? t('chart.fitness_stub') : t('chart.placeholder')}
+            {emptyMsg}
           </div>
-        ) : (
-          <SvgChart data={chartData} width={size.w} height={size.h} />
         )}
       </div>
 
@@ -368,7 +453,7 @@ export default function RewardChart() {
         )}
       </div>
 
-      {/* AI skill meter (replaces the old chart controls, which moved to the tab row) */}
+      {/* AI skill meter */}
       <SkillMeter score={score ?? null} />
     </section>
   )

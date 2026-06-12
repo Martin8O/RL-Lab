@@ -1,15 +1,15 @@
 import type { CSSProperties } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAppStore } from '../store/useAppStore'
-import { startTraining, stopTraining, pauseTraining, resumeTraining } from '../api/client'
-import type { PPOHyperparams } from '../api/types'
+import { useRunControls } from '../api/trainingControls'
+import type { Algo } from '../api/types'
 import ParamInfo from './ParamInfo'
 
 // ── Param-level helpers ─────────────────────────────────────────────────────
 
-const LOG_SCALE = new Set<keyof PPOHyperparams>(['learning_rate'])
+const LOG_SCALE = new Set<string>(['learning_rate'])
 
-function formatValue(id: keyof PPOHyperparams, v: number | string): string {
+function formatValue(id: string, v: number | string): string {
   if (typeof v === 'string') return v
   switch (id) {
     case 'learning_rate': {
@@ -19,6 +19,8 @@ function formatValue(id: keyof PPOHyperparams, v: number | string): string {
     case 'gamma':          return v.toFixed(4)
     case 'clip_range':     return v.toFixed(2)
     case 'ent_coef':       return v.toFixed(3)
+    case 'mutation_rate':
+    case 'crossover_rate': return v.toFixed(2)
     default:               return String(Math.round(v))
   }
 }
@@ -32,7 +34,7 @@ function atRecommended(val: number | string, rec: number | string): boolean {
 // ── ParamSlider ─────────────────────────────────────────────────────────────
 
 interface SliderProps {
-  id: keyof PPOHyperparams
+  id: string
   label: string
   value: number
   min: number
@@ -148,6 +150,53 @@ function ActivationToggle({ value, label, disabled, onChange }: {
   )
 }
 
+// ── AlgoSwitch ───────────────────────────────────────────────────────────────
+
+function AlgoSwitch({ value, disabled, onChange }: {
+  value: Algo
+  disabled?: boolean
+  onChange: (a: Algo) => void
+}) {
+  const { t } = useTranslation()
+  const opts: { id: Algo; label: string }[] = [
+    { id: 'ppo', label: t('sidebar.algo_ppo') },
+    { id: 'neuroevolution', label: t('sidebar.algo_evo') },
+  ]
+  return (
+    <div>
+      <label style={{
+        display: 'block', marginBottom: 4,
+        fontSize: 11, color: 'var(--text-muted)',
+        textTransform: 'uppercase', letterSpacing: '0.05em',
+      }}>
+        {t('sidebar.algorithm')}
+      </label>
+      <div style={{ display: 'flex', gap: 5 }}>
+        {opts.map((opt) => {
+          const active = value === opt.id
+          return (
+            <button
+              key={opt.id}
+              onClick={() => !disabled && onChange(opt.id)}
+              disabled={disabled}
+              style={{
+                flex: 1, padding: '5px 0',
+                background: active ? 'var(--accent)' : 'var(--surface-2)',
+                color: active ? '#fff' : 'var(--text-muted)',
+                border: `1px solid ${active ? 'var(--accent)' : 'var(--border)'}`,
+                borderRadius: 4, cursor: disabled ? 'default' : 'pointer',
+                fontSize: 11, fontWeight: active ? 600 : 400,
+              }}
+            >
+              {opt.label}
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 // ── Run controls ─────────────────────────────────────────────────────────────
 
 function btnStyle(bg: string, disabled = false): CSSProperties {
@@ -174,43 +223,24 @@ export default function Sidebar() {
   const locale          = useAppStore((s) => s.locale)
   const setSelectedEnvId = useAppStore((s) => s.setSelectedEnvId)
 
+  const algo            = useAppStore((s) => s.algo)
+  const setAlgo         = useAppStore((s) => s.setAlgo)
   const hyperparams     = useAppStore((s) => s.hyperparams)
   const setHyperparams  = useAppStore((s) => s.setHyperparams)
+  const evolutionParams = useAppStore((s) => s.evolutionParams)
+  const setEvolutionParams = useAppStore((s) => s.setEvolutionParams)
   const seed            = useAppStore((s) => s.seed)
   const setSeed         = useAppStore((s) => s.setSeed)
   const totalTimesteps  = useAppStore((s) => s.totalTimesteps)
   const setTotalTimesteps = useAppStore((s) => s.setTotalTimesteps)
-  const trainState      = useAppStore((s) => s.trainState)
-  const clearMetrics    = useAppStore((s) => s.clearMetrics)
+
+  const { handleRun, handlePause, handleResume, handleStop, isRunning, isPaused, isStopping, isActive, canRun } =
+    useRunControls()
 
   const selectedEnv = envs.find((e) => e.id === selectedEnvId)
   const ppoDefs = selectedEnv?.hyperparams?.['ppo'] ?? {}
-
-  const isRunning  = trainState === 'running'
-  const isPaused   = trainState === 'paused'
-  const isStopping = trainState === 'stopping'
-  const isActive   = isRunning || isPaused || isStopping
-  const canRun     = !!selectedEnvId && envs.length > 0
-
-  async function handleRun() {
-    if (!canRun) return
-    clearMetrics()
-    try {
-      await startTraining({
-        env_id: selectedEnvId!,
-        algo: 'ppo',
-        seed,
-        total_timesteps: totalTimesteps,
-        hyperparams,
-      })
-    } catch (err) {
-      console.error('Failed to start training:', err)
-    }
-  }
-
-  async function handlePause()  { try { await pauseTraining()  } catch { /* ignore */ } }
-  async function handleResume() { try { await resumeTraining() } catch { /* ignore */ } }
-  async function handleStop()   { try { await stopTraining()   } catch { /* ignore */ } }
+  const evoDefs = selectedEnv?.hyperparams?.['neuroevolution'] ?? {}
+  const isEvo = algo === 'neuroevolution'
 
   return (
     <aside style={{
@@ -226,35 +256,39 @@ export default function Sidebar() {
         {t('sidebar.title')}
       </div>
 
-      {/* Game selector */}
-      <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
-        <label style={{
-          display: 'block', marginBottom: 4,
-          fontSize: 11, color: 'var(--text-muted)',
-          textTransform: 'uppercase', letterSpacing: '0.05em',
-        }}>
-          {t('sidebar.game_selector')}
-        </label>
-        <select
-          value={selectedEnvId ?? ''}
-          onChange={(e) => setSelectedEnvId(e.target.value || null)}
-          disabled={envs.length === 0 || isActive}
-          style={{
-            width: '100%', padding: '5px 8px',
-            background: 'var(--surface-2)', color: 'var(--text)',
-            border: '1px solid var(--border)', borderRadius: 4,
-            fontSize: 13, cursor: envs.length === 0 || isActive ? 'default' : 'pointer',
-          }}
-        >
-          {envs.length === 0
-            ? <option value="">{t('sidebar.loading_envs')}</option>
-            : envs.map((env) => (
-                <option key={env.id} value={env.id}>
-                  {env.display_name[locale]}
-                </option>
-              ))
-          }
-        </select>
+      {/* Game selector + algorithm switch */}
+      <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--border)', flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <div>
+          <label style={{
+            display: 'block', marginBottom: 4,
+            fontSize: 11, color: 'var(--text-muted)',
+            textTransform: 'uppercase', letterSpacing: '0.05em',
+          }}>
+            {t('sidebar.game_selector')}
+          </label>
+          <select
+            value={selectedEnvId ?? ''}
+            onChange={(e) => setSelectedEnvId(e.target.value || null)}
+            disabled={envs.length === 0 || isActive}
+            style={{
+              width: '100%', padding: '5px 8px',
+              background: 'var(--surface-2)', color: 'var(--text)',
+              border: '1px solid var(--border)', borderRadius: 4,
+              fontSize: 13, cursor: envs.length === 0 || isActive ? 'default' : 'pointer',
+            }}
+          >
+            {envs.length === 0
+              ? <option value="">{t('sidebar.loading_envs')}</option>
+              : envs.map((env) => (
+                  <option key={env.id} value={env.id}>
+                    {env.display_name[locale]}
+                  </option>
+                ))
+            }
+          </select>
+        </div>
+
+        <AlgoSwitch value={algo} disabled={isActive} onChange={setAlgo} />
       </div>
 
       {/* Scrollable params */}
@@ -263,75 +297,133 @@ export default function Sidebar() {
           fontSize: 10, color: 'var(--text-muted)', letterSpacing: '0.05em',
           textTransform: 'uppercase', marginBottom: 10,
         }}>
-          {t('sidebar.params_title')}
+          {isEvo ? t('sidebar.evo_params_title') : t('sidebar.params_title')}
         </div>
 
-        {ppoDefs.learning_rate && (
-          <ParamSlider
-            id="learning_rate" label={t('sidebar.learning_rate')}
-            value={hyperparams.learning_rate}
-            min={ppoDefs.learning_rate.min!} max={ppoDefs.learning_rate.max!} step={0.01}
-            recommended={ppoDefs.learning_rate.recommended as number}
-            onChange={(v) => setHyperparams({ learning_rate: v })}
-          />
+        {!isEvo && (
+          <>
+            {ppoDefs.learning_rate && (
+              <ParamSlider
+                id="learning_rate" label={t('sidebar.learning_rate')}
+                value={hyperparams.learning_rate}
+                min={ppoDefs.learning_rate.min!} max={ppoDefs.learning_rate.max!} step={0.01}
+                recommended={ppoDefs.learning_rate.recommended as number}
+                onChange={(v) => setHyperparams({ learning_rate: v })}
+              />
+            )}
+
+            {ppoDefs.gamma && (
+              <ParamSlider
+                id="gamma" label={t('sidebar.gamma')}
+                value={hyperparams.gamma}
+                min={ppoDefs.gamma.min!} max={ppoDefs.gamma.max!} step={ppoDefs.gamma.step!}
+                recommended={ppoDefs.gamma.recommended as number}
+                onChange={(v) => setHyperparams({ gamma: v })}
+              />
+            )}
+
+            {ppoDefs.clip_range && (
+              <ParamSlider
+                id="clip_range" label={t('sidebar.clip_range')}
+                value={hyperparams.clip_range}
+                min={ppoDefs.clip_range.min!} max={ppoDefs.clip_range.max!} step={ppoDefs.clip_range.step!}
+                recommended={ppoDefs.clip_range.recommended as number}
+                onChange={(v) => setHyperparams({ clip_range: v })}
+              />
+            )}
+
+            {ppoDefs.ent_coef && (
+              <ParamSlider
+                id="ent_coef" label={t('sidebar.ent_coef')}
+                value={hyperparams.ent_coef}
+                min={ppoDefs.ent_coef.min!} max={ppoDefs.ent_coef.max!} step={ppoDefs.ent_coef.step!}
+                recommended={ppoDefs.ent_coef.recommended as number}
+                onChange={(v) => setHyperparams({ ent_coef: v })}
+              />
+            )}
+
+            {ppoDefs.n_hidden_layers && (
+              <ParamSlider
+                id="n_hidden_layers" label={t('sidebar.n_hidden_layers')}
+                value={hyperparams.n_hidden_layers}
+                min={ppoDefs.n_hidden_layers.min!} max={ppoDefs.n_hidden_layers.max!} step={ppoDefs.n_hidden_layers.step!}
+                recommended={ppoDefs.n_hidden_layers.recommended as number}
+                onChange={(v) => setHyperparams({ n_hidden_layers: Math.round(v) })}
+              />
+            )}
+
+            {ppoDefs.neurons_per_layer && (
+              <ParamSlider
+                id="neurons_per_layer" label={t('sidebar.neurons_per_layer')}
+                value={hyperparams.neurons_per_layer}
+                min={ppoDefs.neurons_per_layer.min!} max={ppoDefs.neurons_per_layer.max!} step={ppoDefs.neurons_per_layer.step!}
+                recommended={ppoDefs.neurons_per_layer.recommended as number}
+                onChange={(v) => setHyperparams({ neurons_per_layer: Math.round(v) })}
+              />
+            )}
+
+            {ppoDefs.activation && (
+              <ActivationToggle
+                value={hyperparams.activation}
+                label={t('sidebar.activation')}
+                onChange={(v) => setHyperparams({ activation: v })}
+              />
+            )}
+          </>
         )}
 
-        {ppoDefs.gamma && (
-          <ParamSlider
-            id="gamma" label={t('sidebar.gamma')}
-            value={hyperparams.gamma}
-            min={ppoDefs.gamma.min!} max={ppoDefs.gamma.max!} step={ppoDefs.gamma.step!}
-            recommended={ppoDefs.gamma.recommended as number}
-            onChange={(v) => setHyperparams({ gamma: v })}
-          />
-        )}
+        {isEvo && (
+          <>
+            {evoDefs.population_size && (
+              <ParamSlider
+                id="population_size" label={t('sidebar.population_size')}
+                value={evolutionParams.population_size}
+                min={evoDefs.population_size.min!} max={evoDefs.population_size.max!} step={evoDefs.population_size.step!}
+                recommended={evoDefs.population_size.recommended as number}
+                onChange={(v) => setEvolutionParams({ population_size: Math.round(v) })}
+              />
+            )}
 
-        {ppoDefs.clip_range && (
-          <ParamSlider
-            id="clip_range" label={t('sidebar.clip_range')}
-            value={hyperparams.clip_range}
-            min={ppoDefs.clip_range.min!} max={ppoDefs.clip_range.max!} step={ppoDefs.clip_range.step!}
-            recommended={ppoDefs.clip_range.recommended as number}
-            onChange={(v) => setHyperparams({ clip_range: v })}
-          />
-        )}
+            {evoDefs.top_k_parents && (
+              <ParamSlider
+                id="top_k_parents" label={t('sidebar.top_k_parents')}
+                value={evolutionParams.top_k_parents}
+                min={evoDefs.top_k_parents.min!} max={evoDefs.top_k_parents.max!} step={evoDefs.top_k_parents.step!}
+                recommended={evoDefs.top_k_parents.recommended as number}
+                onChange={(v) => setEvolutionParams({ top_k_parents: Math.round(v) })}
+              />
+            )}
 
-        {ppoDefs.ent_coef && (
-          <ParamSlider
-            id="ent_coef" label={t('sidebar.ent_coef')}
-            value={hyperparams.ent_coef}
-            min={ppoDefs.ent_coef.min!} max={ppoDefs.ent_coef.max!} step={ppoDefs.ent_coef.step!}
-            recommended={ppoDefs.ent_coef.recommended as number}
-            onChange={(v) => setHyperparams({ ent_coef: v })}
-          />
-        )}
+            {evoDefs.mutation_rate && (
+              <ParamSlider
+                id="mutation_rate" label={t('sidebar.mutation_rate')}
+                value={evolutionParams.mutation_rate}
+                min={evoDefs.mutation_rate.min!} max={evoDefs.mutation_rate.max!} step={evoDefs.mutation_rate.step!}
+                recommended={evoDefs.mutation_rate.recommended as number}
+                onChange={(v) => setEvolutionParams({ mutation_rate: v })}
+              />
+            )}
 
-        {ppoDefs.n_hidden_layers && (
-          <ParamSlider
-            id="n_hidden_layers" label={t('sidebar.n_hidden_layers')}
-            value={hyperparams.n_hidden_layers}
-            min={ppoDefs.n_hidden_layers.min!} max={ppoDefs.n_hidden_layers.max!} step={ppoDefs.n_hidden_layers.step!}
-            recommended={ppoDefs.n_hidden_layers.recommended as number}
-            onChange={(v) => setHyperparams({ n_hidden_layers: Math.round(v) })}
-          />
-        )}
+            {evoDefs.crossover_rate && (
+              <ParamSlider
+                id="crossover_rate" label={t('sidebar.crossover_rate')}
+                value={evolutionParams.crossover_rate}
+                min={evoDefs.crossover_rate.min!} max={evoDefs.crossover_rate.max!} step={evoDefs.crossover_rate.step!}
+                recommended={evoDefs.crossover_rate.recommended as number}
+                onChange={(v) => setEvolutionParams({ crossover_rate: v })}
+              />
+            )}
 
-        {ppoDefs.neurons_per_layer && (
-          <ParamSlider
-            id="neurons_per_layer" label={t('sidebar.neurons_per_layer')}
-            value={hyperparams.neurons_per_layer}
-            min={ppoDefs.neurons_per_layer.min!} max={ppoDefs.neurons_per_layer.max!} step={ppoDefs.neurons_per_layer.step!}
-            recommended={ppoDefs.neurons_per_layer.recommended as number}
-            onChange={(v) => setHyperparams({ neurons_per_layer: Math.round(v) })}
-          />
-        )}
-
-        {ppoDefs.activation && (
-          <ActivationToggle
-            value={hyperparams.activation}
-            label={t('sidebar.activation')}
-            onChange={(v) => setHyperparams({ activation: v })}
-          />
+            {evoDefs.generations && (
+              <ParamSlider
+                id="generations" label={t('sidebar.generations')}
+                value={evolutionParams.generations}
+                min={evoDefs.generations.min!} max={evoDefs.generations.max!} step={evoDefs.generations.step!}
+                recommended={evoDefs.generations.recommended as number}
+                onChange={(v) => setEvolutionParams({ generations: Math.round(v) })}
+              />
+            )}
+          </>
         )}
 
         {/* Divider */}
@@ -357,30 +449,32 @@ export default function Sidebar() {
           />
         </div>
 
-        {/* Total Steps */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <label style={{ fontSize: 11, color: 'var(--text-muted)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-            {t('sidebar.total_steps')}
-            <ParamInfo paramId="total_steps" label={t('sidebar.total_steps')} />
-          </label>
-          <select
-            value={totalTimesteps}
-            disabled={isActive}
-            onChange={(e) => setTotalTimesteps(parseInt(e.target.value, 10))}
-            style={{
-              padding: '3px 6px',
-              background: 'var(--surface-2)', color: 'var(--text)',
-              border: '1px solid var(--border)', borderRadius: 4,
-              fontSize: 12, cursor: isActive ? 'default' : 'pointer',
-            }}
-          >
-            {STEPS_OPTIONS.map((n) => (
-              <option key={n} value={n}>
-                {n === 50_000 ? `${n / 1000}k ★` : `${n / 1000}k`}
-              </option>
-            ))}
-          </select>
-        </div>
+        {/* Total Steps — PPO only (evolution is bounded by Generations, not a step budget) */}
+        {!isEvo && (
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <label style={{ fontSize: 11, color: 'var(--text-muted)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+              {t('sidebar.total_steps')}
+              <ParamInfo paramId="total_steps" label={t('sidebar.total_steps')} />
+            </label>
+            <select
+              value={totalTimesteps}
+              disabled={isActive}
+              onChange={(e) => setTotalTimesteps(parseInt(e.target.value, 10))}
+              style={{
+                padding: '3px 6px',
+                background: 'var(--surface-2)', color: 'var(--text)',
+                border: '1px solid var(--border)', borderRadius: 4,
+                fontSize: 12, cursor: isActive ? 'default' : 'pointer',
+              }}
+            >
+              {STEPS_OPTIONS.map((n) => (
+                <option key={n} value={n}>
+                  {n === 50_000 ? `${n / 1000}k ★` : `${n / 1000}k`}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
       </div>
 
       {/* Run controls — outer div is always the flex row so flex:1 works in every branch */}

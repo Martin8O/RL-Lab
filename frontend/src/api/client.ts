@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { useAppStore } from '../store/useAppStore'
 import type {
   EnvSpec,
+  HighScore,
   PreviewConfig,
   PreviewFrame,
   PreviewState,
@@ -113,6 +114,10 @@ export function useTrainingWs(): void {
           ) {
             useAppStore.getState().clearMetrics()
           }
+        } else if (frame.type === 'evolution') {
+          useAppStore.getState().addEvolution(frame)
+        } else if (frame.type === 'highscore') {
+          useAppStore.getState().setHighScore(frame)
         } else if (frame.type === 'frame') {
           frameHandler?.(frame)
         } else if (frame.type === 'preview') {
@@ -139,6 +144,15 @@ export async function fetchEnv(id: string): Promise<EnvSpec> {
   const res = await fetch(`${API_BASE}/api/envs/${encodeURIComponent(id)}`)
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
   return res.json() as Promise<EnvSpec>
+}
+
+// ── High scores (C2) ──────────────────────────────────────────────────────────
+
+/** All-time best per env (persisted server-side). Live updates arrive via WS. */
+export async function fetchHighScores(): Promise<HighScore[]> {
+  const res = await fetch(`${API_BASE}/api/highscores`)
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  return res.json() as Promise<HighScore[]>
 }
 
 // ── Training control ────────────────────────────────────────────────────────

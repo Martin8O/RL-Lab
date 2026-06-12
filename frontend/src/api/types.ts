@@ -136,6 +136,27 @@ export interface EvolutionMetrics {
   elapsed: number
 }
 
+// --- High scores (C2) ------------------------------------------------------
+// Mirrors backend/app/schemas/highscores.py — keep both sides in sync.
+
+/** How an all-time best was achieved (generation for evolution, iteration for PPO). */
+export interface HighScoreMeta {
+  algo: Algo
+  seed: number
+  generation: number | null
+  iteration: number | null
+  achieved_at: string
+}
+
+/** The persisted all-time best for one env. Returned by /api/highscores[/{env_id}]
+ *  and pushed as {type:"highscore"} whenever a run beats the stored best. */
+export interface HighScore {
+  type: 'highscore'
+  env_id: string
+  score: number
+  meta: HighScoreMeta
+}
+
 /** Lifecycle snapshot: returned by /api/train/* and pushed as {type:"status", ...}. */
 export interface TrainStatus {
   type: 'status'
@@ -187,3 +208,4 @@ export type TrainWsFrame =
   | TrainStatus
   | PreviewState
   | PreviewFrame
+  | HighScore

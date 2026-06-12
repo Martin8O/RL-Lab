@@ -1,6 +1,16 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import type { EnvSpec, PPOHyperparams, TrainingMetrics, TrainingProgress, TrainState } from '../api/types'
+import type {
+  Algo,
+  EnvSpec,
+  EvolutionHyperparams,
+  EvolutionMetrics,
+  HighScore,
+  PPOHyperparams,
+  TrainingMetrics,
+  TrainingProgress,
+  TrainState,
+} from '../api/types'
 
 export type Locale        = 'cz' | 'en'
 export type Theme         = 'dark' | 'light'
@@ -10,6 +20,8 @@ export type ChartTab      = 'reward' | 'loss' | 'fitness'
 // Cap on retained ~1 Hz progress frames (3 h of training); the chart's window control
 // still slices this down for display.
 const PROGRESS_CAP = 10_800
+// Generations are coarse (one frame each), so a generous cap covers any realistic run.
+const EVOLUTION_CAP = 2_000
 
 const DEFAULT_HYPERPARAMS: PPOHyperparams = {
   learning_rate:   3e-4,
@@ -23,12 +35,25 @@ const DEFAULT_HYPERPARAMS: PPOHyperparams = {
   activation:      'tanh',
 }
 
+// Matches the registry's ★ recommended neuroevolution block. ``episodes`` is a non-UI knob
+// (fitness = mean return over this many episodes); kept here so the sent config is complete.
+const DEFAULT_EVOLUTION_PARAMS: EvolutionHyperparams = {
+  population_size: 50,
+  top_k_parents:   10,
+  mutation_rate:   0.1,
+  crossover_rate:  0.5,
+  generations:     30,
+  episodes:        3,
+}
+
 interface AppState {
   // ─ persisted ───────────────────────────────────────────────
   locale:          Locale
   theme:           Theme
   selectedEnvId:   string | null
+  algo:            Algo       // PPO ↔ neuroevolution
   hyperparams:     PPOHyperparams
+  evolutionParams: EvolutionHyperparams
   seed:            number
   totalTimesteps:  number
   emaAlpha:        number     // 1 = raw; 0.05 = heavy smoothing
@@ -44,26 +69,34 @@ interface AppState {
   metricsHistory:  TrainingMetrics[]
   progressHistory: TrainingProgress[]   // ~1 Hz frames — feeds the reward chart
   lastProgress:    TrainingProgress | null
-  bestReward:      number | null
+  bestReward:      number | null        // best score this session (live high)
+  evolutionHistory: EvolutionMetrics[]  // per-generation frames — feeds the Fitness chart
+  lastEvolution:   EvolutionMetrics | null
+  highScores:      Record<string, HighScore>  // all-time best per env id
 
   // ─ actions ────────────────────────────────────────────────
-  setLocale:          (l: Locale)                   => void
-  setTheme:           (t: Theme)                    => void
-  setBackendStatus:   (s: BackendStatus)            => void
-  setEnvs:            (envs: EnvSpec[])             => void
-  setSelectedEnvId:   (id: string | null)           => void
-  setHyperparams:     (h: Partial<PPOHyperparams>)  => void
-  setSeed:            (s: number)                   => void
-  setTotalTimesteps:  (n: number)                   => void
-  setEmaAlpha:        (a: number)                   => void
-  setChartWindow:     (w: number)                   => void
-  setActiveTab:       (t: ChartTab)                 => void
-  setVisual:          (v: boolean)                  => void
-  setSpeed:           (n: number)                   => void
-  setTrainState:      (s: TrainState)               => void
-  addMetrics:         (m: TrainingMetrics)          => void
-  setProgress:        (p: TrainingProgress)         => void
-  clearMetrics:       ()                            => void
+  setLocale:          (l: Locale)                       => void
+  setTheme:           (t: Theme)                        => void
+  setBackendStatus:   (s: BackendStatus)                => void
+  setEnvs:            (envs: EnvSpec[])                 => void
+  setSelectedEnvId:   (id: string | null)               => void
+  setAlgo:            (a: Algo)                          => void
+  setHyperparams:     (h: Partial<PPOHyperparams>)      => void
+  setEvolutionParams: (e: Partial<EvolutionHyperparams>) => void
+  setSeed:            (s: number)                       => void
+  setTotalTimesteps:  (n: number)                       => void
+  setEmaAlpha:        (a: number)                       => void
+  setChartWindow:     (w: number)                       => void
+  setActiveTab:       (t: ChartTab)                     => void
+  setVisual:          (v: boolean)                      => void
+  setSpeed:           (n: number)                       => void
+  setTrainState:      (s: TrainState)                   => void
+  addMetrics:         (m: TrainingMetrics)              => void
+  setProgress:        (p: TrainingProgress)             => void
+  addEvolution:       (e: EvolutionMetrics)             => void
+  setHighScore:       (hs: HighScore)                   => void
+  setHighScores:      (list: HighScore[])               => void
+  clearMetrics:       ()                                => void
 }
 
 export const useAppStore = create<AppState>()(
@@ -72,7 +105,9 @@ export const useAppStore = create<AppState>()(
       locale:          'en',
       theme:           'dark',
       selectedEnvId:   null,
+      algo:            'ppo',
       hyperparams:     DEFAULT_HYPERPARAMS,
+      evolutionParams: DEFAULT_EVOLUTION_PARAMS,
       seed:            42,
       totalTimesteps:  50_000,
       emaAlpha:        0.3,
@@ -88,13 +123,20 @@ export const useAppStore = create<AppState>()(
       progressHistory: [],
       lastProgress:    null,
       bestReward:      null,
+      evolutionHistory: [],
+      lastEvolution:   null,
+      highScores:      {},
 
       setLocale:         (locale)         => set({ locale }),
       setTheme:          (theme)          => set({ theme }),
       setBackendStatus:  (backendStatus)  => set({ backendStatus }),
       setEnvs:           (envs)           => set({ envs }),
       setSelectedEnvId:  (selectedEnvId)  => set({ selectedEnvId }),
+      // Switching algorithm also jumps to the chart tab that algorithm feeds, so the chart
+      // never sits empty after a switch (PPO → Reward, neuroevolution → Fitness).
+      setAlgo:           (algo)           => set({ algo, activeTab: algo === 'neuroevolution' ? 'fitness' : 'reward' }),
       setHyperparams:    (h)              => set((s) => ({ hyperparams: { ...s.hyperparams, ...h } })),
+      setEvolutionParams:(e)              => set((s) => ({ evolutionParams: { ...s.evolutionParams, ...e } })),
       setSeed:           (seed)           => set({ seed }),
       setTotalTimesteps: (n)              => set({ totalTimesteps: n }),
       setEmaAlpha:       (emaAlpha)       => set({ emaAlpha }),
@@ -133,23 +175,42 @@ export const useAppStore = create<AppState>()(
           }
         }),
 
+      // One frame per generation: append (capped), track the latest, and fold best_fitness
+      // into the session-best so the same "live high" surface works for both algorithms.
+      addEvolution: (e) =>
+        set((s) => ({
+          evolutionHistory: [...s.evolutionHistory, e].slice(-EVOLUTION_CAP),
+          lastEvolution: e,
+          bestReward:
+            s.bestReward === null ? e.best_fitness : Math.max(s.bestReward, e.best_fitness),
+        })),
+
+      setHighScore:  (hs)   => set((s) => ({ highScores: { ...s.highScores, [hs.env_id]: hs } })),
+      setHighScores: (list) =>
+        set({ highScores: Object.fromEntries(list.map((hs) => [hs.env_id, hs])) }),
+
       clearMetrics: () =>
-        set({ metricsHistory: [], progressHistory: [], lastProgress: null, bestReward: null }),
+        set({
+          metricsHistory: [], progressHistory: [], lastProgress: null, bestReward: null,
+          evolutionHistory: [], lastEvolution: null,
+        }),
     }),
     {
       name: 'rl-app-store',
       partialize: (s) => ({
-        locale:         s.locale,
-        theme:          s.theme,
-        selectedEnvId:  s.selectedEnvId,
-        hyperparams:    s.hyperparams,
-        seed:           s.seed,
-        totalTimesteps: s.totalTimesteps,
-        emaAlpha:       s.emaAlpha,
-        chartWindow:    s.chartWindow,
-        activeTab:      s.activeTab,
-        visual:         s.visual,
-        speed:          s.speed,
+        locale:          s.locale,
+        theme:           s.theme,
+        selectedEnvId:   s.selectedEnvId,
+        algo:            s.algo,
+        hyperparams:     s.hyperparams,
+        evolutionParams: s.evolutionParams,
+        seed:            s.seed,
+        totalTimesteps:  s.totalTimesteps,
+        emaAlpha:        s.emaAlpha,
+        chartWindow:     s.chartWindow,
+        activeTab:       s.activeTab,
+        visual:          s.visual,
+        speed:           s.speed,
       }),
     },
   ),

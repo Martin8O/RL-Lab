@@ -21,6 +21,7 @@ from app.schemas.training import (
     TrainStatus,
 )
 from app.services.connection_manager import ConnectionManager, manager
+from app.services.highscores import HighScoreStore, highscores, make_meta
 from app.services.preview_streamer import preview_streamer
 from app.services.train_control import TrainControl
 
@@ -38,8 +39,11 @@ class InvalidConfigError(ValueError):
 class TrainingManager:
     """Owns the single active training run and mirrors its state over WebSocket."""
 
-    def __init__(self, connection_manager: ConnectionManager) -> None:
+    def __init__(
+        self, connection_manager: ConnectionManager, hi_scores: HighScoreStore = highscores
+    ) -> None:
         self._cm = connection_manager
+        self._hi = hi_scores
         self._lock = threading.Lock()
         self._thread: threading.Thread | None = None
         self._control: TrainControl | None = None
@@ -175,11 +179,32 @@ class TrainingManager:
             self._last_metrics = metrics
             self._timesteps = metrics.timesteps
         self._broadcast(metrics.model_dump())
+        if metrics.ep_rew_mean is not None:
+            self._record_highscore(metrics.ep_rew_mean, iteration=metrics.iteration)
 
     def _emit_evolution(self, ev: EvolutionMetrics) -> None:
         with self._lock:
             self._timesteps = ev.timesteps
         self._broadcast(ev.model_dump())
+        self._record_highscore(ev.best_fitness, generation=ev.generation)
+
+    def _record_highscore(
+        self, score: float, *, generation: int | None = None, iteration: int | None = None
+    ) -> None:
+        """Persist a new all-time best for the active env and push it to clients live.
+
+        Called from the trainer thread on each metrics/evolution frame; the store only writes
+        (and only returns a record) when ``score`` actually beats the stored best, so this is
+        a cheap no-op for the common case. File IO runs outside the manager lock.
+        """
+        with self._lock:
+            cfg = self._config
+        if cfg is None:
+            return
+        meta = make_meta(cfg.algo, cfg.seed, generation=generation, iteration=iteration)
+        record = self._hi.record(cfg.env_id, score, meta)
+        if record is not None:
+            self._broadcast(record.model_dump())
 
     def _emit_progress(self, progress: TrainingProgress) -> None:
         with self._lock:

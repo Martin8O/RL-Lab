@@ -184,6 +184,100 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
     },
   },
 
+  // ── Neuroevolution settings (C2) ──────────────────────────────────────────
+  // The "200 cars" idea: instead of one agent improving by gradient steps, a whole
+  // population of networks is scored each generation and the best are bred together.
+
+  population_size: {
+    general: {
+      en: 'How many different networks are tried in each generation — the size of the "herd". A bigger population explores more strategies at once and is more likely to stumble on a good one, but every generation takes proportionally longer to score.',
+      cz: 'Kolik různých sítí se vyzkouší v každé generaci — velikost „stáda“. Větší populace zkouší více strategií najednou a má větší šanci narazit na dobrou, ale ohodnocení každé generace trvá úměrně déle.',
+    },
+    recommended: {
+      en: '50 — plenty of variety while still scoring a generation in a second or two on CPU.',
+      cz: '50 — dostatek rozmanitosti, a přitom se generace na CPU ohodnotí za vteřinu či dvě.',
+    },
+    range: '10 – 200',
+    perEnv: {
+      cartpole: {
+        en: 'CartPole is easy, so even 30–50 networks find a balancing strategy within a few generations. Larger populations mostly just cost more CPU here.',
+        cz: 'CartPole je snadný, takže i 30–50 sítí najde strategii pro udržení tyče během několika generací. Větší populace zde většinou jen spotřebují více CPU.',
+      },
+    },
+  },
+
+  top_k_parents: {
+    general: {
+      en: 'How many of the best performers survive to become parents of the next generation. Too few and the gene pool narrows fast (everyone ends up alike); too many and weak networks keep breeding, slowing progress.',
+      cz: 'Kolik nejlepších jedinců přežije a stane se rodiči další generace. Příliš málo a genofond se rychle zúží (všichni si jsou podobní); příliš mnoho a množí se i slabé sítě, což zpomaluje pokrok.',
+    },
+    recommended: {
+      en: '10 — the top fifth of a 50-network population; a healthy balance of quality and diversity.',
+      cz: '10 — horní pětina z populace 50 sítí; zdravá rovnováha kvality a rozmanitosti.',
+    },
+    range: '2 – 50',
+    perEnv: {
+      cartpole: {
+        en: 'Keeping the top ~10 works well for CartPole. Setting it to 2 can lock in one early lucky strategy before it has truly mastered balancing.',
+        cz: 'Ponechání horních ~10 funguje pro CartPole dobře. Nastavení na 2 může zafixovat jednu časnou šťastnou strategii dříve, než skutečně zvládne balancování.',
+      },
+    },
+  },
+
+  mutation_rate: {
+    general: {
+      en: 'How strongly each offspring\'s weights are randomly nudged when it is born — the amount of "creative noise". Higher values explore boldly but unpredictably; lower values fine-tune carefully but can get stuck on a so-so strategy.',
+      cz: 'Jak silně se náhodně pozmění váhy každého potomka při jeho „narození“ — míra „tvůrčího šumu“. Vyšší hodnoty zkoumají odvážně, ale nepředvídatelně; nižší hodnoty pečlivě dolaďují, ale mohou uvíznout u průměrné strategie.',
+    },
+    recommended: {
+      en: '0.1 — small, steady tweaks that improve the herd without scrambling good networks.',
+      cz: '0.1 — malé, stálé úpravy, které zlepšují stádo, aniž by rozházely dobré sítě.',
+    },
+    range: '0.01 – 1.0',
+    perEnv: {
+      cartpole: {
+        en: 'For CartPole 0.1 climbs to 500 reliably. Push it toward 1.0 and good balancers get scrambled each generation, so the best score jumps around instead of settling.',
+        cz: 'U CartPole 0.1 spolehlivě vyšplhá k 500. Posuňte ji k 1.0 a dobré „balancéry“ se každou generaci rozházejí, takže nejlepší skóre poskakuje místo ustálení.',
+      },
+    },
+  },
+
+  crossover_rate: {
+    general: {
+      en: 'The chance that a new network is a mix of two parents (combining their strengths) rather than a copy of one. Crossover blends ideas across the population; with it at 0 each child just descends from a single parent plus mutation.',
+      cz: 'Pravděpodobnost, že nová síť je směsí dvou rodičů (kombinuje jejich přednosti) místo kopie jednoho. Křížení míchá nápady napříč populací; při 0 každý potomek pochází jen z jediného rodiče plus mutace.',
+    },
+    recommended: {
+      en: '0.5 — half the offspring blend two parents, half refine one; a common, well-rounded default.',
+      cz: '0.5 — polovina potomků mísí dva rodiče, polovina dolaďuje jednoho; běžná, vyvážená výchozí hodnota.',
+    },
+    range: '0.0 – 1.0',
+    perEnv: {
+      cartpole: {
+        en: 'CartPole solves across a wide range of crossover rates, so this is a safe dial to experiment with and watch how mixing parents affects the climb.',
+        cz: 'CartPole se vyřeší v širokém rozsahu měr křížení, takže je to bezpečný knoflík k experimentování a sledování, jak mísení rodičů ovlivňuje vzestup.',
+      },
+    },
+  },
+
+  generations: {
+    general: {
+      en: 'How many breeding rounds to run — the evolution equivalent of training length. Each generation scores the whole population, keeps the best, and breeds the next. More generations give more chances to refine, up to the point the task is mastered.',
+      cz: 'Kolik kol šlechtění proběhne — evoluční obdoba délky tréninku. Každá generace ohodnotí celou populaci, ponechá nejlepší a vyšlechtí další. Více generací dává více příležitostí k vylepšení, dokud úloha není zvládnuta.',
+    },
+    recommended: {
+      en: '30 — comfortably enough for the herd to reach a near-perfect CartPole score.',
+      cz: '30 — pohodlně dost na to, aby stádo dosáhlo téměř dokonalého skóre v CartPole.',
+    },
+    range: '5 – 200',
+    perEnv: {
+      cartpole: {
+        en: 'CartPole is often essentially solved within 10–20 generations; beyond that the best fitness just sits near 500, much like extra steps do for PPO.',
+        cz: 'CartPole bývá v podstatě vyřešen během 10–20 generací; dále už nejlepší fitness jen sedí poblíž 500, podobně jako kroky navíc u PPO.',
+      },
+    },
+  },
+
   // ── Chart concepts (B5 follow-up) ─────────────────────────────────────────
   // The reward/loss/fitness tabs and the Smooth control. These describe what a
   // curve means rather than a tunable, so most omit recommended/range.
@@ -237,5 +331,43 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
       cz: 'Kolem 0.3 — dost vyhlazené pro čtení trendu, aniž by se skryly skutečné změny.',
     },
     range: '0.05 – 1.0  (1.0 = raw, no smoothing)',
+  },
+
+  // ── Top-bar chips + panel descriptions (C2) ───────────────────────────────
+  // Concept popups for the header chips and the whole Evolution Stats panel.
+
+  topbar_gen: {
+    general: {
+      en: 'Generation — which breeding round neuroevolution is currently on, shown as current / total. Each generation scores the whole population, keeps the best, and breeds the next. PPO does not evolve a population, so this stays "—" in PPO mode.',
+      cz: 'Generace — kolikáté kolo šlechtění právě neuroevoluce zpracovává, zobrazeno jako aktuální / celkem. Každá generace ohodnotí celou populaci, ponechá nejlepší a vyšlechtí další. PPO populaci nešlechtí, takže v režimu PPO zůstává „—“.',
+    },
+  },
+
+  topbar_iter: {
+    general: {
+      en: 'Iterations — a measure of how much work the run has done. For PPO it counts completed rollout-and-update cycles; for neuroevolution it counts the total network evaluations so far (generation × population).',
+      cz: 'Iterace — měřítko, kolik práce běh odvedl. U PPO počítá dokončené cykly „sběr dat + úprava“; u neuroevoluce počítá celkový počet vyhodnocení sítí dosud (generace × populace).',
+    },
+  },
+
+  topbar_best: {
+    general: {
+      en: 'The all-time best score this environment has ever reached on this machine. It is saved to disk and survives restarts — distinct from the live session high. For CartPole the ceiling is 500 (a pole balanced for the whole episode).',
+      cz: 'Nejlepší skóre, jakého kdy toto prostředí na tomto počítači dosáhlo. Ukládá se na disk a přežije restart — na rozdíl od nejlepšího skóre aktuální relace. U CartPole je strop 500 (tyč udržená po celou epizodu).',
+    },
+  },
+
+  topbar_pop: {
+    general: {
+      en: 'Population — how many neural networks compete in each neuroevolution generation. A bigger population explores more strategies per generation but is slower to score. PPO trains a single network, so this stays "—" in PPO mode.',
+      cz: 'Populace — kolik neuronových sítí soutěží v každé generaci neuroevoluce. Větší populace zkouší více strategií za generaci, ale ohodnocení je pomalejší. PPO trénuje jedinou síť, takže v režimu PPO zůstává „—“.',
+    },
+  },
+
+  evolution_stats: {
+    general: {
+      en: "This panel summarises the current neuroevolution generation. Generation is the breeding round (current / total). Total Iters is how many networks have been scored so far (generation × population). Best, Avg and Worst are the fitness scores of the top, mean and bottom network this generation — fitness is the average reward over the evaluation episodes (0–500 for CartPole, where ~500 means solved); a healthy run pushes Best upward and Avg follows it. Mutation spread is a histogram of the random weight tweaks used to breed this generation's offspring: it is centred on zero and shaped like a bell, and grows wider when the Mutation Rate is higher. Watch Best climb generation by generation — once it nears the ceiling, the population has mastered the task.",
+      cz: "Tento panel shrnuje aktuální generaci neuroevoluce. Generace je kolo šlechtění (aktuální / celkem). Celkem iterací je, kolik sítí už bylo ohodnoceno (generace × populace). Nejlepší, Průměr a Nejhorší jsou fitness skóre nejlepší, průměrné a nejhorší sítě v této generaci — fitness je průměrná odměna za vyhodnocovací epizody (0–500 pro CartPole, kde ~500 znamená vyřešeno); zdravý běh tlačí Nejlepší nahoru a Průměr ho následuje. Rozptyl mutací je histogram náhodných úprav vah použitých k vyšlechtění potomků této generace: je vystředěný na nule a tvarem připomíná zvon, širší při vyšší Míře mutace. Sleduj, jak Nejlepší stoupá generaci za generací — jakmile se přiblíží stropu, populace úlohu zvládla.",
+    },
   },
 }
