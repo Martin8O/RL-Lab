@@ -735,6 +735,10 @@ export default function RewardChart() {
             {emptyMsg}
           </div>
         )}
+
+        {/* Skill meter floats as an overlay at the bottom of the chart (no footer row) — shown only
+            while training is the live context (it self-gates; otherwise it appears in the env panel). */}
+        <SkillMeter slot="train" overlay />
       </div>
 
       {/* Stats row — fixed height so the panel's bottom line never shifts between PPO and
@@ -772,9 +776,6 @@ export default function RewardChart() {
         )}
       </div>
 
-      {/* Shared skill meter — renders here only while training is the live context (it self-gates;
-          during play it appears in the env panel instead). */}
-      <SkillMeter slot="train" />
     </section>
   )
 }

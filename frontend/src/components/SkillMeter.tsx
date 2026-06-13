@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAppStore } from '../store/useAppStore'
 import { currentBand, scaleFromEnvSkill, skillScaleFor } from '../content/skill'
@@ -17,7 +18,12 @@ const MARKER_COLORS = { human: '#4aa3ff', ai: '#c07cf0' } as const
  *   - otherwise → the training agent's live skill (*AI skill*).
  *
  *  It reads everything from the store itself (no props) so App can mount it once, full-width. */
-export default function SkillMeter({ slot }: { slot: 'play' | 'train' }) {
+export default function SkillMeter({ slot, overlay = false }: {
+  slot: 'play' | 'train'
+  /** When true, float as an absolute HUD chip inside the (position:relative) stage instead of a
+   *  footer row — reclaims the vertical space below the visualization for the stats panels. */
+  overlay?: boolean
+}) {
   const { t } = useTranslation()
   const envId    = useAppStore((s) => s.selectedEnvId)
   const envSkill = useAppStore((s) => s.envSkill)
@@ -87,12 +93,22 @@ export default function SkillMeter({ slot }: { slot: 'play' | 'train' }) {
       label: t(m.key === 'human' ? 'playscore.best_human' : 'playscore.best_ai', { score: Math.round(m.value) }),
     }))
 
+  const containerStyle: CSSProperties = overlay
+    ? {
+        position: 'absolute', left: 10, right: 10, bottom: 10, zIndex: 3,
+        background: 'var(--surface-1)', border: '1px solid var(--border-default)',
+        borderRadius: 'var(--radius-md)', boxShadow: 'var(--shadow-md)',
+        padding: '5px 11px', minHeight: 30,
+        display: 'flex', alignItems: 'center', gap: 10,
+      }
+    : {
+        flexShrink: 0, borderTop: '1px solid var(--border-default)',
+        background: 'var(--surface)', padding: '6px 12px', minHeight: 34,
+        display: 'flex', alignItems: 'center', gap: 10,
+      }
+
   return (
-    <div style={{
-      flexShrink: 0, borderTop: '1px solid var(--border-default)',
-      background: 'var(--surface)', padding: '6px 12px', minHeight: 34,
-      display: 'flex', alignItems: 'center', gap: 10,
-    }}>
+    <div style={containerStyle}>
       <span style={{
         fontSize: 11, fontWeight: 600, letterSpacing: '0.02em',
         color: 'var(--text-muted)', whiteSpace: 'nowrap',

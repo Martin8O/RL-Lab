@@ -13,7 +13,7 @@ const MAX_SPEED = 20
 // app/services/client_render.py). For these, the server streams state instead of an image.
 const CLIENT_RENDER_ENVS = new Set(['cartpole'])
 const CART_X_LIMIT = 2.4   // CartPole fails at |x| ≈ 2.4
-const CART_X_SCALE = 132   // px of horizontal travel mapped from ±x-limit (track is 40..360)
+const CART_X_SCALE = 250   // px of horizontal travel from ±x-limit (wide track 30..570, centre 300)
 
 const EyeOn = (
   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden>
@@ -81,7 +81,7 @@ export default function EnvPreview() {
         const tx = Math.max(-CART_X_SCALE, Math.min(CART_X_SCALE, (x / CART_X_LIMIT) * CART_X_SCALE))
         cg.setAttribute('transform', `translate(${tx.toFixed(1)} 0)`)
       }
-      if (pg) pg.setAttribute('transform', `rotate(${((theta * 180) / Math.PI).toFixed(2)} 200 190)`)
+      if (pg) pg.setAttribute('transform', `rotate(${((theta * 180) / Math.PI).toFixed(2)} 300 190)`)
     }
     const onFrame = (frame: PreviewFrame | PlayFrame) => {
       if (frame.state && frame.state.length >= 2) {
@@ -200,17 +200,17 @@ export default function EnvPreview() {
       }}>
         {clientRender ? (
           <div style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16 }}>
-            <svg viewBox="0 0 400 280" preserveAspectRatio="xMidYMid meet"
-              style={{ width: '100%', maxWidth: 500, maxHeight: '100%' }} aria-label="CartPole">
-              <line x1="40" y1="210" x2="360" y2="210" stroke="var(--border-strong)" strokeWidth="2.5" />
+            <svg viewBox="0 0 600 260" preserveAspectRatio="xMidYMid meet"
+              style={{ width: '100%', maxWidth: 820, maxHeight: '100%' }} aria-label="CartPole">
+              <line x1="30" y1="210" x2="570" y2="210" stroke="var(--border-strong)" strokeWidth="2.5" />
               <g ref={cartGroupRef}>
                 <g ref={poleGroupRef}>
-                  <line x1="200" y1="190" x2="200" y2="70" stroke="var(--accent)" strokeWidth="7" strokeLinecap="round" />
-                  <circle cx="200" cy="66" r="9" fill="var(--accent)" />
+                  <line x1="300" y1="190" x2="300" y2="70" stroke="var(--accent)" strokeWidth="7" strokeLinecap="round" />
+                  <circle cx="300" cy="66" r="9" fill="var(--accent)" />
                 </g>
-                <rect x="168" y="184" width="64" height="26" rx="5" fill="var(--surface-3)" stroke="var(--border-strong)" strokeWidth="2.5" />
-                <circle cx="182" cy="214" r="6" fill="var(--text-faint)" />
-                <circle cx="218" cy="214" r="6" fill="var(--text-faint)" />
+                <rect x="268" y="184" width="64" height="26" rx="5" fill="var(--surface-3)" stroke="var(--border-strong)" strokeWidth="2.5" />
+                <circle cx="282" cy="214" r="6" fill="var(--text-faint)" />
+                <circle cx="318" cy="214" r="6" fill="var(--text-faint)" />
               </g>
             </svg>
             {!live && (
@@ -243,11 +243,13 @@ export default function EnvPreview() {
             ⌨ {t('play.playing_hint')}
           </div>
         )}
+
+        {/* Skill meter floats as an overlay at the bottom of the stage (no footer row) — shown only
+            while a play session is the live context, so it doesn't steal space from the panels below. */}
+        <SkillMeter slot="play" overlay />
       </div>
 
-      {/* Play vs AI (E2): controls + the shared skill meter, which renders here only while a play
-          session is the live context (it self-gates; during training it appears in the chart panel
-          instead). One gauge, shown in whichever visualization panel is relevant. */}
+      {/* Play vs AI (E2): controls. */}
       <PlayControls />
       <SkillMeter slot="play" />
     </section>

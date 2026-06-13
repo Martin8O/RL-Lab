@@ -161,7 +161,12 @@
     "export": "Export",
     "delete": "Delete",
     "nothing_to_save": "Start a run first — nothing to save yet",
-    "confirm_delete": "Delete checkpoint \"{{label}}\"?"
+    "confirm_delete": "Delete checkpoint \"{{label}}\"?",
+    "manage": "Manage",
+    "load_title": "Load a save",
+    "manage_title": "Manage saves",
+    "pick_hint": "Pick a save to load",
+    "moved_hint": "Save / load is in the sidebar, under the Run button"
   },
   "runs": {
     "compare": "Compare",

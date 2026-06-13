@@ -4,6 +4,7 @@ import { useAppStore } from '../store/useAppStore'
 import { useRunControls } from '../api/trainingControls'
 import type { Algo } from '../api/types'
 import ParamInfo from './ParamInfo'
+import SaveLoadControls from './SaveLoadControls'
 
 // ── Shared style helpers ─────────────────────────────────────────────────────
 
@@ -539,6 +540,11 @@ export default function Sidebar() {
             {PlayGlyph} {t('sidebar.run')}
           </button>
         )}
+      </div>
+
+      {/* Save / Load / Manage (D1) — the checkpoint slots live in modals here, not in the dashboard. */}
+      <div style={{ padding: '0 var(--space-5) var(--space-4)', flexShrink: 0 }}>
+        <SaveLoadControls />
       </div>
     </aside>
   )
