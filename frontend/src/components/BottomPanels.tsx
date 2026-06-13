@@ -222,17 +222,16 @@ function EvolutionStats() {
   )
 }
 
-// ── Saves placeholder ─────────────────────────────────────────────────────────
-// Save / Load / Manage moved to the sidebar (under Run); the checkpoint slots now live in
-// modals there, not inline in the dashboard. This panel is intentionally left empty — what to
-// put in the reclaimed space is a future iteration.
+// ── Blank panel ───────────────────────────────────────────────────────────────
+// Reserved, intentionally empty space (growth potential) — the old Save / Load panel (moved to the
+// sidebar) and the slot freed by narrowing the high-score board, both kept blank for future games.
 
-function SavesPlaceholder() {
-  const { t } = useTranslation()
+function BlankPanel({ flex = 1, borderRight = true }: { flex?: number; borderRight?: boolean }) {
   return (
-    <PanelShell title={t('saveload.title')} borderRight={false} center>
-      <Empty text={t('saveload.moved_hint')} />
-    </PanelShell>
+    <div style={{
+      flex, minWidth: 0, background: 'var(--surface)',
+      borderRight: borderRight ? '1px solid var(--border)' : undefined,
+    }} />
   )
 }
 
@@ -283,9 +282,18 @@ export default function BottomPanels() {
       height: 200, flexShrink: 0, display: 'flex',
       borderTop: '2px solid var(--border-default)',
     }}>
-      {showEvoLeaderboard ? <Leaderboard /> : <PlayLeaderboards />}
-      <EvolutionStats />
-      <SavesPlaceholder />
+      {/* Left group spans the cart-window width (55%) so its right edge lands exactly on the
+          cart/chart divider: high scores (narrowed ~⅓) + evolution stats, side by side. */}
+      <div style={{ flex: '0 0 55%', minWidth: 0, display: 'flex', overflow: 'hidden' }}>
+        <div style={{ flex: 2, minWidth: 0, display: 'flex', overflow: 'hidden' }}>
+          {showEvoLeaderboard ? <Leaderboard /> : <PlayLeaderboards />}
+        </div>
+        <div style={{ flex: 3, minWidth: 0, display: 'flex', overflow: 'hidden' }}>
+          <EvolutionStats />
+        </div>
+      </div>
+      {/* The single empty panel — bottom-right, the width of the chart window (45%) — growth potential. */}
+      <BlankPanel flex={1} borderRight={false} />
     </div>
   )
 }

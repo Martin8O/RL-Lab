@@ -691,8 +691,10 @@ export default function RewardChart() {
         </div>
       </div>
 
-      {/* Chart area */}
-      <div ref={containerRef} style={{ flex: 1, overflow: 'hidden', position: 'relative' }}>
+      {/* Chart area + skill meter — the meter reserves a strip BELOW the plot (not an overlay), so
+          the chart shrinks to sit above it and the meter never covers the curve / x-axis / solved markers. */}
+      <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <div ref={containerRef} style={{ flex: 1, minHeight: 0, overflow: 'hidden', position: 'relative' }}>
         {hasChart ? (
           <>
             <LineChart series={series} markers={markers} width={size.w} height={size.h} xFmt={xFmt} />
@@ -736,9 +738,10 @@ export default function RewardChart() {
           </div>
         )}
 
-        {/* Skill meter floats as an overlay at the bottom of the chart (no footer row) — shown only
-            while training is the live context (it self-gates; otherwise it appears in the env panel). */}
-        <SkillMeter slot="train" overlay />
+      </div>
+      {/* Skill meter as a reserved strip below the plot (shown only while training is the live
+          context; otherwise it self-gates to null and the chart uses the full height). */}
+      <SkillMeter slot="train" />
       </div>
 
       {/* Stats row — fixed height so the panel's bottom line never shifts between PPO and

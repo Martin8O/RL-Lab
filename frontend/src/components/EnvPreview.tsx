@@ -249,9 +249,8 @@ export default function EnvPreview() {
         <SkillMeter slot="play" overlay />
       </div>
 
-      {/* Play vs AI (E2): controls. */}
+      {/* Play vs AI (E2): controls. The skill meter is the single overlay inside the stage above. */}
       <PlayControls />
-      <SkillMeter slot="play" />
     </section>
   )
 }

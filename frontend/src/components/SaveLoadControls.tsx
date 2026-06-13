@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type CSSProperties, type ReactNode } from 'react'
+import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAppStore } from '../store/useAppStore'
 import {
@@ -179,11 +179,21 @@ export default function SaveLoadControls() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [modal, setModal] = useState<null | 'load' | 'manage'>(null)
+  const [toast, setToast] = useState<string | null>(null)
 
   const refresh = useCallback(() => {
     void fetchCheckpoints().then(setSlots).catch(() => {})
   }, [])
   useEffect(() => { refresh() }, [refresh])
+
+  // Brief confirmation popup ("Saved" / "Loaded") so the action is visibly acknowledged.
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const flashToast = useCallback((msg: string) => {
+    setToast(msg)
+    if (toastTimer.current) clearTimeout(toastTimer.current)
+    toastTimer.current = setTimeout(() => setToast(null), 1200)
+  }, [])
+  useEffect(() => () => { if (toastTimer.current) clearTimeout(toastTimer.current) }, [])
 
   const canSave = SAVEABLE.has(trainState)
 
@@ -193,6 +203,7 @@ export default function SaveLoadControls() {
     try {
       await saveCheckpoint()
       refresh()
+      flashToast(t('saveload.saved'))
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
@@ -216,6 +227,7 @@ export default function SaveLoadControls() {
         if (status.config.evolution) st.setEvolutionParams(status.config.evolution)
       }
       setModal(null)
+      flashToast(t('saveload.loaded'))
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     }
@@ -257,6 +269,18 @@ export default function SaveLoadControls() {
         </button>
       </div>
       {error && <div style={{ fontSize: 'var(--fs-meta)', color: 'var(--danger)' }}>{error}</div>}
+
+      {toast && (
+        <div style={{
+          position: 'fixed', left: '50%', bottom: 28, transform: 'translateX(-50%)', zIndex: 60,
+          display: 'flex', alignItems: 'center', gap: 8, pointerEvents: 'none',
+          background: 'var(--surface-1)', border: '1px solid var(--border-default)',
+          borderRadius: 'var(--radius-md)', boxShadow: 'var(--shadow-popover)',
+          padding: '8px 16px', fontSize: 'var(--fs-sm)', fontWeight: 'var(--fw-semibold)', color: 'var(--text-strong)',
+        }}>
+          <span style={{ color: 'var(--success)' }}>✓</span> {toast}
+        </div>
+      )}
 
       {modal && (
         <Modal

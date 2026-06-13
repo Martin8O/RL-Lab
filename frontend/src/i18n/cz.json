@@ -166,7 +166,9 @@
     "load_title": "Načíst uložení",
     "manage_title": "Správa uložení",
     "pick_hint": "Vyberte uložení, které chcete načíst",
-    "moved_hint": "Uložit / načíst je v postranním panelu pod tlačítkem Spustit"
+    "moved_hint": "Uložit / načíst je v postranním panelu pod tlačítkem Spustit",
+    "saved": "Uloženo",
+    "loaded": "Načteno"
   },
   "runs": {
     "compare": "Porovnat",

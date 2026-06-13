@@ -8,6 +8,14 @@ import PlayInstructions from './PlayInstructions'
 
 const PLAY_SPEEDS = [0.1, 0.15, 0.25, 0.5, 1, 2, 4]
 
+// Compact label for the checkpoint picker: drop the leading "env · " (the env is already chosen)
+// and cap the length so a long name doesn't run into the <select> arrow on the right.
+function optionLabel(label: string): string {
+  const i = label.indexOf('·')
+  const s = (i >= 0 ? label.slice(i + 1) : label).trim()
+  return s.length > 20 ? `${s.slice(0, 19)}…` : s
+}
+
 // Play-vs-AI controls (E2): start/stop one interactive episode, pick who plays (human at the
 // keyboard ↔ AI watch from a checkpoint) and the pacing, and open the how-to-play guide.
 // The canvas + keyboard live in EnvPreview; this row owns the lifecycle + config.
@@ -137,8 +145,8 @@ export default function PlayControls() {
               style={{ ...selectStyle, maxWidth: 160 }}
             >
               {envCheckpoints.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.label} · {c.algo === 'ppo' ? 'PPO' : 'EVO'}
+                <option key={c.id} value={c.id} title={c.label}>
+                  {optionLabel(c.label)}
                 </option>
               ))}
             </select>

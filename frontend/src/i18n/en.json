@@ -166,7 +166,9 @@
     "load_title": "Load a save",
     "manage_title": "Manage saves",
     "pick_hint": "Pick a save to load",
-    "moved_hint": "Save / load is in the sidebar, under the Run button"
+    "moved_hint": "Save / load is in the sidebar, under the Run button",
+    "saved": "Saved",
+    "loaded": "Loaded"
   },
   "runs": {
     "compare": "Compare",
