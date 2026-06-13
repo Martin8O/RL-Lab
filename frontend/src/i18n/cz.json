@@ -63,6 +63,7 @@
   "skill": {
     "title": "Dovednost AI",
     "short": "Dovednost",
+    "you": "Tvoje dovednost",
     "child": "Dítě",
     "below": "Podprůměr",
     "average": "Průměr",

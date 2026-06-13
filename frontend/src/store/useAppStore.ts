@@ -265,13 +265,17 @@ export const useAppStore = create<AppState>()(
       // Lifecycle snapshot from a {type:"play_status"} frame or REST start/stop response.
       // A fresh 'playing' status arrives with step/score 0 + result null, which resets the meter.
       applyPlayStatus: (s) =>
-        set({
+        set((state) => ({
           playState: s.state,
           playScore: s.score,
           playStep:  s.step,
           playResult: s.result,
           playError: s.error,
-        }),
+          // Mode is authoritative from the backend while a session exists, so the skill-meter label
+          // ("Your skill" vs "AI skill") matches the running session even after a reload reconcile;
+          // when idle (mode null) keep the selector's choice for the next session.
+          playMode: s.mode ?? state.playMode,
+        })),
 
       // High-frequency per-frame update (throttled by the caller) so the skill meter climbs live.
       setPlayProgress: (playScore, playStep) => set({ playScore, playStep }),

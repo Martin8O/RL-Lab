@@ -6,37 +6,79 @@ import { currentBand, scaleFromEnvSkill, skillScaleFor } from '../content/skill'
 const GRADIENT =
   'linear-gradient(to right, #e2453c 0%, #f0883e 28%, #e3c000 50%, #86c440 75%, #3fae4f 100%)'
 
-/** Record markers (E2): best-human + best-AI scores drawn as starred lines on the play meter. */
-export interface SkillMarkers {
-  human?: number | null
-  ai?: number | null
-}
 const MARKER_COLORS = { human: '#4aa3ff', ai: '#c07cf0' } as const
 
-/** Compact skill gauge: maps the live Score to a band (Child → Superhuman) with a needle.
- *  Height matches the env-preview speed row (34px) so the two panels stay aligned.
- *  `titleKey` lets callers relabel it ("AI skill" for the trained agent, "Your skill" for play).
- *  `markers` overlays starred record lines (the play meter passes best human/AI here). */
-export default function SkillMeter({
-  score,
-  titleKey = 'skill.title',
-  markers,
-}: { score: number | null; titleKey?: string; markers?: SkillMarkers }) {
+/** The dashboard's single, context-aware skill gauge (one full-width row under both top panels).
+ *
+ *  Training and play-vs-AI never need a skill readout at the same time, so instead of two identical
+ *  meters this one **relabels by whichever context is live**:
+ *   - a play session (active or just finished) wins → shows the play rating: *Your skill* when the
+ *     human plays, *AI skill* when watching the AI, plus starred best-human / best-AI record marks;
+ *   - otherwise → the training agent's live skill (*AI skill*).
+ *
+ *  It reads everything from the store itself (no props) so App can mount it once, full-width. */
+export default function SkillMeter({ slot }: { slot: 'play' | 'train' }) {
   const { t } = useTranslation()
   const envId    = useAppStore((s) => s.selectedEnvId)
   const envSkill = useAppStore((s) => s.envSkill)
+
+  const playState      = useAppStore((s) => s.playState)
+  const playMode       = useAppStore((s) => s.playMode)
+  const playScore      = useAppStore((s) => s.playScore)
+  const playScores     = useAppStore((s) => s.playScores)
+  const trainState     = useAppStore((s) => s.trainState)
+  const algo           = useAppStore((s) => s.algo)
+  const lastProgress   = useAppStore((s) => s.lastProgress)
+  const metricsHistory = useAppStore((s) => s.metricsHistory)
+  const lastEvolution  = useAppStore((s) => s.lastEvolution)
+
+  // One meter, relabelled by what's relevant now: you actively playing always wins (you're at the
+  // keyboard); otherwise a training run that has started this session owns the readout — its live
+  // value, and its final value after it stops, so it won't snap back to an old play score. A
+  // finished play result only lingers as feedback when no training has run this session (e.g. a
+  // reconciled prior session on a fresh load).
+  const playActive = playState === 'playing'
+  const trainStarted = trainState !== 'idle'
+  const playVisible = playActive || (!trainStarted && playState !== 'idle')
+
+  // One meter, but it lives in BOTH visualization panels and shows in whichever matches the live
+  // context: the env/cart panel while playing, the chart panel while training (or idle). The other
+  // instance renders nothing — so there's never a duplicate, and no separate full-width row.
+  if (slot === 'play' && !playVisible) return null
+  if (slot === 'train' && playVisible) return null
+
+  let score: number | null
+  let titleKey: string
+  let markerHuman: number | null = null
+  let markerAi: number | null = null
+  if (playVisible) {
+    score = playScore
+    titleKey = playMode === 'human' ? 'skill.you' : 'skill.title'
+    markerHuman = playScores?.human[0]?.score ?? null
+    markerAi = playScores?.ai[0]?.score ?? null
+  } else {
+    const lastMetrics = metricsHistory.at(-1)
+    score =
+      algo === 'neuroevolution'
+        ? lastEvolution?.best_fitness ?? null
+        : lastProgress?.ep_rew_mean ?? lastMetrics?.ep_rew_mean ?? null
+    titleKey = 'skill.title'
+  }
+
   // Prefer the backend's per-env thresholds (single source of truth with the play rating);
   // fall back to the local table until that fetch lands or for an unknown env.
   const scale = envSkill ? scaleFromEnvSkill(envSkill) : skillScaleFor(envId)
 
   const hasScore = score !== null
-  const value = hasScore ? score : 0
+  const value = score ?? 0
   const frac = Math.max(0, Math.min(1, value / scale.max))
   const band = currentBand(value, scale)
   const ticks = scale.bands.slice(1).map((b) => b.min / scale.max) // band boundaries
 
-  const recordMarks = (['human', 'ai'] as const)
-    .map((key) => ({ key, value: markers?.[key] }))
+  const recordMarks = [
+    { key: 'human' as const, value: markerHuman },
+    { key: 'ai' as const, value: markerAi },
+  ]
     .filter((m): m is { key: 'human' | 'ai'; value: number } => typeof m.value === 'number' && m.value > 0)
     .map((m) => ({
       ...m,
@@ -47,11 +89,14 @@ export default function SkillMeter({
 
   return (
     <div style={{
-      flexShrink: 0, borderTop: '1px solid var(--border)',
+      flexShrink: 0, borderTop: '1px solid var(--border-default)',
       background: 'var(--surface)', padding: '6px 12px', minHeight: 34,
       display: 'flex', alignItems: 'center', gap: 10,
     }}>
-      <span style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+      <span style={{
+        fontSize: 11, fontWeight: 600, letterSpacing: '0.02em',
+        color: 'var(--text-muted)', whiteSpace: 'nowrap',
+      }}>
         {t(titleKey)}
       </span>
 
@@ -98,7 +143,7 @@ export default function SkillMeter({
       <span style={{
         fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap',
         color: hasScore ? 'var(--text-h)' : 'var(--text-muted)',
-        minWidth: 110, textAlign: 'right',
+        minWidth: 120, textAlign: 'right',
       }}>
         {hasScore ? `${t(`skill.${band.key}`)} · ${Math.round(value)}` : t('skill.no_data')}
       </span>

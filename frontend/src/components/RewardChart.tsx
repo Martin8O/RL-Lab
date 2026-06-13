@@ -772,8 +772,9 @@ export default function RewardChart() {
         )}
       </div>
 
-      {/* AI skill meter */}
-      <SkillMeter score={score ?? null} />
+      {/* Shared skill meter — renders here only while training is the live context (it self-gates;
+          during play it appears in the env panel instead). */}
+      <SkillMeter slot="train" />
     </section>
   )
 }

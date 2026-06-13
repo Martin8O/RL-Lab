@@ -40,8 +40,6 @@ export default function EnvPreview() {
   const selectedEnvId = useAppStore((s) => s.selectedEnvId)
   const playState     = useAppStore((s) => s.playState)
   const playMode      = useAppStore((s) => s.playMode)
-  const playScore     = useAppStore((s) => s.playScore)
-  const playScores    = useAppStore((s) => s.playScores)
 
   const canvasRef     = useRef<HTMLCanvasElement | null>(null)
   const cartGroupRef  = useRef<SVGGElement | null>(null)   // CartPole: horizontal cart travel
@@ -247,17 +245,11 @@ export default function EnvPreview() {
         )}
       </div>
 
-      {/* Play vs AI (E2): controls + a skill meter (renders always — matches the chart panel's
-          meter for bottom-line alignment; shows your live rating while you play). */}
+      {/* Play vs AI (E2): controls + the shared skill meter, which renders here only while a play
+          session is the live context (it self-gates; during training it appears in the chart panel
+          instead). One gauge, shown in whichever visualization panel is relevant. */}
       <PlayControls />
-      <SkillMeter
-        score={playVisible ? playScore : null}
-        titleKey="skill.short"
-        markers={{
-          human: playScores?.human[0]?.score ?? null,
-          ai: playScores?.ai[0]?.score ?? null,
-        }}
-      />
+      <SkillMeter slot="play" />
     </section>
   )
 }

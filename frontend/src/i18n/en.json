@@ -63,6 +63,7 @@
   "skill": {
     "title": "AI Skill",
     "short": "Skill",
+    "you": "Your skill",
     "child": "Child",
     "below": "Below avg",
     "average": "Average",
