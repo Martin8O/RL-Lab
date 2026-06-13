@@ -4,26 +4,28 @@ import type { BackendStatus } from '../store/useAppStore'
 import ParamInfo from './ParamInfo'
 
 const DOT_COLOR: Record<BackendStatus, string> = {
-  online:     'var(--ok)',
-  connecting: 'var(--warn)',
-  offline:    'var(--err)',
+  online:     'var(--success)',
+  connecting: 'var(--warning)',
+  offline:    'var(--danger)',
 }
 
 function StatusDot() {
   const { t } = useTranslation()
   const status = useAppStore((s) => s.backendStatus)
+  const color = DOT_COLOR[status]
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-      <span
-        style={{
-          width: 8, height: 8, borderRadius: '50%',
-          background: DOT_COLOR[status],
-          boxShadow: `0 0 6px ${DOT_COLOR[status]}`,
-          display: 'inline-block',
-          animation: status === 'connecting' ? 'pulse 1.4s ease-in-out infinite' : undefined,
-        }}
-      />
-      <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>{t(`status.${status}`)}</span>
+    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+      <span style={{ position: 'relative', width: 8, height: 8, display: 'inline-flex' }}>
+        <span
+          style={{
+            position: 'relative', width: 8, height: 8, borderRadius: '50%',
+            background: color,
+            boxShadow: status === 'online' ? `0 0 0 3px var(--success-surface)` : 'none',
+            animation: status === 'connecting' ? 'lab-pulse 1.4s var(--ease-in-out) infinite' : undefined,
+          }}
+        />
+      </span>
+      <span style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-label)' }}>{t(`status.${status}`)}</span>
     </div>
   )
 }
@@ -35,20 +37,64 @@ function Chip({ label, value, title, accent, infoId, infoLabel }: {
     <div
       title={title}
       style={{
-        display: 'flex', alignItems: 'center', gap: 4,
-        background: 'var(--surface-2)', border: '1px solid var(--border)',
-        borderRadius: 6, padding: '2px 8px', fontSize: 12,
+        display: 'inline-flex', alignItems: 'center', gap: 7,
+        height: 28, padding: '0 11px',
+        background: 'var(--surface-2)', border: '1px solid var(--border-default)',
+        borderRadius: 'var(--radius-pill)', fontSize: 'var(--fs-label)',
+        whiteSpace: 'nowrap',
         cursor: title ? 'help' : undefined,
       }}
     >
       <span style={{ color: 'var(--text-muted)' }}>{label}</span>
-      <span style={{ color: accent ? 'var(--ok)' : 'var(--text-h)', fontVariantNumeric: 'tabular-nums', fontWeight: accent ? 600 : 400 }}>
+      <span style={{
+        fontFamily: 'var(--font-mono)', fontFeatureSettings: 'var(--ff-tabular)',
+        fontWeight: 'var(--fw-medium)', letterSpacing: 'var(--ls-tight)',
+        color: accent ? 'var(--success)' : 'var(--text-strong)',
+      }}>
         {value}
       </span>
       {infoId && <ParamInfo paramId={infoId} label={infoLabel ?? label} />}
     </div>
   )
 }
+
+function IconBtn({ onClick, label, children, text }: {
+  onClick: () => void; label: string; children?: React.ReactNode; text?: string
+}) {
+  return (
+    <button
+      onClick={onClick}
+      aria-label={label}
+      title={label}
+      style={{
+        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+        height: 34, minWidth: 34, padding: text ? '0 11px' : 0,
+        background: 'transparent', border: '1px solid transparent',
+        borderRadius: 'var(--radius-md)', color: 'var(--text-muted)',
+        fontSize: 'var(--fs-label)', fontWeight: 'var(--fw-semibold)',
+        letterSpacing: 'var(--ls-wide)', cursor: 'pointer',
+        transition: 'var(--t-colors)',
+      }}
+      onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--surface-2)'; e.currentTarget.style.color = 'var(--text-default)' }}
+      onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-muted)' }}
+    >
+      {text ?? children}
+    </button>
+  )
+}
+
+const SunIcon = (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
+    <circle cx="12" cy="12" r="4.2" stroke="currentColor" strokeWidth="2" />
+    <path d="M12 2.5v2.2M12 19.3v2.2M21.5 12h-2.2M4.7 12H2.5M18.4 5.6l-1.6 1.6M7.2 16.8l-1.6 1.6M18.4 18.4l-1.6-1.6M7.2 7.2L5.6 5.6"
+      stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+  </svg>
+)
+const MoonIcon = (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
+    <path d="M20 14.5A8 8 0 019.5 4 8 8 0 1020 14.5z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
+  </svg>
+)
 
 export default function TopBar() {
   const { t }  = useTranslation()
@@ -88,62 +134,61 @@ export default function TopBar() {
 
   return (
     <header style={{
-      height: 48, flexShrink: 0,
-      display: 'flex', alignItems: 'center', gap: 12, padding: '0 16px',
-      background: 'var(--surface)', borderBottom: '1px solid var(--border)',
+      height: 'var(--topbar-h)', flexShrink: 0,
+      display: 'flex', alignItems: 'center', gap: 'var(--space-4)', padding: '0 var(--space-5)',
+      background: 'var(--surface-1)', borderBottom: '2px solid var(--border-default)',
     }}>
-      <span style={{ fontWeight: 600, fontSize: 15, color: 'var(--text-h)', letterSpacing: '-0.2px', marginRight: 4 }}>
-        {t('app.title')}
-      </span>
+      {/* Brand */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 11 }}>
+        <div style={{
+          width: 30, height: 30, borderRadius: 'var(--radius-md)', background: 'var(--accent)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          boxShadow: 'var(--shadow-sm)', flexShrink: 0,
+        }}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
+            <path d="M4 18 L9 11 L13 14 L20 5" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+            <circle cx="20" cy="5" r="2.3" fill="#fff" />
+          </svg>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.1 }}>
+          <span style={{ fontSize: 15, fontWeight: 'var(--fw-semibold)', color: 'var(--text-strong)', letterSpacing: 'var(--ls-tight)' }}>
+            {t('app.title')}
+          </span>
+          <span style={{
+            fontSize: 'var(--fs-micro)', fontWeight: 'var(--fw-semibold)',
+            letterSpacing: 'var(--ls-eyebrow)', textTransform: 'uppercase', color: 'var(--text-faint)',
+          }}>
+            {t('app.subtitle')}
+          </span>
+        </div>
+      </div>
+
+      <div style={{ width: 1, height: 26, background: 'var(--border-default)' }} />
 
       <StatusDot />
 
       <div style={{ flex: 1 }} />
 
-      <Chip label={t('topbar.chips.gen')}  value={genValue}  infoId="topbar_gen" />
-      <Chip label={t('topbar.chips.iter')} value={iterValue} infoId="topbar_iter" />
-      <Chip
-        label={`★ ${t('topbar.chips.best')}`}
-        value={allTime !== undefined ? allTime.toFixed(1) : '—'}
-        title={bestTitle}
-        accent={allTime !== undefined}
-        infoId="topbar_best"
-        infoLabel={t('topbar.chips.best')}
-      />
-      <Chip label={t('topbar.chips.pop')}  value={popValue} infoId="topbar_pop" />
+      <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+        <Chip label={t('topbar.chips.gen')}  value={genValue}  infoId="topbar_gen" />
+        <Chip label={t('topbar.chips.iter')} value={iterValue} infoId="topbar_iter" />
+        <Chip
+          label={`★ ${t('topbar.chips.best')}`}
+          value={allTime !== undefined ? allTime.toFixed(1) : '—'}
+          title={bestTitle}
+          accent={allTime !== undefined}
+          infoId="topbar_best"
+          infoLabel={t('topbar.chips.best')}
+        />
+        <Chip label={t('topbar.chips.pop')}  value={popValue} infoId="topbar_pop" />
+      </div>
 
-      <div style={{ width: 1, height: 20, background: 'var(--border)', margin: '0 4px' }} />
+      <div style={{ width: 1, height: 26, background: 'var(--border-default)' }} />
 
-      <button
-        onClick={() => setLocale(locale === 'en' ? 'cz' : 'en')}
-        style={{
-          background: 'var(--surface-2)', border: '1px solid var(--border)',
-          borderRadius: 6, padding: '3px 10px', cursor: 'pointer',
-          color: 'var(--text-h)', fontSize: 12, fontWeight: 500,
-        }}
-        aria-label="Toggle language"
-      >
-        {locale === 'en' ? 'CZ' : 'EN'}
-      </button>
-
-      <button
-        onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-        style={{
-          background: 'var(--surface-2)', border: '1px solid var(--border)',
-          borderRadius: 6, padding: '3px 8px', cursor: 'pointer',
-          color: 'var(--text-h)', fontSize: 14, lineHeight: 1,
-        }}
-        aria-label="Toggle theme"
-      >
-        {theme === 'dark' ? '☀' : '🌙'}
-      </button>
-
-      <style>{`
-        @keyframes pulse {
-          0%, 100% { opacity: 1; }
-          50%       { opacity: 0.35; }
-        }
-      `}</style>
+      <IconBtn onClick={() => setLocale(locale === 'en' ? 'cz' : 'en')} label="Toggle language" text={locale === 'en' ? 'CZ' : 'EN'} />
+      <IconBtn onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} label="Toggle theme">
+        {theme === 'dark' ? MoonIcon : SunIcon}
+      </IconBtn>
     </header>
   )
 }

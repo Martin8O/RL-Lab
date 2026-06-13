@@ -1,51 +1,272 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   LABORATORY — RL Dashboard Design System
+   Single CSS entry point. A calm, scientific, fully-tokenised system with
+   symmetric dark + light themes. Components consume SEMANTIC tokens only.
+
+   Legacy aliases (bottom of :root) map the original token names onto the new
+   semantic tokens, so the whole app re-skins without touching every call site.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Type family — IBM Plex (loads from Google Fonts CDN). Falls back to the
+   system stack offline; self-host the files to drop the CDN dependency. */
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
 @import "tailwindcss";
 
-/* ── Dark theme (default) ───────────────────────────────── */
+/* ─────────────────────────────────────────────────────────────────────────
+   COLOR — DARK THEME (default). Cool-slate ink; surfaces step forward evenly.
+   ───────────────────────────────────────────────────────────────────────── */
+:root,
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  --bg-sunken:        #06070a;
+  --bg-base:          #0a0c10;
+  --surface-1:        #101319;
+  --surface-2:        #161a22;
+  --surface-3:        #1d222c;
+  --surface-inset:    #0c0e13;
+
+  --border-subtle:    #1b202a;
+  --border-default:   #262d39;
+  --border-strong:    #353e4d;
+
+  --text-strong:      #f3f5f9;
+  --text-default:     #c2cad6;
+  --text-muted:       #828d9c;
+  --text-faint:       #58626f;
+  --text-on-accent:   #ffffff;
+
+  --accent:           #6e7bff;
+  --accent-hover:     #8a93ff;
+  --accent-active:    #5a67f0;
+  --accent-contrast:  #ffffff;
+  --accent-surface:   rgba(110, 123, 255, 0.13);
+  --accent-border:    rgba(110, 123, 255, 0.40);
+
+  --success:          #36d399;
+  --warning:          #f6c358;
+  --danger:           #fb7185;
+  --info:             #5cb6ff;
+
+  --success-surface:  rgba(54, 211, 153, 0.13);
+  --warning-surface:  rgba(246, 195, 88, 0.14);
+  --danger-surface:   rgba(251, 113, 133, 0.13);
+  --info-surface:     rgba(92, 182, 255, 0.13);
+
+  --focus-ring:       rgba(110, 123, 255, 0.55);
+
+  --chart-grid:       rgba(255, 255, 255, 0.06);
+  --chart-axis:       #58626f;
+  --chart-plot-bg:    #0c0e13;
+
+  /* Data-visualisation palette (series order is meaningful) */
+  --viz-1: #7c8bff;   /* iris   — primary / average      */
+  --viz-2: #34d6a5;   /* teal   — best / upper bound      */
+  --viz-3: #fb7a8e;   /* rose   — worst / lower bound      */
+  --viz-4: #f6c358;   /* amber  — secondary metric         */
+  --viz-5: #c08cff;   /* violet — comparison run           */
+  --viz-6: #4ec5f0;   /* cyan   — comparison run           */
+  --viz-1-soft: rgba(124, 139, 255, 0.16);
+  --viz-2-soft: rgba(52, 214, 165, 0.16);
+  --viz-3-soft: rgba(251, 122, 142, 0.16);
+
+  /* Elevation — deep, soft shadows for dark */
+  --shadow-xs:      0 1px 2px rgba(0, 0, 0, 0.40);
+  --shadow-sm:      0 1px 3px rgba(0, 0, 0, 0.45), 0 1px 2px rgba(0, 0, 0, 0.30);
+  --shadow-md:      0 4px 12px rgba(0, 0, 0, 0.45), 0 2px 4px rgba(0, 0, 0, 0.30);
+  --shadow-lg:      0 12px 28px rgba(0, 0, 0, 0.50), 0 4px 10px rgba(0, 0, 0, 0.35);
+  --shadow-popover: 0 16px 40px rgba(0, 0, 0, 0.55), 0 6px 14px rgba(0, 0, 0, 0.40);
+  --ring-inset:     inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   COLOR — LIGHT THEME. Soft cool paper; pure-white raised surfaces.
+   ───────────────────────────────────────────────────────────────────────── */
+[data-theme="light"] {
+  color-scheme: light;
+
+  --bg-sunken:        #e9edf2;
+  --bg-base:          #f4f6f9;
+  --surface-1:        #ffffff;
+  --surface-2:        #ffffff;
+  --surface-3:        #f1f4f8;
+  --surface-inset:    #f7f9fb;
+
+  --border-subtle:    #edf0f4;
+  --border-default:   #dde2e9;
+  --border-strong:    #c3cbd6;
+
+  --text-strong:      #0c111b;
+  --text-default:     #353d4a;
+  --text-muted:       #6a7585;
+  --text-faint:       #97a1b0;
+  --text-on-accent:   #ffffff;
+
+  /* Accent — muted indigo-slate. Calmer on light paper than the vivid #4f46e5
+     so filled buttons / active controls / the iris chart line don't glare. */
+  --accent:           #565fb3;
+  --accent-hover:     #474f9c;
+  --accent-active:    #3c4488;
+  --accent-contrast:  #ffffff;
+  --accent-surface:   rgba(86, 95, 179, 0.10);
+  --accent-border:    rgba(86, 95, 179, 0.30);
+
+  --success:          #0e9f6e;
+  --warning:          #c2820a;
+  --danger:           #e0364f;
+  --info:             #2374d6;
+
+  --success-surface:  rgba(14, 159, 110, 0.10);
+  --warning-surface:  rgba(194, 130, 10, 0.11);
+  --danger-surface:   rgba(224, 54, 79, 0.09);
+  --info-surface:     rgba(35, 116, 214, 0.09);
+
+  --focus-ring:       rgba(86, 95, 179, 0.42);
+
+  --chart-grid:       rgba(12, 17, 27, 0.07);
+  --chart-axis:       #97a1b0;
+  --chart-plot-bg:    #fbfcfe;
+
+  --viz-1: #565fb3;
+  --viz-2: #0e9f6e;
+  --viz-3: #e0364f;
+  --viz-4: #c2820a;
+  --viz-5: #8b3fd6;
+  --viz-6: #1499c7;
+  --viz-1-soft: rgba(86, 95, 179, 0.12);
+  --viz-2-soft: rgba(14, 159, 110, 0.12);
+  --viz-3-soft: rgba(224, 54, 79, 0.12);
+
+  --shadow-xs:      0 1px 1px rgba(16, 24, 40, 0.05);
+  --shadow-sm:      0 1px 2px rgba(16, 24, 40, 0.07), 0 1px 1px rgba(16, 24, 40, 0.04);
+  --shadow-md:      0 6px 16px rgba(16, 24, 40, 0.08), 0 2px 4px rgba(16, 24, 40, 0.05);
+  --shadow-lg:      0 14px 32px rgba(16, 24, 40, 0.12), 0 4px 8px rgba(16, 24, 40, 0.06);
+  --shadow-popover: 0 18px 44px rgba(16, 24, 40, 0.16), 0 6px 12px rgba(16, 24, 40, 0.08);
+  --ring-inset:     inset 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   TYPOGRAPHY · SPACING · MOTION (theme-independent)
+   ───────────────────────────────────────────────────────────────────────── */
 :root {
-  --bg:          #0f1117;
-  --surface:     #1a1d27;
-  --surface-2:   #23273a;
-  --border:      #2e3147;
-  --text:        #c8cdd6;
-  --text-h:      #eceef2;
-  --text-muted:  #6b7280;
-  --accent:      #6366f1;
-  --accent-h:    #818cf8;
-  --accent-soft: rgba(99, 102, 241, 0.18);
-  --ok:          #22c55e;
-  --warn:        #f59e0b;
-  --err:         #ef4444;
+  --font-sans: 'IBM Plex Sans', ui-sans-serif, system-ui, -apple-system,
+               'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', 'JetBrains Mono',
+               'Cascadia Code', Menlo, monospace;
+
+  --fs-display:  30px;
+  --fs-title:    20px;
+  --fs-heading:  16px;
+  --fs-body:     14px;
+  --fs-sm:       13px;
+  --fs-label:    12px;
+  --fs-meta:     11px;
+  --fs-micro:    10px;
+
+  --fw-regular:  400;
+  --fw-medium:   500;
+  --fw-semibold: 600;
+  --fw-bold:     700;
+
+  --lh-tight:    1.15;
+  --lh-snug:     1.35;
+  --lh-normal:   1.55;
+
+  --ls-tight:    -0.015em;
+  --ls-normal:   0;
+  --ls-wide:     0.02em;
+  --ls-eyebrow:  0.09em;
+
+  --ff-tabular:  'tnum' 1, 'cv05' 1;
+
+  /* Spacing scale — 4px base */
+  --space-0: 0;   --space-px: 1px;
+  --space-1: 4px; --space-2: 8px;  --space-3: 12px; --space-4: 16px;
+  --space-5: 20px;--space-6: 24px; --space-8: 32px; --space-10: 40px;
+  --space-12: 48px; --space-16: 64px; --space-20: 80px;
+
+  --radius-xs: 3px; --radius-sm: 5px; --radius-md: 8px; --radius-lg: 11px;
+  --radius-xl: 16px; --radius-2xl: 22px; --radius-pill: 999px;
+
+  --control-sm: 28px; --control-md: 34px; --control-lg: 42px;
+  --topbar-h: 56px; --sidebar-w: 288px; --panel-head-h: 44px; --bottom-h: 156px;
+  --hairline: 1px;
+
+  --z-base: 0; --z-raised: 10; --z-sticky: 20; --z-overlay: 30;
+  --z-popover: 40; --z-modal: 50; --z-toast: 60;
+
+  --dur-1: 90ms; --dur-2: 140ms; --dur-3: 200ms; --dur-4: 320ms;
+  --ease-out:    cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --ease-in:     cubic-bezier(0.4, 0, 1, 1);
+
+  --t-fast:   all var(--dur-1) var(--ease-out);
+  --t-base:   all var(--dur-2) var(--ease-out);
+  --t-enter:  all var(--dur-3) var(--ease-out);
+  --t-colors: color var(--dur-2) var(--ease-out),
+              background-color var(--dur-2) var(--ease-out),
+              border-color var(--dur-2) var(--ease-out),
+              box-shadow var(--dur-2) var(--ease-out);
+
+  /* ── Legacy aliases ──────────────────────────────────────────────────────
+     The original components reference these names. Pointing them at the new
+     semantic tokens re-skins the entire app; values follow the active theme
+     automatically because the targets are theme-scoped. */
+  --bg:          var(--bg-base);
+  --surface:     var(--surface-1);
+  --border:      var(--border-default);
+  --text:        var(--text-default);
+  --text-h:      var(--text-strong);
+  --accent-h:    var(--accent-hover);
+  --accent-soft: var(--accent-surface);
+  --ok:          var(--success);
+  --warn:        var(--warning);
+  --err:         var(--danger);
 }
 
-/* ── Light theme ────────────────────────────────────────── */
-:root[data-theme="light"] {
-  --bg:          #f0f2f5;
-  --surface:     #ffffff;
-  --surface-2:   #e5e7eb;
-  --border:      #d1d5db;
-  --text:        #374151;
-  --text-h:      #111827;
-  --text-muted:  #9ca3af;
-  --accent:      #4f46e5;
-  --accent-h:    #6366f1;
-  --accent-soft: rgba(79, 70, 229, 0.13);
-  --ok:          #16a34a;
-  --warn:        #d97706;
-  --err:         #dc2626;
+/* ─────────────────────────────────────────────────────────────────────────
+   KEYFRAMES
+   ───────────────────────────────────────────────────────────────────────── */
+@keyframes lab-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%      { opacity: 0.45; transform: scale(0.82); }
 }
+@keyframes lab-fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes lab-rise {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes lab-draw { to { stroke-dashoffset: 0; } }
+/* Back-compat: TopBar previously declared `pulse` locally; keep it global. */
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
 
-*,
-*::before,
-*::after { box-sizing: border-box; }
+/* Idle CartPole placeholder — a quiet sway on the pole */
+@keyframes cp-sway { 0%, 100% { transform: rotate(-7deg); } 50% { transform: rotate(7deg); } }
+.cp-pole { transform-box: fill-box; transform-origin: bottom center; animation: cp-sway 3.6s var(--ease-in-out) infinite; }
+
+/* ─────────────────────────────────────────────────────────────────────────
+   RESET & BASE
+   ───────────────────────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; }
+
+html {
+  height: 100%;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
 
 body {
   margin: 0;
-  background: var(--bg);
-  color: var(--text);
-  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-  font-size: 13px;
-  line-height: 1.5;
-  -webkit-font-smoothing: antialiased;
+  height: 100%;
+  background: var(--bg-base);
+  color: var(--text-default);
+  font-family: var(--font-sans);
+  font-size: var(--fs-body);
+  line-height: var(--lh-normal);
+  font-feature-settings: 'ss01' 1, 'cv05' 1;
+  transition: background-color var(--dur-3) var(--ease-out),
+              color var(--dur-3) var(--ease-out);
 }
 
 #root {
@@ -53,4 +274,121 @@ body {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+}
+
+h1, h2, h3, h4, h5, h6, p, figure { margin: 0; }
+
+/* Numeric data: mono family + tabular figures so columns align */
+.mono, [data-mono] {
+  font-family: var(--font-mono);
+  font-feature-settings: var(--ff-tabular);
+  letter-spacing: var(--ls-tight);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   FORM CONTROLS — custom range slider (thin rail + 14px iris thumb with ring)
+   matching the Laboratory handoff. Firefox also gets a native accent fill.
+   ───────────────────────────────────────────────────────────────────────── */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 16px;
+  background: transparent;
+  cursor: pointer;
+  accent-color: var(--accent);
+}
+input[type="range"]:disabled { cursor: default; opacity: 0.55; }
+
+input[type="range"]::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-inset);
+  border: 1px solid var(--border-default);
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  margin-top: -6px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid var(--surface-1);
+  box-shadow: var(--shadow-sm);
+  transition: background-color var(--dur-2) var(--ease-out);
+}
+input[type="range"]:hover:not(:disabled)::-webkit-slider-thumb { background: var(--accent-hover); }
+
+input[type="range"]::-moz-range-track {
+  height: 4px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-inset);
+  border: 1px solid var(--border-default);
+}
+input[type="range"]::-moz-range-progress {
+  height: 4px;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+}
+input[type="range"]::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid var(--surface-1);
+  box-shadow: var(--shadow-sm);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   SCROLLBARS
+   ───────────────────────────────────────────────────────────────────────── */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: var(--radius-pill);
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-faint);
+  background-clip: content-box;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   FOCUS & SELECTION
+   ───────────────────────────────────────────────────────────────────────── */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-xs);
+}
+::selection {
+  background: var(--accent-surface);
+  color: var(--text-strong);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   SHARED UTILITIES
+   ───────────────────────────────────────────────────────────────────────── */
+.eyebrow {
+  font-size: var(--fs-meta);
+  font-weight: var(--fw-semibold);
+  letter-spacing: var(--ls-eyebrow);
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.hr { height: var(--hairline); background: var(--border-default); border: 0; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

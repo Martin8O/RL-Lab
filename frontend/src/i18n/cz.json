@@ -1,5 +1,5 @@
 {
-  "app": { "title": "RL Přehled" },
+  "app": { "title": "RL Přehled", "subtitle": "Laboratoř" },
   "status": {
     "connecting": "Připojování…",
     "online": "Backend online",
@@ -62,6 +62,7 @@
   },
   "skill": {
     "title": "Dovednost AI",
+    "short": "Dovednost",
     "child": "Dítě",
     "below": "Podprůměr",
     "average": "Průměr",

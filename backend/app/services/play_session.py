@@ -28,6 +28,7 @@ from app.envs.registry import get_env
 from app.schemas.play import PlayConfig, PlayMode, PlayResult, PlayState, PlayStatus
 from app.services import skill
 from app.services.checkpoints import CheckpointStore, checkpoint_store
+from app.services.client_render import cart_state
 from app.services.connection_manager import ConnectionManager, manager
 from app.services.policy import PolicyLoadError, PredictFn, predict_from_checkpoint
 from app.services.preview_streamer import encode_frame
@@ -319,6 +320,11 @@ class PlaySession:
         return int(n) if n is not None else None
 
     def _emit_frame(self, env: Any, step: int, score: float) -> None:
+        # CartPole is drawn client-side from raw state — skip the rgb render + JPEG entirely.
+        state = cart_state(env)
+        if state is not None:
+            self._broadcast({"type": "play_frame", "step": step, "score": score, "state": state})
+            return
         try:
             rgb = np.asarray(env.render(), dtype=np.uint8)
             image, width, height = encode_frame(rgb)

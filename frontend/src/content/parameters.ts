@@ -22,6 +22,23 @@ export interface ParamInfo {
 }
 
 export const PARAM_INFO: Record<string, ParamInfo> = {
+  algorithm: {
+    general: {
+      en: 'How the agent learns. PPO (reinforcement learning) tweaks one neural network with gradients after each batch of play — steady and sample-efficient. Neuroevolution keeps a whole population of networks, scores them, and breeds the best (mutation + crossover) each generation — simple, gradient-free, and easy to picture as "survival of the fittest".',
+      cz: 'Jak se agent učí. PPO (zpětnovazební učení) upravuje jednu neuronovou síť pomocí gradientů po každé dávce hraní — stabilní a úsporné na data. Neuroevoluce udržuje celou populaci sítí, ohodnotí je a v každé generaci množí ty nejlepší (mutace + křížení) — jednoduchá, bez gradientů, snadno představitelná jako „přežití nejschopnějších“.',
+    },
+    recommended: {
+      en: 'PPO — fastest and most reliable for CartPole. Try Neuroevolution to watch the population-based idea in action.',
+      cz: 'PPO — nejrychlejší a nejspolehlivější pro CartPole. Vyzkoušejte Neuroevoluci, abyste viděli populační princip v akci.',
+    },
+    perEnv: {
+      cartpole: {
+        en: 'Both solve CartPole. PPO usually reaches 500 in seconds; neuroevolution takes a few dozen generations but is more intuitive to follow.',
+        cz: 'Oba CartPole vyřeší. PPO obvykle dosáhne 500 během vteřin; neuroevoluce potřebuje pár desítek generací, ale je názornější.',
+      },
+    },
+  },
+
   learning_rate: {
     general: {
       en: 'How big a step the agent takes when it updates its strategy after each batch of experience. Too high and learning becomes unstable and "forgets" what worked; too low and it crawls, needing far more steps to improve.',

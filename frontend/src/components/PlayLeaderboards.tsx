@@ -61,7 +61,8 @@ function Board({ title, entries, divider = false }: {
         </div>
       ) : (
         <div style={{ flex: 1, overflowY: 'auto', padding: '0 4px 4px' }}>
-          {entries.map((e, i) => <Row key={`${e.name}-${e.achieved_at}`} entry={e} rank={i + 1} />)}
+          {/* Show only the top 5 so the board never needs to scroll. */}
+          {entries.slice(0, 5).map((e, i) => <Row key={`${e.name}-${e.achieved_at}`} entry={e} rank={i + 1} />)}
         </div>
       )}
     </div>
@@ -73,7 +74,7 @@ const MEDALS = ['🥇', '🥈', '🥉']
 
 function Row({ entry, rank }: { entry: PlayScoreEntry; rank: number }) {
   const score: CSSProperties = {
-    fontFamily: 'monospace', fontSize: 11, fontWeight: 600, color: 'var(--ok)', flexShrink: 0,
+    fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 600, color: 'var(--ok)', flexShrink: 0,
   }
   return (
     <div

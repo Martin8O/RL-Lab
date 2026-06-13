@@ -101,10 +101,10 @@ function NameModal({ score, steps, onDone }: { score: number; steps: number; onD
         onClick={(e) => e.stopPropagation()}
         style={{
           width: '100%', maxWidth: 360,
-          background: 'var(--surface)', color: 'var(--text)',
-          border: '1px solid var(--border)', borderRadius: 10,
-          boxShadow: '0 12px 40px rgba(0,0,0,0.4)', padding: 18,
-          display: 'flex', flexDirection: 'column', gap: 12,
+          background: 'var(--surface-1)', color: 'var(--text-default)',
+          border: '1px solid var(--border-default)', borderRadius: 'var(--radius-xl)',
+          boxShadow: 'var(--shadow-popover)', padding: 'var(--space-5)',
+          display: 'flex', flexDirection: 'column', gap: 'var(--space-3)',
         }}
       >
         <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-h)' }}>
@@ -121,9 +121,9 @@ function NameModal({ score, steps, onDone }: { score: number; steps: number; onD
           onChange={(e) => setName(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') void save() }}
           style={{
-            padding: '8px 10px', borderRadius: 6, fontSize: 13,
-            background: 'var(--surface-2)', color: 'var(--text)',
-            border: '1px solid var(--border)',
+            padding: '9px 11px', borderRadius: 'var(--radius-md)', fontSize: 13,
+            background: 'var(--surface-inset)', color: 'var(--text-strong)',
+            border: '1px solid var(--border-default)', outline: 'none',
           }}
         />
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>

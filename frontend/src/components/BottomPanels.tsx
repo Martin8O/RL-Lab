@@ -105,7 +105,7 @@ function Row({ child, solveMax, isBest }: {
 }) {
   const { t } = useTranslation()
   const frac = solveMax > 0 ? Math.max(0, Math.min(1, child.avg_reward / solveMax)) : 0
-  const num: CSSProperties = { textAlign: 'right', fontFamily: 'monospace', fontSize: 11, color: 'var(--text)' }
+  const num: CSSProperties = { textAlign: 'right', fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text)' }
 
   return (
     <div
@@ -140,9 +140,9 @@ function Row({ child, solveMax, isBest }: {
 
 function StatCell({ label, value, color }: { label: string; value: string; color?: string }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-      <span style={{ fontSize: 9, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{label}</span>
-      <span style={{ fontSize: 13, fontWeight: 600, color: color ?? 'var(--text-h)', fontVariantNumeric: 'tabular-nums' }}>{value}</span>
+    <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0, gap: 2 }}>
+      <span style={{ fontSize: 'var(--fs-meta)', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 'var(--ls-eyebrow)', fontWeight: 'var(--fw-semibold)' }}>{label}</span>
+      <span style={{ fontFamily: 'var(--font-mono)', fontFeatureSettings: 'var(--ff-tabular)', fontSize: 'var(--fs-sm)', fontWeight: 'var(--fw-medium)', letterSpacing: 'var(--ls-tight)', color: color ?? 'var(--text-strong)' }}>{value}</span>
     </div>
   )
 }
@@ -272,8 +272,9 @@ function Slot({ slot, onLoad, onDelete }: {
   const { frac, text } = slotProgress(slot)
   return (
     <div style={{
-      border: '1px solid var(--border)', borderRadius: 6, padding: '5px 7px',
-      marginTop: 4, background: 'var(--surface-2)', display: 'flex', flexDirection: 'column', gap: 3,
+      border: '1px solid var(--border-default)', borderRadius: 'var(--radius-md)', padding: '6px 8px',
+      marginTop: 5, background: 'var(--surface-2)', boxShadow: 'var(--ring-inset)',
+      display: 'flex', flexDirection: 'column', gap: 4,
     }}>
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 6 }}>
         <span style={{
@@ -283,7 +284,7 @@ function Slot({ slot, onLoad, onDelete }: {
           {slot.label}
         </span>
         {slot.reward != null && (
-          <span style={{ fontSize: 11, fontFamily: 'monospace', color: 'var(--ok)', flexShrink: 0 }}>
+          <span style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--ok)', flexShrink: 0 }}>
             {slot.reward.toFixed(1)}
           </span>
         )}
@@ -292,7 +293,7 @@ function Slot({ slot, onLoad, onDelete }: {
         <span style={{ fontSize: 9, color: 'var(--text-muted)' }}>
           {slot.algo === 'neuroevolution' ? t('sidebar.algo_evo') : t('sidebar.algo_ppo')} · {t('sidebar.seed')} {slot.seed}
         </span>
-        <span style={{ fontSize: 9, color: 'var(--text-muted)', fontFamily: 'monospace' }}>{text}</span>
+        <span style={{ fontSize: 9, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>{text}</span>
       </div>
       <div style={{ height: 2, background: 'var(--border)', borderRadius: 1 }}>
         <div style={{ width: `${Math.min(1, frac) * 100}%`, height: '100%', background: 'var(--accent)', borderRadius: 1 }} />
@@ -451,7 +452,7 @@ export default function BottomPanels() {
   return (
     <div style={{
       height: 168, flexShrink: 0, display: 'flex',
-      borderTop: '1px solid var(--border)',
+      borderTop: '2px solid var(--border-default)',
     }}>
       {showEvoLeaderboard ? <Leaderboard /> : <PlayLeaderboards />}
       <EvolutionStats />

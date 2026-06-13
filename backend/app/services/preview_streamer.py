@@ -35,6 +35,7 @@ from PIL import Image
 
 from app.core.logging import get_logger
 from app.schemas.preview import PreviewState
+from app.services.client_render import cart_state
 from app.services.connection_manager import ConnectionManager, manager
 
 logger = get_logger(__name__)
@@ -191,6 +192,13 @@ class PreviewStreamer:
             env.close()
 
     def _emit_frame(self, env: Any, episode: int, step: int, reward: float) -> None:
+        # CartPole is drawn client-side from raw state — skip the rgb render + JPEG entirely.
+        state = cart_state(env)
+        if state is not None:
+            self._broadcast(
+                {"type": "frame", "episode": episode, "step": step, "reward": reward, "state": state}
+            )
+            return
         try:
             rgb = np.asarray(env.render(), dtype=np.uint8)
             image, width, height = encode_frame(rgb)

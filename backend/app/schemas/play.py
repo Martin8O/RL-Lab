@@ -75,9 +75,11 @@ class PlayFrame(BaseModel):
     type: Literal["play_frame"] = "play_frame"
     step: int
     score: float
-    width: int
-    height: int
-    image: str
+    # Either a server-rendered image (width/height/image) OR client-render state — never both.
+    width: int | None = None
+    height: int | None = None
+    image: str | None = None
+    state: list[float] | None = None  # CartPole: [x, theta] (cart position, pole angle), drawn client-side
 
 
 class PlayActionMessage(BaseModel):

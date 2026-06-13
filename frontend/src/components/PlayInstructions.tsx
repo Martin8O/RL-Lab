@@ -18,16 +18,22 @@ export default function PlayInstructions() {
         type="button"
         onClick={() => setOpen(true)}
         title={t('play.how_to_play')}
+        aria-label={t('play.how_to_play')}
         style={{
-          display: 'inline-flex', alignItems: 'center', gap: 4,
-          padding: '5px 10px', borderRadius: 6, cursor: 'pointer',
-          fontSize: 11, fontWeight: 600,
+          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+          width: 'var(--control-sm)', height: 'var(--control-sm)', padding: 0, cursor: 'pointer',
           background: 'var(--surface-2)', color: 'var(--text-muted)',
-          border: '1px solid var(--border)',
+          border: '1px solid var(--border-default)', borderRadius: 'var(--radius-md)',
+          transition: 'var(--t-colors)',
         }}
+        onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--accent)'; e.currentTarget.style.borderColor = 'var(--accent-border)' }}
+        onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text-muted)'; e.currentTarget.style.borderColor = 'var(--border-default)' }}
       >
-        <span aria-hidden>ⓘ</span>
-        {t('play.how_to_play')}
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden>
+          <circle cx="12" cy="12" r="9.25" stroke="currentColor" strokeWidth="1.7" />
+          <path d="M9.5 9.3a2.6 2.6 0 015.05.85c0 1.7-2.55 2.3-2.55 2.3" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+          <circle cx="12" cy="16.7" r="1.05" fill="currentColor" />
+        </svg>
       </button>
       {open && <InstructionsModal onClose={() => setOpen(false)} />}
     </>
@@ -70,9 +76,9 @@ function InstructionsModal({ onClose }: { onClose: () => void }) {
         onClick={(e) => e.stopPropagation()}
         style={{
           width: '100%', maxWidth: 460, maxHeight: '80vh', overflowY: 'auto',
-          background: 'var(--surface)', color: 'var(--text)',
-          border: '1px solid var(--border)', borderRadius: 10,
-          boxShadow: '0 12px 40px rgba(0,0,0,0.4)',
+          background: 'var(--surface-1)', color: 'var(--text-default)',
+          border: '1px solid var(--border-default)', borderRadius: 'var(--radius-xl)',
+          boxShadow: 'var(--shadow-popover)',
         }}
       >
         {/* Header */}
@@ -109,7 +115,7 @@ function InstructionsModal({ onClose }: { onClose: () => void }) {
               {guide.controls.map((c) => (
                 <div key={c.keys} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                   <kbd style={{
-                    fontFamily: 'monospace', fontSize: 12, fontWeight: 700,
+                    fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 700,
                     padding: '2px 8px', borderRadius: 5, whiteSpace: 'nowrap',
                     background: 'var(--surface-2)', color: 'var(--text-h)',
                     border: '1px solid var(--border)',

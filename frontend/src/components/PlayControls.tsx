@@ -87,9 +87,9 @@ export default function PlayControls() {
 
   return (
     <div style={{
-      flexShrink: 0, borderTop: '1px solid var(--border)',
-      background: 'var(--surface)', padding: '6px 12px', minHeight: 46,
-      display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
+      flexShrink: 0, borderTop: '1px solid var(--border-default)',
+      background: 'var(--surface-1)', padding: '0 var(--space-3)', minHeight: 52,
+      display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap',
     }}>
       {/* Play / Stop */}
       <button
@@ -97,13 +97,14 @@ export default function PlayControls() {
         disabled={!playing && !canPlay}
         title={!humanPlayable ? t('play.not_playable') : trainLive ? t('play.busy_training') : undefined}
         style={{
-          display: 'flex', alignItems: 'center', gap: 5,
-          padding: '5px 12px', borderRadius: 6,
+          display: 'inline-flex', alignItems: 'center', gap: 6,
+          height: 'var(--control-sm)', padding: '0 12px', borderRadius: 'var(--radius-md)',
           cursor: (!playing && !canPlay) ? 'not-allowed' : 'pointer',
-          fontSize: 11, fontWeight: 700,
-          background: playing ? 'var(--danger, #e2453c)' : 'var(--accent)',
-          color: '#fff', border: 'none',
-          opacity: (!playing && !canPlay) ? 0.5 : 1,
+          fontSize: 'var(--fs-label)', fontWeight: 'var(--fw-semibold)',
+          background: playing ? 'var(--danger-surface)' : 'var(--accent)',
+          color: playing ? 'var(--danger)' : 'var(--accent-contrast)',
+          border: '1px solid transparent', boxShadow: playing ? 'none' : 'var(--shadow-xs)',
+          opacity: (!playing && !canPlay) ? 0.5 : 1, transition: 'var(--t-colors)',
         }}
       >
         <span aria-hidden>{playing ? '■' : '▶'}</span>
@@ -177,7 +178,8 @@ const labelStyle: CSSProperties = {
 }
 
 const selectStyle: CSSProperties = {
-  padding: '3px 6px', borderRadius: 5, fontSize: 11,
-  background: 'var(--surface-2)', color: 'var(--text)',
-  border: '1px solid var(--border)', cursor: 'pointer',
+  height: 'var(--control-sm)', padding: '0 10px', borderRadius: 'var(--radius-md)',
+  fontSize: 'var(--fs-label)', fontFamily: 'var(--font-sans)',
+  background: 'var(--surface-2)', color: 'var(--text-strong)',
+  border: '1px solid var(--border-default)', cursor: 'pointer', transition: 'var(--t-colors)',
 }

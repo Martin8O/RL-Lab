@@ -11,11 +11,21 @@ import { PARAM_INFO } from '../content/parameters'
 
 const infoBtnStyle: CSSProperties = {
   display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-  width: 14, height: 14, padding: 0,
+  width: 15, height: 15, padding: 0, flexShrink: 0,
   border: 'none', borderRadius: '50%', background: 'transparent',
-  color: 'var(--text-muted)', cursor: 'pointer',
-  fontSize: 11, lineHeight: 1, fontStyle: 'italic', fontWeight: 700,
+  color: 'var(--text-faint)', cursor: 'pointer', lineHeight: 0,
+  transition: 'color var(--dur-2) var(--ease-out)',
 }
+
+// Crisp circled-i — replaces the heavier ⓘ glyph. Uses currentColor so the
+// hover-to-accent transition on the button drives the icon colour.
+const InfoGlyph = (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden>
+    <circle cx="12" cy="12" r="9.25" stroke="currentColor" strokeWidth="1.7" />
+    <circle cx="12" cy="7.75" r="1.15" fill="currentColor" />
+    <path d="M12 11.25v5.25" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" />
+  </svg>
+)
 
 export default function ParamInfo({ paramId, label }: { paramId: string; label: string }) {
   const { t } = useTranslation()
@@ -32,9 +42,9 @@ export default function ParamInfo({ paramId, label }: { paramId: string; label: 
         title={t('info.aria_open', { param: label })}
         style={infoBtnStyle}
         onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--accent)')}
-        onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-muted)')}
+        onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-faint)')}
       >
-        ⓘ
+        {InfoGlyph}
       </button>
       {open && <InfoModal paramId={paramId} label={label} onClose={() => setOpen(false)} />}
     </>
@@ -79,9 +89,9 @@ function InfoModal({ paramId, label, onClose }: { paramId: string; label: string
         onClick={(e) => e.stopPropagation()}
         style={{
           width: '100%', maxWidth: 440, maxHeight: '80vh', overflowY: 'auto',
-          background: 'var(--surface)', color: 'var(--text)',
-          border: '1px solid var(--border)', borderRadius: 10,
-          boxShadow: '0 12px 40px rgba(0,0,0,0.4)',
+          background: 'var(--surface-1)', color: 'var(--text-default)',
+          border: '1px solid var(--border-default)', borderRadius: 'var(--radius-xl)',
+          boxShadow: 'var(--shadow-popover)',
         }}
       >
         {/* Header */}
@@ -121,7 +131,7 @@ function InfoModal({ paramId, label, onClose }: { paramId: string; label: string
 
           {info.range && (
             <Section title={t('info.range')}>
-              <p style={{ ...bodyText, fontFamily: 'monospace' }}>{info.range}</p>
+              <p style={{ ...bodyText, fontFamily: 'var(--font-mono)' }}>{info.range}</p>
             </Section>
           )}
 

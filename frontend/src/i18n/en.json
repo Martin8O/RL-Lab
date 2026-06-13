@@ -1,5 +1,5 @@
 {
-  "app": { "title": "RL Dashboard" },
+  "app": { "title": "RL Dashboard", "subtitle": "Laboratory" },
   "status": {
     "connecting": "Connecting…",
     "online": "Backend online",
@@ -62,6 +62,7 @@
   },
   "skill": {
     "title": "AI Skill",
+    "short": "Skill",
     "child": "Child",
     "below": "Below avg",
     "average": "Average",

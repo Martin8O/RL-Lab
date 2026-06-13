@@ -241,16 +241,18 @@ export interface PreviewState {
   active: boolean
 }
 
-/** WS frame: {type:"frame", ...} — one rendered env image. */
+/** WS frame: {type:"frame", ...} — a rendered env image OR client-render state. */
 export interface PreviewFrame {
   type: 'frame'
   episode: number
   step: number
   reward: number
-  width: number
-  height: number
+  width?: number
+  height?: number
   /** base64-encoded JPEG, no data-URI prefix (the client prepends it). */
-  image: string
+  image?: string
+  /** Client-side render state (CartPole: [x, theta]); present instead of image. */
+  state?: number[]
 }
 
 /** Partial preview update for POST /api/preview. */
@@ -331,14 +333,16 @@ export interface PlayStatus {
   error: string | null
 }
 
-/** WS frame: {type:"play_frame", ...} — one rendered episode image (base64 JPEG, no prefix). */
+/** WS frame: {type:"play_frame", ...} — a rendered episode image OR client-render state. */
 export interface PlayFrame {
   type: 'play_frame'
   step: number
   score: number
-  width: number
-  height: number
-  image: string
+  width?: number
+  height?: number
+  image?: string
+  /** Client-side render state (CartPole: [x, theta]); present instead of image. */
+  state?: number[]
 }
 
 /** Outbound human input over WS: {type:"action", action:<int>} (CartPole: 0=left, 1=right). */

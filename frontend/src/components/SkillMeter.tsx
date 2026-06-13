@@ -59,7 +59,7 @@ export default function SkillMeter({
       <div style={{ position: 'relative', flex: 1, height: 14 }}>
         <div style={{
           position: 'absolute', inset: 0, borderRadius: 7,
-          background: GRADIENT, opacity: hasScore ? 1 : 0.3,
+          background: GRADIENT, opacity: hasScore ? 1 : 0.8,
         }} />
         {ticks.map((tk) => (
           <div key={tk} style={{

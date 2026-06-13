@@ -78,6 +78,7 @@ interface Series {
   opacity?: number
   dot?: boolean              // draw a dot at the latest value
   dash?: boolean             // dashed stroke (used for overlaid past runs)
+  area?: boolean             // soft gradient fill under the line (main smoothed series)
 }
 
 function buildSvgPath(x: number[], values: (number | null)[], toX: (v: number) => number, toY: (v: number) => number): string {
@@ -141,24 +142,51 @@ function LineChart({ series, markers = [], width, height, xFmt }: {
       style={{ display: 'block', overflow: 'visible' }}
       aria-label="Training chart"
     >
+      <defs>
+        {series.map((s, i) => (s.area ? (
+          <linearGradient key={i} id={`rc-area-${i}`} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={s.color} stopOpacity={0.22} />
+            <stop offset="100%" stopColor={s.color} stopOpacity={0} />
+          </linearGradient>
+        ) : null))}
+      </defs>
+
       {/* Horizontal grid */}
       {yTicks.map((v) => (
-        <line key={v} x1={PAD.l} y1={toY(v)} x2={PAD.l + chartW} y2={toY(v)} stroke="var(--border)" strokeWidth={1} />
+        <line key={v} x1={PAD.l} y1={toY(v)} x2={PAD.l + chartW} y2={toY(v)} stroke="var(--chart-grid)" strokeWidth={1} />
       ))}
 
       {/* Y axis labels */}
       {yTicks.map((v) => (
-        <text key={v} x={PAD.l - 5} y={toY(v) + 4} textAnchor="end" fontSize={9} fill="var(--text-muted)">
+        <text key={v} x={PAD.l - 6} y={toY(v) + 4} textAnchor="end" fontSize={10}
+          fontFamily="var(--font-mono)" fill="var(--chart-axis)">
           {fmtTick(v)}
         </text>
       ))}
 
       {/* X axis labels */}
       {xTicks.map((v) => (
-        <text key={v} x={toX(v)} y={PAD.t + chartH + 18} textAnchor="middle" fontSize={9} fill="var(--text-muted)">
+        <text key={v} x={toX(v)} y={PAD.t + chartH + 18} textAnchor="middle" fontSize={10}
+          fontFamily="var(--font-mono)" fill="var(--chart-axis)">
           {xFmt(v)}
         </text>
       ))}
+
+      {/* Area fill under the main smoothed line (behind the strokes) */}
+      {series.map((s, i) => {
+        if (!s.area) return null
+        const pts: [number, number][] = []
+        for (let j = 0; j < s.x.length; j++) {
+          const y = s.values[j]
+          if (y !== null && y !== undefined) pts.push([toX(s.x[j]), toY(y)])
+        }
+        if (pts.length < 2) return null
+        const baseY = PAD.t + chartH
+        let d = `M${pts[0][0].toFixed(1)},${baseY.toFixed(1)}`
+        for (const [px, py] of pts) d += `L${px.toFixed(1)},${py.toFixed(1)}`
+        d += `L${pts[pts.length - 1][0].toFixed(1)},${baseY.toFixed(1)}Z`
+        return <path key={`area-${i}`} d={d} fill={`url(#rc-area-${i})`} />
+      })}
 
       {/* Lines */}
       {series.map((s, i) => {
@@ -200,8 +228,9 @@ function LineChart({ series, markers = [], width, height, xFmt }: {
   )
 }
 
-// Categorical palette for overlaid past runs — mid-saturation so it reads on dark + light.
-const OVERLAY_COLORS = ['#e0a458', '#9b8cf0', '#4fb8d6']
+// Categorical palette for overlaid past runs — the viz comparison hues (amber / violet /
+// cyan), which recolour per theme via CSS vars so overlays read on dark + light.
+const OVERLAY_COLORS = ['var(--viz-4)', 'var(--viz-5)', 'var(--viz-6)']
 
 // Project a saved run's recorded frames onto the active tab's (x, y), or null if the run has
 // no data for that tab (e.g. an evolution run on the Reward tab).
@@ -224,11 +253,16 @@ function runSeries(run: RunDetail, tab: ChartTab, color: string): Series | null 
 
 function StatChip({ label, value }: { label: string; value: string }) {
   return (
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-      <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{label}</span>
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, minWidth: 0 }}>
       <span style={{
-        fontSize: 13, fontWeight: 600, color: 'var(--text-h)',
-        fontVariantNumeric: 'tabular-nums',
+        fontSize: 'var(--fs-meta)', fontWeight: 'var(--fw-semibold)', letterSpacing: 'var(--ls-eyebrow)',
+        textTransform: 'uppercase', color: 'var(--text-muted)', whiteSpace: 'nowrap',
+      }}>{label}</span>
+      <span style={{
+        fontFamily: 'var(--font-mono)', fontFeatureSettings: 'var(--ff-tabular)',
+        fontSize: 'var(--fs-sm)', fontWeight: 'var(--fw-medium)', letterSpacing: 'var(--ls-tight)',
+        color: 'var(--text-strong)', whiteSpace: 'nowrap', maxWidth: '100%',
+        overflow: 'hidden', textOverflow: 'ellipsis',
       }}>{value}</span>
     </div>
   )
@@ -284,12 +318,12 @@ function RunRow({ run, color, selected, atCap, onToggle, onDelete }: {
         {run.solved_at != null && (
           <span
             title={t('runs.solved')}
-            style={{ fontSize: 9, fontFamily: 'monospace', color: 'var(--accent-h)', flexShrink: 0 }}
+            style={{ fontSize: 9, fontFamily: 'var(--font-mono)', color: 'var(--accent-h)', flexShrink: 0 }}
           >
             ✓ {run.algo === 'neuroevolution' ? `g${fmtGen(run.solved_at)}` : fmtSteps(run.solved_at)}
           </span>
         )}
-        <span style={{ fontSize: 10, fontFamily: 'monospace', color: 'var(--ok)', flexShrink: 0 }}>
+        <span style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--ok)', flexShrink: 0 }}>
           {run.final_reward != null ? run.final_reward.toFixed(1) : '—'}
         </span>
       </button>
@@ -457,7 +491,7 @@ export default function RewardChart() {
     const raw = v.map((p) => p.ep_rew_mean)
     liveSeries = [
       { x: lx, values: raw, color: accent, width: 1, opacity: 0.28 },
-      { x: lx, values: computeEma(raw, emaAlpha), color: accent, width: 2, dot: true },
+      { x: lx, values: computeEma(raw, emaAlpha), color: accent, width: 2, dot: true, area: true },
     ]
   } else if (activeTab === 'loss') {
     const v = win(metricsHistory)
@@ -465,7 +499,7 @@ export default function RewardChart() {
     const raw = v.map((m) => m.loss)
     liveSeries = [
       { x: lx, values: raw, color: accent, width: 1, opacity: 0.28 },
-      { x: lx, values: computeEma(raw, emaAlpha), color: accent, width: 2, dot: true },
+      { x: lx, values: computeEma(raw, emaAlpha), color: accent, width: 2, dot: true, area: true },
     ]
   } else {
     // Fitness: best / gen-avg / worst across generations.
@@ -476,12 +510,12 @@ export default function RewardChart() {
     const avg   = v.map((e) => e.avg_fitness)
     const worst = v.map((e) => e.worst_fitness)
     liveSeries = [
-      { x: lx, values: worst, color: 'var(--err)', width: 1, opacity: 0.18 },
-      { x: lx, values: computeEma(worst, emaAlpha), color: 'var(--err)', width: 2 },
-      { x: lx, values: avg, color: accent, width: 1, opacity: 0.18 },
-      { x: lx, values: computeEma(avg, emaAlpha), color: accent, width: 2 },
-      { x: lx, values: best, color: 'var(--ok)', width: 1, opacity: 0.18 },
-      { x: lx, values: computeEma(best, emaAlpha), color: 'var(--ok)', width: 2, dot: true },
+      { x: lx, values: worst, color: 'var(--viz-3)', width: 1, opacity: 0.18 },
+      { x: lx, values: computeEma(worst, emaAlpha), color: 'var(--viz-3)', width: 2 },
+      { x: lx, values: avg, color: 'var(--viz-1)', width: 1, opacity: 0.18 },
+      { x: lx, values: computeEma(avg, emaAlpha), color: 'var(--viz-1)', width: 2, area: true },
+      { x: lx, values: best, color: 'var(--viz-2)', width: 1, opacity: 0.18 },
+      { x: lx, values: computeEma(best, emaAlpha), color: 'var(--viz-2)', width: 2, dot: true },
     ]
   }
 
@@ -554,23 +588,25 @@ export default function RewardChart() {
   return (
     <section style={{
       flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden',
-      background: 'var(--bg)',
+      background: 'var(--chart-plot-bg)',
     }}>
       {/* Tab bar + chart controls (Smooth / Window) */}
       <div style={{
-        display: 'flex', alignItems: 'center', borderBottom: '1px solid var(--border)',
-        background: 'var(--surface)', flexShrink: 0, padding: '0 10px 0 4px', minHeight: 35,
+        display: 'flex', alignItems: 'center', borderBottom: '1px solid var(--border-default)',
+        background: 'var(--surface-1)', flexShrink: 0, padding: '0 var(--space-3) 0 var(--space-1)',
+        minHeight: 'var(--panel-head-h)',
       }}>
         {TABS.map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
             style={{
-              padding: '7px 10px', border: 'none', cursor: 'pointer',
-              background: 'transparent', fontSize: 12,
-              fontWeight: activeTab === tab ? 600 : 400,
-              color: activeTab === tab ? 'var(--accent-h)' : 'var(--text-muted)',
+              padding: '9px 12px', border: 'none', cursor: 'pointer',
+              background: 'transparent', fontSize: 'var(--fs-sm)',
+              fontWeight: activeTab === tab ? 'var(--fw-semibold)' : 'var(--fw-medium)',
+              color: activeTab === tab ? 'var(--text-strong)' : 'var(--text-muted)',
               borderBottom: `2px solid ${activeTab === tab ? 'var(--accent)' : 'transparent'}`,
+              transition: 'var(--t-colors)',
             }}
           >
             {t(`chart.tab_${tab}`)}
@@ -665,9 +701,9 @@ export default function RewardChart() {
                 position: 'absolute', top: 6, left: PAD.l, display: 'flex', gap: 10,
                 fontSize: 10, color: 'var(--text-muted)',
               }}>
-                <LegendDot color="var(--ok)"     label={t('chart.series_best')} />
-                <LegendDot color="var(--accent)" label={t('chart.series_avg')} />
-                <LegendDot color="var(--err)"    label={t('chart.series_worst')} />
+                <LegendDot color="var(--viz-2)" label={t('chart.series_best')} />
+                <LegendDot color="var(--viz-1)" label={t('chart.series_avg')} />
+                <LegendDot color="var(--viz-3)" label={t('chart.series_worst')} />
               </div>
             )}
             {/* Overlaid past-run legend (dashed lines) */}
@@ -701,12 +737,13 @@ export default function RewardChart() {
         )}
       </div>
 
-      {/* Stats row */}
+      {/* Stats row — fixed height so the panel's bottom line never shifts between PPO and
+          neuroevolution (different stat content) and stays aligned with the env panel. */}
       <div style={{
-        flexShrink: 0, borderTop: '1px solid var(--border)',
-        background: 'var(--surface)', padding: '6px 12px',
-        display: 'flex', alignItems: 'center',
-        minHeight: 46,
+        flexShrink: 0, borderTop: '1px solid var(--border-default)',
+        background: 'var(--surface-1)', padding: '0 var(--space-3)',
+        display: 'flex', alignItems: 'center', gap: 6,
+        height: 52, overflow: 'hidden',
       }}>
         {hasStats ? (
           <>
@@ -729,7 +766,9 @@ export default function RewardChart() {
             <StatChip label={t('stats.elapsed')}      value={elapsed != null ? fmtElapsed(elapsed) : '—'} />
           </>
         ) : (
-          <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{t('stats.no_data')}</span>
+          <span style={{ flex: 1, textAlign: 'center', fontSize: 'var(--fs-label)', color: 'var(--text-muted)' }}>
+            {t('stats.no_data')}
+          </span>
         )}
       </div>
 

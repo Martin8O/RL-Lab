@@ -1,9 +1,75 @@
-import type { CSSProperties } from 'react'
+import type { CSSProperties, ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAppStore } from '../store/useAppStore'
 import { useRunControls } from '../api/trainingControls'
 import type { Algo } from '../api/types'
 import ParamInfo from './ParamInfo'
+
+// ── Shared style helpers ─────────────────────────────────────────────────────
+
+const fieldLabel: CSSProperties = {
+  fontSize: 'var(--fs-label)', fontWeight: 'var(--fw-medium)', color: 'var(--text-muted)',
+  display: 'inline-flex', alignItems: 'center', gap: 4,
+}
+const sectionEyebrow: CSSProperties = {
+  fontSize: 'var(--fs-meta)', fontWeight: 'var(--fw-semibold)',
+  letterSpacing: 'var(--ls-eyebrow)', textTransform: 'uppercase', color: 'var(--text-faint)',
+}
+const selectStyle: CSSProperties = {
+  width: '100%', height: 'var(--control-md)', padding: '0 12px',
+  background: 'var(--surface-2)', color: 'var(--text-strong)',
+  border: '1px solid var(--border-default)', borderRadius: 'var(--radius-md)',
+  fontFamily: 'var(--font-sans)', fontSize: 'var(--fs-sm)', cursor: 'pointer',
+  transition: 'var(--t-colors)',
+}
+
+const PlayGlyph  = <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden><path d="M7 5v14l12-7z" /></svg>
+const PauseGlyph = <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden><rect x="6" y="5" width="4" height="14" rx="1" /><rect x="14" y="5" width="4" height="14" rx="1" /></svg>
+const StopGlyph  = <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden><rect x="6" y="6" width="12" height="12" rx="2" /></svg>
+
+// ── Segmented (algorithm / activation switch) ────────────────────────────────
+
+function Segmented<T extends string>({ options, value, disabled, onChange }: {
+  options: { id: T; label: ReactNode }[]
+  value: T
+  disabled?: boolean
+  onChange: (v: T) => void
+}) {
+  return (
+    <div role="tablist" style={{
+      display: 'flex', padding: 3, gap: 3,
+      background: 'var(--surface-inset)', border: '1px solid var(--border-default)',
+      borderRadius: 'var(--radius-md)', opacity: disabled ? 0.6 : 1,
+    }}>
+      {options.map((opt) => {
+        const active = value === opt.id
+        return (
+          <button
+            key={opt.id}
+            role="tab"
+            aria-selected={active}
+            onClick={() => !disabled && onChange(opt.id)}
+            disabled={disabled}
+            style={{
+              flex: 1, height: 30, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+              background: active ? 'var(--surface-2)' : 'transparent',
+              color: active ? 'var(--text-strong)' : 'var(--text-muted)',
+              borderWidth: 1, borderStyle: 'solid',
+              borderColor: active ? 'var(--border-default)' : 'transparent',
+              boxShadow: active ? 'var(--shadow-xs)' : 'none',
+              borderRadius: 'var(--radius-sm)', fontFamily: 'var(--font-sans)',
+              fontSize: 'var(--fs-sm)', fontWeight: 'var(--fw-medium)',
+              cursor: disabled ? 'default' : 'pointer', whiteSpace: 'nowrap',
+              transition: 'var(--t-colors)',
+            }}
+          >
+            {opt.label}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
 
 // ── Param-level helpers ─────────────────────────────────────────────────────
 
@@ -62,15 +128,16 @@ function ParamSlider({ id, label, value, min, max, step, recommended, disabled, 
   const recLeft = `calc(${recFrac * 100}% + ${(0.5 - recFrac) * THUMB_PX}px)`
 
   return (
-    <div style={{ marginBottom: 9 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2, alignItems: 'baseline' }}>
-        <span style={{ fontSize: 11, color: 'var(--text-muted)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+    <div style={{ marginBottom: 14 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, alignItems: 'baseline' }}>
+        <span style={fieldLabel}>
           {label}
           <ParamInfo paramId={id} label={label} />
         </span>
         <span style={{
-          fontSize: 11, fontFamily: 'monospace',
-          color: isRec ? 'var(--ok)' : 'var(--text)',
+          fontFamily: 'var(--font-mono)', fontFeatureSettings: 'var(--ff-tabular)',
+          fontSize: 'var(--fs-label)', letterSpacing: 'var(--ls-tight)',
+          color: isRec ? 'var(--success)' : 'var(--text-strong)',
         }}>
           {formatValue(id, value)}
         </span>
@@ -97,11 +164,11 @@ function ParamSlider({ id, label, value, min, max, step, recommended, disabled, 
             top: '50%',
             transform: 'translate(-50%, -50%)',
             width: 2,
-            height: 10,
-            background: 'var(--ok)',
+            height: 11,
+            background: 'var(--success)',
             borderRadius: 1,
             pointerEvents: 'none',
-            opacity: 0.85,
+            opacity: 0.9,
           }}
         />
       </div>
@@ -118,34 +185,19 @@ function ActivationToggle({ value, label, disabled, onChange }: {
   onChange: (v: 'tanh' | 'relu') => void
 }) {
   return (
-    <div style={{ marginBottom: 9 }}>
-      <div style={{ marginBottom: 4 }}>
-        <span style={{ fontSize: 11, color: 'var(--text-muted)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+    <div style={{ marginBottom: 14 }}>
+      <div style={{ marginBottom: 6 }}>
+        <span style={fieldLabel}>
           {label}
           <ParamInfo paramId="activation" label={label} />
         </span>
       </div>
-      <div style={{ display: 'flex', gap: 5 }}>
-        {(['tanh', 'relu'] as const).map((opt) => {
-          const active = value === opt
-          return (
-            <button
-              key={opt}
-              onClick={() => !disabled && onChange(opt)}
-              style={{
-                flex: 1, padding: '3px 0',
-                background: active ? 'var(--accent)' : 'var(--surface-2)',
-                color: active ? '#fff' : 'var(--text-muted)',
-                border: `1px solid ${active ? 'var(--accent)' : 'var(--border)'}`,
-                borderRadius: 4, cursor: disabled ? 'default' : 'pointer',
-                fontSize: 11, fontWeight: active ? 600 : 400,
-              }}
-            >
-              {opt === 'tanh' ? '★ tanh' : 'relu'}
-            </button>
-          )
-        })}
-      </div>
+      <Segmented
+        value={value}
+        disabled={disabled}
+        onChange={onChange}
+        options={[{ id: 'tanh', label: '★ tanh' }, { id: 'relu', label: 'relu' }]}
+      />
     </div>
   )
 }
@@ -158,56 +210,44 @@ function AlgoSwitch({ value, disabled, onChange }: {
   onChange: (a: Algo) => void
 }) {
   const { t } = useTranslation()
-  const opts: { id: Algo; label: string }[] = [
-    { id: 'ppo', label: t('sidebar.algo_ppo') },
-    { id: 'neuroevolution', label: t('sidebar.algo_evo') },
-  ]
   return (
     <div>
-      <label style={{
-        display: 'block', marginBottom: 4,
-        fontSize: 11, color: 'var(--text-muted)',
-        textTransform: 'uppercase', letterSpacing: '0.05em',
-      }}>
+      <label style={{ ...fieldLabel, marginBottom: 8 }}>
         {t('sidebar.algorithm')}
+        <ParamInfo paramId="algorithm" label={t('sidebar.algorithm')} />
       </label>
-      <div style={{ display: 'flex', gap: 5 }}>
-        {opts.map((opt) => {
-          const active = value === opt.id
-          return (
-            <button
-              key={opt.id}
-              onClick={() => !disabled && onChange(opt.id)}
-              disabled={disabled}
-              style={{
-                flex: 1, padding: '5px 0',
-                background: active ? 'var(--accent)' : 'var(--surface-2)',
-                color: active ? '#fff' : 'var(--text-muted)',
-                border: `1px solid ${active ? 'var(--accent)' : 'var(--border)'}`,
-                borderRadius: 4, cursor: disabled ? 'default' : 'pointer',
-                fontSize: 11, fontWeight: active ? 600 : 400,
-              }}
-            >
-              {opt.label}
-            </button>
-          )
-        })}
-      </div>
+      <Segmented
+        value={value}
+        disabled={disabled}
+        onChange={onChange}
+        options={[
+          { id: 'ppo', label: t('sidebar.algo_ppo') },
+          { id: 'neuroevolution', label: t('sidebar.algo_evo') },
+        ]}
+      />
     </div>
   )
 }
 
 // ── Run controls ─────────────────────────────────────────────────────────────
 
-function btnStyle(bg: string, disabled = false): CSSProperties {
-  return {
-    flex: 1, padding: '11px 0',
-    background: disabled ? 'var(--surface-2)' : bg,
-    color: disabled ? 'var(--text-muted)' : '#fff',
-    border: 'none', borderRadius: 6,
-    cursor: disabled ? 'not-allowed' : 'pointer',
-    fontSize: 13, fontWeight: 700,
-    letterSpacing: '0.02em',
+type BtnKind = 'primary' | 'pause' | 'resume' | 'stop' | 'disabled'
+
+function runBtn(kind: BtnKind, lg = false): CSSProperties {
+  const base: CSSProperties = {
+    flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7,
+    height: lg ? 'var(--control-lg)' : 'var(--control-md)',
+    borderRadius: 'var(--radius-md)', fontFamily: 'var(--font-sans)',
+    fontSize: lg ? 'var(--fs-body)' : 'var(--fs-sm)', fontWeight: 'var(--fw-semibold)',
+    borderWidth: 1, borderStyle: 'solid', borderColor: 'transparent',
+    cursor: 'pointer', whiteSpace: 'nowrap', transition: 'var(--t-colors)',
+  }
+  switch (kind) {
+    case 'primary':  return { ...base, background: 'var(--accent)', color: 'var(--accent-contrast)', boxShadow: 'var(--shadow-xs)' }
+    case 'resume':   return { ...base, background: 'var(--success-surface)', color: 'var(--success)' }
+    case 'pause':    return { ...base, background: 'var(--warning-surface)', color: 'var(--warning)' }
+    case 'stop':     return { ...base, background: 'var(--danger-surface)', color: 'var(--danger)' }
+    case 'disabled': return { ...base, background: 'var(--surface-2)', color: 'var(--text-muted)', borderColor: 'var(--border-default)', cursor: 'not-allowed' }
   }
 }
 
@@ -244,38 +284,32 @@ export default function Sidebar() {
 
   return (
     <aside style={{
-      width: 264, flexShrink: 0,
-      background: 'var(--surface)', borderRight: '1px solid var(--border)',
+      width: 'var(--sidebar-w)', flexShrink: 0,
+      background: 'var(--surface-1)', borderRight: '2px solid var(--border-default)',
       display: 'flex', flexDirection: 'column', overflow: 'hidden',
     }}>
       {/* Header */}
       <div style={{
-        padding: '10px 14px', borderBottom: '1px solid var(--border)',
-        fontWeight: 600, fontSize: 13, color: 'var(--text-h)', flexShrink: 0,
+        height: 'var(--panel-head-h)', flexShrink: 0,
+        padding: '0 var(--space-5)', borderBottom: '1px solid var(--border-default)',
+        display: 'flex', alignItems: 'center',
+        fontWeight: 'var(--fw-semibold)', fontSize: 'var(--fs-sm)', color: 'var(--text-strong)',
       }}>
         {t('sidebar.title')}
       </div>
 
       {/* Game selector + algorithm switch */}
-      <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--border)', flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 10 }}>
-        <div>
-          <label style={{
-            display: 'block', marginBottom: 4,
-            fontSize: 11, color: 'var(--text-muted)',
-            textTransform: 'uppercase', letterSpacing: '0.05em',
-          }}>
-            {t('sidebar.game_selector')}
-          </label>
+      <div style={{
+        padding: 'var(--space-4) var(--space-5)', borderBottom: '1px solid var(--border-default)',
+        flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 'var(--space-4)',
+      }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <label style={fieldLabel}>{t('sidebar.game_selector')}</label>
           <select
             value={selectedEnvId ?? ''}
             onChange={(e) => setSelectedEnvId(e.target.value || null)}
             disabled={envs.length === 0 || isActive}
-            style={{
-              width: '100%', padding: '5px 8px',
-              background: 'var(--surface-2)', color: 'var(--text)',
-              border: '1px solid var(--border)', borderRadius: 4,
-              fontSize: 13, cursor: envs.length === 0 || isActive ? 'default' : 'pointer',
-            }}
+            style={{ ...selectStyle, cursor: envs.length === 0 || isActive ? 'default' : 'pointer' }}
           >
             {envs.length === 0
               ? <option value="">{t('sidebar.loading_envs')}</option>
@@ -292,11 +326,8 @@ export default function Sidebar() {
       </div>
 
       {/* Scrollable params */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '10px 14px' }}>
-        <div style={{
-          fontSize: 10, color: 'var(--text-muted)', letterSpacing: '0.05em',
-          textTransform: 'uppercase', marginBottom: 10,
-        }}>
+      <div style={{ flex: 1, overflowY: 'auto', padding: 'var(--space-5)' }}>
+        <div style={{ ...sectionEyebrow, marginBottom: 'var(--space-4)' }}>
           {isEvo ? t('sidebar.evo_params_title') : t('sidebar.params_title')}
         </div>
 
@@ -427,32 +458,40 @@ export default function Sidebar() {
         )}
 
         {/* Divider */}
-        <div style={{ borderTop: '1px solid var(--border)', margin: '10px 0' }} />
+        <div style={{ height: 1, background: 'var(--border-default)', margin: 'var(--space-3) 0 var(--space-4)' }} />
 
         {/* Seed */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-          <label style={{ fontSize: 11, color: 'var(--text-muted)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-3)' }}>
+          <label style={fieldLabel}>
             {t('sidebar.seed')}
             <ParamInfo paramId="seed" label={t('sidebar.seed')} />
           </label>
-          <input
-            type="number"
-            min={0} max={999999}
-            value={seed}
-            disabled={isActive}
-            onChange={(e) => setSeed(Math.max(0, parseInt(e.target.value, 10) || 0))}
-            style={{
-              width: 72, padding: '3px 6px', textAlign: 'right',
-              background: 'var(--surface-2)', color: 'var(--text)',
-              border: '1px solid var(--border)', borderRadius: 4, fontSize: 12,
-            }}
-          />
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 8, height: 'var(--control-sm)',
+            padding: '0 10px', background: 'var(--surface-inset)',
+            border: '1px solid var(--border-default)', borderRadius: 'var(--radius-md)',
+            opacity: isActive ? 0.5 : 1,
+          }}>
+            <input
+              type="number"
+              min={0} max={999999}
+              value={seed}
+              disabled={isActive}
+              onChange={(e) => setSeed(Math.max(0, parseInt(e.target.value, 10) || 0))}
+              style={{
+                width: 56, textAlign: 'right', background: 'transparent', border: 'none', outline: 'none',
+                color: 'var(--text-strong)', fontFamily: 'var(--font-mono)',
+                fontFeatureSettings: 'var(--ff-tabular)', fontSize: 'var(--fs-label)',
+              }}
+            />
+            <span style={{ fontSize: 'var(--fs-meta)', color: 'var(--text-faint)', fontFamily: 'var(--font-mono)' }}>int</span>
+          </div>
         </div>
 
         {/* Total Steps — PPO only (evolution is bounded by Generations, not a step budget) */}
         {!isEvo && (
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <label style={{ fontSize: 11, color: 'var(--text-muted)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+            <label style={fieldLabel}>
               {t('sidebar.total_steps')}
               <ParamInfo paramId="total_steps" label={t('sidebar.total_steps')} />
             </label>
@@ -461,10 +500,11 @@ export default function Sidebar() {
               disabled={isActive}
               onChange={(e) => setTotalTimesteps(parseInt(e.target.value, 10))}
               style={{
-                padding: '3px 6px',
-                background: 'var(--surface-2)', color: 'var(--text)',
-                border: '1px solid var(--border)', borderRadius: 4,
-                fontSize: 12, cursor: isActive ? 'default' : 'pointer',
+                width: 'auto', height: 'var(--control-sm)', padding: '0 10px',
+                background: 'var(--surface-2)', color: 'var(--text-strong)',
+                border: '1px solid var(--border-default)', borderRadius: 'var(--radius-md)',
+                fontFamily: 'var(--font-mono)', fontFeatureSettings: 'var(--ff-tabular)',
+                fontSize: 'var(--fs-label)', cursor: isActive ? 'default' : 'pointer',
               }}
             >
               {STEPS_OPTIONS.map((n) => (
@@ -479,32 +519,24 @@ export default function Sidebar() {
 
       {/* Run controls — outer div is always the flex row so flex:1 works in every branch */}
       <div style={{
-        padding: '10px 14px', borderTop: '1px solid var(--border)',
-        flexShrink: 0, display: 'flex', gap: 6,
+        padding: 'var(--space-4) var(--space-5)', borderTop: '1px solid var(--border-default)',
+        flexShrink: 0, display: 'flex', gap: 'var(--space-2)',
       }}>
         {isStopping ? (
-          <button disabled style={btnStyle('', true)}>{t('sidebar.stopping')}</button>
+          <button disabled style={runBtn('disabled', true)}>{t('sidebar.stopping')}</button>
         ) : isRunning ? (
           <>
-            <button onClick={handlePause} style={btnStyle('var(--warn)')}>
-              ⏸ {t('sidebar.pause')}
-            </button>
-            <button onClick={handleStop} style={btnStyle('var(--err)')}>
-              ⏹ {t('sidebar.stop')}
-            </button>
+            <button onClick={handlePause} style={runBtn('pause')}>{PauseGlyph} {t('sidebar.pause')}</button>
+            <button onClick={handleStop} style={runBtn('stop')}>{StopGlyph} {t('sidebar.stop')}</button>
           </>
         ) : isPaused ? (
           <>
-            <button onClick={handleResume} style={btnStyle('var(--ok)')}>
-              ▶ {t('sidebar.resume')}
-            </button>
-            <button onClick={handleStop} style={btnStyle('var(--err)')}>
-              ⏹ {t('sidebar.stop')}
-            </button>
+            <button onClick={handleResume} style={runBtn('resume')}>{PlayGlyph} {t('sidebar.resume')}</button>
+            <button onClick={handleStop} style={runBtn('stop')}>{StopGlyph} {t('sidebar.stop')}</button>
           </>
         ) : (
-          <button onClick={handleRun} disabled={!canRun} style={btnStyle('var(--accent)', !canRun)}>
-            ▶ {t('sidebar.run')}
+          <button onClick={handleRun} disabled={!canRun} style={canRun ? runBtn('primary', true) : runBtn('disabled', true)}>
+            {PlayGlyph} {t('sidebar.run')}
           </button>
         )}
       </div>
