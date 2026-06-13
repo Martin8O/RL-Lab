@@ -185,8 +185,8 @@ export default function TopBar() {
 
       <div style={{ width: 1, height: 26, background: 'var(--border-default)' }} />
 
-      <IconBtn onClick={() => setLocale(locale === 'en' ? 'cz' : 'en')} label="Toggle language" text={locale === 'en' ? 'CZ' : 'EN'} />
-      <IconBtn onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} label="Toggle theme">
+      <IconBtn onClick={() => setLocale(locale === 'en' ? 'cz' : 'en')} label={t('topbar.toggle_language')} text={locale === 'en' ? 'CZ' : 'EN'} />
+      <IconBtn onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} label={t('topbar.toggle_theme')}>
         {theme === 'dark' ? MoonIcon : SunIcon}
       </IconBtn>
     </header>

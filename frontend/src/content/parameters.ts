@@ -32,13 +32,13 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
       cz: '**Jak se agent učí.**\n**PPO** (zpětnovazební učení) — upravuje jednu neuronovou síť pomocí gradientů po každé dávce hraní; stabilní a úsporné na data.\n**Neuroevoluce** — udržuje celou populaci sítí, ohodnotí je a v každé generaci množí ty nejlepší (mutace + křížení); jednoduchá, bez gradientů, jako „přežití nejschopnějších“.',
     },
     recommended: {
-      en: 'PPO — fastest and most reliable for CartPole. Try Neuroevolution to watch the population-based idea in action.',
-      cz: 'PPO — nejrychlejší a nejspolehlivější pro CartPole. Vyzkoušejte Neuroevoluci, abyste viděli populační princip v akci.',
+      en: 'PPO — the reliable, general-purpose default that also scales to hard games later. On an easy task like CartPole, though, Neuroevolution often reaches 500 faster in wall-clock time — try both.',
+      cz: 'PPO — spolehlivá, univerzální volba, která později zvládne i těžké hry. U snadné úlohy jako CartPole ale Neuroevoluce často dosáhne 500 rychleji v reálném čase — vyzkoušejte oba.',
     },
     perEnv: {
       cartpole: {
-        en: 'Both solve CartPole. PPO usually reaches 500 in seconds; neuroevolution takes a few dozen generations but is more intuitive to follow.',
-        cz: 'Oba CartPole vyřeší. PPO obvykle dosáhne 500 během vteřin; neuroevoluce potřebuje pár desítek generací, ale je názornější.',
+        en: 'Both solve CartPole. Counter-intuitively, Neuroevolution is often the faster of the two here — within a few wall-clock seconds — because the network is tiny and there are no gradient updates, just scoring a population. PPO is steadier and is the method that scales to hard problems, but on this easy task it usually needs more wall-clock time (it collects rollouts and runs gradient steps).',
+        cz: 'Oba CartPole vyřeší. Možná překvapivě bývá tady rychlejší Neuroevoluce — během pár vteřin reálného času — protože síť je drobná a nejsou žádné gradientní úpravy, jen ohodnocení populace. PPO je stabilnější a je to metoda, která zvládne i těžké úlohy, ale u téhle snadné úlohy obvykle potřebuje víc reálného času (sbírá data a počítá gradientní kroky).',
       },
     },
   },

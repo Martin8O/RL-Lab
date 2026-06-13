@@ -142,7 +142,7 @@ function NameModal({ score, steps, onDone }: { score: number; steps: number; onD
             disabled={!name.trim() || saving}
             style={{
               padding: '6px 14px', borderRadius: 6, fontSize: 12, fontWeight: 700,
-              background: 'var(--accent)', color: '#fff', border: 'none',
+              background: 'var(--accent)', color: 'var(--accent-contrast)', border: 'none',
               cursor: name.trim() && !saving ? 'pointer' : 'not-allowed',
               opacity: name.trim() && !saving ? 1 : 0.5,
             }}

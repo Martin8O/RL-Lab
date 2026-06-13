@@ -147,6 +147,7 @@ function ParamSlider({ id, label, value, min, max, step, recommended, disabled, 
       <div style={{ position: 'relative' }}>
         <input
           type="range"
+          aria-label={label}
           min={sMin} max={sMax} step={log ? 0.01 : step}
           value={sVal}
           disabled={disabled}
@@ -307,6 +308,7 @@ export default function Sidebar() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           <label style={fieldLabel}>{t('sidebar.game_selector')}</label>
           <select
+            aria-label={t('sidebar.game_selector')}
             value={selectedEnvId ?? ''}
             onChange={(e) => setSelectedEnvId(e.target.value || null)}
             disabled={envs.length === 0 || isActive}
@@ -475,6 +477,7 @@ export default function Sidebar() {
           }}>
             <input
               type="number"
+              aria-label={t('sidebar.seed')}
               min={0} max={999999}
               value={seed}
               disabled={isActive}
@@ -497,6 +500,7 @@ export default function Sidebar() {
               <ParamInfo paramId="total_steps" label={t('sidebar.total_steps')} />
             </label>
             <select
+              aria-label={t('sidebar.total_steps')}
               value={totalTimesteps}
               disabled={isActive}
               onChange={(e) => setTotalTimesteps(parseInt(e.target.value, 10))}

@@ -19,7 +19,7 @@ function PanelShell({ title, right, borderRight = true, center = false, children
     <div style={{
       flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column',
       background: 'var(--surface)',
-      borderRight: borderRight ? '1px solid var(--border)' : undefined,
+      borderRight: borderRight ? '2px solid var(--border)' : undefined,
       overflow: 'hidden',
     }}>
       <div style={{
@@ -230,7 +230,7 @@ function BlankPanel({ flex = 1, borderRight = true }: { flex?: number; borderRig
   return (
     <div style={{
       flex, minWidth: 0, background: 'var(--surface)',
-      borderRight: borderRight ? '1px solid var(--border)' : undefined,
+      borderRight: borderRight ? '2px solid var(--border)' : undefined,
     }} />
   )
 }

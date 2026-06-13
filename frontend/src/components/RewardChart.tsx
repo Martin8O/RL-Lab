@@ -108,8 +108,8 @@ interface SolvedMarker { x: number; color: string; label: string }
 
 // Multi-series chart: each series carries its own x[], so live data and overlaid past runs
 // (with different step/generation ranges) share one auto-scaled domain.
-function LineChart({ series, markers = [], width, height, xFmt }: {
-  series: Series[]; markers?: SolvedMarker[]; width: number; height: number; xFmt: (v: number) => string
+function LineChart({ series, markers = [], width, height, xFmt, ariaLabel }: {
+  series: Series[]; markers?: SolvedMarker[]; width: number; height: number; xFmt: (v: number) => string; ariaLabel: string
 }) {
   const allX: number[] = []
   const allY: number[] = []
@@ -140,7 +140,8 @@ function LineChart({ series, markers = [], width, height, xFmt }: {
     <svg
       width={width} height={height}
       style={{ display: 'block', overflow: 'visible' }}
-      aria-label="Training chart"
+      role="img"
+      aria-label={ariaLabel}
     >
       <defs>
         {series.map((s, i) => (s.area ? (
@@ -330,6 +331,7 @@ function RunRow({ run, color, selected, atCap, onToggle, onDelete }: {
       <button
         onClick={() => onDelete(run)}
         title={t('runs.delete')}
+        aria-label={t('runs.delete')}
         style={{
           flexShrink: 0, width: 20, height: 20, lineHeight: '18px', textAlign: 'center',
           background: 'transparent', border: 'none', cursor: 'pointer',
@@ -350,15 +352,21 @@ function ComparePopover({ runs, selectedOrder, onToggle, onDelete, onClear, onCl
 }) {
   const { t } = useTranslation()
   const atCap = selectedOrder.length >= OVERLAY_COLORS.length
+  // Esc closes the popover (keyboard parity with the click-away backdrop).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
   return (
     <>
       {/* Click-away backdrop */}
       <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 30 }} />
-      <div style={{
+      <div role="dialog" aria-label={t('runs.title')} style={{
         position: 'absolute', top: 'calc(100% + 4px)', right: 0, zIndex: 31,
         width: 290, maxHeight: 280, display: 'flex', flexDirection: 'column',
         background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 6,
-        boxShadow: '0 8px 24px rgba(0,0,0,0.35)',
+        boxShadow: 'var(--shadow-popover)',
       }}>
         <div style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
@@ -668,6 +676,8 @@ export default function RewardChart() {
           <button
             onClick={() => setShowCompare((v) => !v)}
             title={t('runs.title')}
+            aria-label={t('runs.compare')}
+            aria-expanded={showCompare}
             style={{
               display: 'flex', alignItems: 'center', gap: 4, padding: '2px 8px',
               borderRadius: 4, border: '1px solid var(--border)', cursor: 'pointer',
@@ -697,7 +707,7 @@ export default function RewardChart() {
       <div ref={containerRef} style={{ flex: 1, minHeight: 0, overflow: 'hidden', position: 'relative' }}>
         {hasChart ? (
           <>
-            <LineChart series={series} markers={markers} width={size.w} height={size.h} xFmt={xFmt} />
+            <LineChart series={series} markers={markers} width={size.w} height={size.h} xFmt={xFmt} ariaLabel={t('chart.aria_label')} />
             {activeTab === 'fitness' && (
               <div style={{
                 position: 'absolute', top: 6, left: PAD.l, display: 'flex', gap: 10,

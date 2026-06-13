@@ -303,8 +303,8 @@ input[type="range"]:disabled { cursor: default; opacity: 0.55; }
 input[type="range"]::-webkit-slider-runnable-track {
   height: 4px;
   border-radius: var(--radius-pill);
-  background: var(--surface-inset);
-  border: 1px solid var(--border-default);
+  background: var(--surface-3);
+  border: 1px solid var(--border-strong);
 }
 input[type="range"]::-webkit-slider-thumb {
   -webkit-appearance: none;
@@ -323,8 +323,8 @@ input[type="range"]:hover:not(:disabled)::-webkit-slider-thumb { background: var
 input[type="range"]::-moz-range-track {
   height: 4px;
   border-radius: var(--radius-pill);
-  background: var(--surface-inset);
-  border: 1px solid var(--border-default);
+  background: var(--surface-3);
+  border: 1px solid var(--border-strong);
 }
 input[type="range"]::-moz-range-progress {
   height: 4px;

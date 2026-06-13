@@ -13,7 +13,9 @@
       "pop":  "Pop"
     },
     "best_alltime": "Nejlepší všech dob pro {{env}} — přetrvá restart",
-    "best_session": "Nejlepší v této relaci"
+    "best_session": "Nejlepší v této relaci",
+    "toggle_language": "Přepnout jazyk",
+    "toggle_theme": "Přepnout motiv"
   },
   "sidebar": {
     "title": "Parametry",
@@ -117,6 +119,7 @@
   },
   "chart": {
     "title": "Graf odměn",
+    "aria_label": "Tréninkový graf",
     "placeholder": "Spusťte trénink pro živý graf",
     "tab_reward": "Odměna",
     "tab_loss": "Ztráta",

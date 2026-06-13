@@ -10,12 +10,13 @@ TASKS
     dev-frontend    Start the Vite frontend dev server.
     lint            Run ruff + mypy on the backend.
     test            Run pytest on the backend.
+    i18n            Check frontend i18n completeness (en/cz parity + every t() key).
     all             Run lint + test.
 #>
 
 param(
     [Parameter(Mandatory=$true)]
-    [ValidateSet("dev-backend","dev-frontend","lint","test","all")]
+    [ValidateSet("dev-backend","dev-frontend","lint","test","i18n","all")]
     [string]$Task
 )
 
@@ -61,5 +62,13 @@ switch ($Task) {
     }
     "lint" { Invoke-Lint }
     "test" { Invoke-Test }
+    "i18n" {
+        Write-Host "`n==> i18n check (frontend)" -ForegroundColor Cyan
+        Push-Location $Frontend
+        node scripts/check-i18n.mjs
+        $code = $LASTEXITCODE
+        Pop-Location
+        if ($code -ne 0) { exit $code }
+    }
     "all"  { Invoke-Lint; Invoke-Test }
 }

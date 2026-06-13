@@ -15,7 +15,7 @@ export default function PlayLeaderboards() {
   return (
     <div style={{
       flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column',
-      background: 'var(--surface)', borderRight: '1px solid var(--border)', overflow: 'hidden',
+      background: 'var(--surface)', borderRight: '2px solid var(--border)', overflow: 'hidden',
     }}>
       {/* Shared title — makes it clear both columns below are high-score boards */}
       <div style={{

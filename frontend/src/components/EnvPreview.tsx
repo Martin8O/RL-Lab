@@ -38,8 +38,12 @@ export default function EnvPreview() {
   const trainState    = useAppStore((s) => s.trainState)
   const backendStatus = useAppStore((s) => s.backendStatus)
   const selectedEnvId = useAppStore((s) => s.selectedEnvId)
+  const envs          = useAppStore((s) => s.envs)
+  const locale        = useAppStore((s) => s.locale)
   const playState     = useAppStore((s) => s.playState)
   const playMode      = useAppStore((s) => s.playMode)
+
+  const envName = envs.find((e) => e.id === selectedEnvId)?.display_name[locale] ?? t('envpreview.title')
 
   const canvasRef     = useRef<HTMLCanvasElement | null>(null)
   const cartGroupRef  = useRef<SVGGElement | null>(null)   // CartPole: horizontal cart travel
@@ -201,7 +205,7 @@ export default function EnvPreview() {
         {clientRender ? (
           <div style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16 }}>
             <svg viewBox="0 0 600 260" preserveAspectRatio="xMidYMid meet"
-              style={{ width: '100%', maxWidth: 820, maxHeight: '100%' }} aria-label="CartPole">
+              style={{ width: '100%', maxWidth: 820, maxHeight: '100%' }} role="img" aria-label={envName}>
               <line x1="30" y1="210" x2="570" y2="210" stroke="var(--border-strong)" strokeWidth="2.5" />
               <g ref={cartGroupRef}>
                 <g ref={poleGroupRef}>

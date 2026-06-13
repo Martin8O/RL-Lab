@@ -13,7 +13,9 @@
       "pop":  "Pop"
     },
     "best_alltime": "All-time best for {{env}} — persists across restarts",
-    "best_session": "Best this session"
+    "best_session": "Best this session",
+    "toggle_language": "Switch language",
+    "toggle_theme": "Switch theme"
   },
   "sidebar": {
     "title": "Parameters",
@@ -117,6 +119,7 @@
   },
   "chart": {
     "title": "Reward Chart",
+    "aria_label": "Training chart",
     "placeholder": "Start training to see the live chart",
     "tab_reward": "Reward",
     "tab_loss": "Loss",
