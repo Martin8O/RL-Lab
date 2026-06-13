@@ -20,7 +20,12 @@ export default function PlayScoreGate() {
   useEffect(() => {
     if (playState === 'playing') {
       armedRef.current = true
-      setPending(null) // a new game supersedes any unsubmitted prompt
+      // A new game supersedes any unsubmitted prompt. This is a deliberate synchronous setState in
+      // the effect: the gate's correctness rests on the armed-ref reconcile-safety (E2/ADR-016), so
+      // we keep the proven control flow rather than risk a render-time refactor. The dispatch is a
+      // no-op when `pending` is already null, so it does not actually cascade renders in practice.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setPending(null)
       return
     }
     if (playState !== 'finished' || !playResult || !armedRef.current) return

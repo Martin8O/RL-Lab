@@ -489,8 +489,9 @@ export default function RewardChart() {
   const win = <T,>(arr: T[]): T[] => (chartWindow > 0 ? arr.slice(-chartWindow) : arr)
   const accent = 'var(--accent)'
 
-  // Build the active tab's live series (each shares this tab's x[]).
-  let liveSeries: Series[] = []
+  // Build the active tab's live series (each shares this tab's x[]). Assigned in every branch
+  // of the exhaustive if/else below, so no initializer is needed.
+  let liveSeries: Series[]
   let xFmt = fmtSteps
 
   if (activeTab === 'reward') {

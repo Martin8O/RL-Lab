@@ -1,0 +1,5 @@
+# Prettier is available but NOT part of the quality gate — the app is hand-formatted (F2, variant A).
+# These are never worth formatting regardless.
+dist
+node_modules
+coverage

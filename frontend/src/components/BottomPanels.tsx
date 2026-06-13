@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState, type CSSProperties } from 'react'
+import { type CSSProperties } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAppStore } from '../store/useAppStore'
 import { skillScaleFor } from '../content/skill'
+import { useShowEvoLeaderboard } from '../hooks/useShowEvoLeaderboard'
 import ParamInfo from './ParamInfo'
 import PlayLeaderboards from './PlayLeaderboards'
 import type { EvolutionChild, MutationDist } from '../api/types'
@@ -236,43 +237,6 @@ function BlankPanel({ flex = 1, borderRight = true }: { flex?: number; borderRig
 }
 
 // ── BottomPanels ──────────────────────────────────────────────────────────────
-
-// Keep the Top-5 leaderboard up this long after a neuroevolution run ends, so the final
-// generation can be studied before the slot reverts to the persistent high-score boards.
-const EVO_GRACE_MS = 15_000
-
-/** When to show the evolution Top-5 (vs. the high-score boards): only while a neuroevolution
- *  run is active, plus a short grace window after it ends. Selecting neuroevolution without
- *  pressing Run keeps the high scores; switching back to PPO drops the leaderboard at once. */
-function useShowEvoLeaderboard(): boolean {
-  const algo       = useAppStore((s) => s.algo)
-  const trainState = useAppStore((s) => s.trainState)
-  const isEvo = algo === 'neuroevolution'
-  const evoRunActive =
-    isEvo && (trainState === 'running' || trainState === 'paused' || trainState === 'stopping')
-
-  const [show, setShow] = useState(false)
-  const wasActiveRef = useRef(false)
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-  useEffect(() => {
-    const clearTimer = () => {
-      if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null }
-    }
-    if (!isEvo) { clearTimer(); wasActiveRef.current = false; setShow(false); return }
-    if (evoRunActive) { clearTimer(); wasActiveRef.current = true; setShow(true); return }
-    // In evo mode but no active run: if a run just ended (falling edge), hold for the grace
-    // window, then revert. If a run never ran (idle after selecting evo), stay on high scores.
-    if (wasActiveRef.current) {
-      wasActiveRef.current = false
-      clearTimer()
-      timerRef.current = setTimeout(() => { timerRef.current = null; setShow(false) }, EVO_GRACE_MS)
-    }
-    return clearTimer
-  }, [isEvo, evoRunActive])
-
-  return show
-}
 
 export default function BottomPanels() {
   const showEvoLeaderboard = useShowEvoLeaderboard()

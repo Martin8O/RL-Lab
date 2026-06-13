@@ -123,6 +123,11 @@ class TrainingManager:
             self._metrics_log = []
             self._run_started_at = datetime.now(UTC).isoformat()
             self._state = "running"
+            # Snapshot the freshly-launched state *under the lock*, before the worker thread can
+            # emit its first frame. Reading status() after thread.start() would race a fast run
+            # (e.g. tiny CartPole evolution lands generation 1 in milliseconds), so the returned
+            # status could already carry that frame instead of the clean "just started" state.
+            initial_status = self._status_locked()
 
         self._broadcast_status()
         self._thread = threading.Thread(
@@ -134,7 +139,7 @@ class TrainingManager:
         self._thread.start()
         # Let the (decoupled) preview streamer begin watching this run, if visual is on.
         preview_streamer.attach_run(gym_id)
-        return self.status()
+        return initial_status
 
     # -- checkpoints ------------------------------------------------------------
 
