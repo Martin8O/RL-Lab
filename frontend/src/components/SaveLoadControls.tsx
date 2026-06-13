@@ -272,13 +272,13 @@ export default function SaveLoadControls() {
 
       {toast && (
         <div style={{
-          position: 'fixed', left: '50%', bottom: 28, transform: 'translateX(-50%)', zIndex: 60,
-          display: 'flex', alignItems: 'center', gap: 8, pointerEvents: 'none',
+          position: 'fixed', left: '50%', top: '50%', transform: 'translate(-50%, -50%)', zIndex: 1100,
+          display: 'flex', alignItems: 'center', gap: 10, pointerEvents: 'none',
           background: 'var(--surface-1)', border: '1px solid var(--border-default)',
-          borderRadius: 'var(--radius-md)', boxShadow: 'var(--shadow-popover)',
-          padding: '8px 16px', fontSize: 'var(--fs-sm)', fontWeight: 'var(--fw-semibold)', color: 'var(--text-strong)',
+          borderRadius: 'var(--radius-lg)', boxShadow: 'var(--shadow-popover)',
+          padding: '14px 26px', fontSize: 'var(--fs-body)', fontWeight: 'var(--fw-semibold)', color: 'var(--text-strong)',
         }}>
-          <span style={{ color: 'var(--success)' }}>✓</span> {toast}
+          <span style={{ color: 'var(--success)', fontSize: 18 }}>✓</span> {toast}
         </div>
       )}
 

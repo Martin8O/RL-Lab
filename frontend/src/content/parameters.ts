@@ -2,6 +2,10 @@
 // for every tunable in the sidebar. This is the data-driven "learning aid" feature:
 // each sidebar control opens a popup that reads its entry from here.
 //
+// Readability convention (2026-06-13): the `general` (and multi-concept) texts use a tiny markup
+// rendered by ParamInfo — **term** is bold, and "\n" starts a new line — so each popup leads with a
+// bold key term and multi-concept popups read as a scannable list, not one wall of text.
+//
 // Extensibility: adding a new parameter = adding one entry below (no UI/logic change).
 // Adding a new game = adding a `perEnv[<envId>]` note to each relevant parameter.
 //
@@ -24,8 +28,8 @@ export interface ParamInfo {
 export const PARAM_INFO: Record<string, ParamInfo> = {
   algorithm: {
     general: {
-      en: 'How the agent learns. PPO (reinforcement learning) tweaks one neural network with gradients after each batch of play — steady and sample-efficient. Neuroevolution keeps a whole population of networks, scores them, and breeds the best (mutation + crossover) each generation — simple, gradient-free, and easy to picture as "survival of the fittest".',
-      cz: 'Jak se agent učí. PPO (zpětnovazební učení) upravuje jednu neuronovou síť pomocí gradientů po každé dávce hraní — stabilní a úsporné na data. Neuroevoluce udržuje celou populaci sítí, ohodnotí je a v každé generaci množí ty nejlepší (mutace + křížení) — jednoduchá, bez gradientů, snadno představitelná jako „přežití nejschopnějších“.',
+      en: '**How the agent learns.**\n**PPO** (reinforcement learning) — tweaks one neural network with gradients after each batch of play; steady and sample-efficient.\n**Neuroevolution** — keeps a whole population of networks, scores them, and breeds the best (mutation + crossover) each generation; simple, gradient-free, like "survival of the fittest".',
+      cz: '**Jak se agent učí.**\n**PPO** (zpětnovazební učení) — upravuje jednu neuronovou síť pomocí gradientů po každé dávce hraní; stabilní a úsporné na data.\n**Neuroevoluce** — udržuje celou populaci sítí, ohodnotí je a v každé generaci množí ty nejlepší (mutace + křížení); jednoduchá, bez gradientů, jako „přežití nejschopnějších“.',
     },
     recommended: {
       en: 'PPO — fastest and most reliable for CartPole. Try Neuroevolution to watch the population-based idea in action.',
@@ -41,8 +45,8 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
 
   learning_rate: {
     general: {
-      en: 'How big a step the agent takes when it updates its strategy after each batch of experience. Too high and learning becomes unstable and "forgets" what worked; too low and it crawls, needing far more steps to improve.',
-      cz: 'Jak velký krok agent udělá při úpravě své strategie po každé dávce zkušeností. Příliš vysoká hodnota způsobí nestabilitu a „zapomínání“ toho, co fungovalo; příliš nízká učení zpomalí a vyžaduje mnohem více kroků.',
+      en: '**Step size.** How big a step the agent takes when it updates its strategy after each batch of experience.\nToo high → learning becomes unstable and "forgets" what worked. Too low → it crawls, needing far more steps to improve.',
+      cz: '**Velikost kroku.** Jak velký krok agent udělá při úpravě své strategie po každé dávce zkušeností.\nPříliš vysoká → nestabilita a „zapomínání“ toho, co fungovalo. Příliš nízká → učení se vleče a vyžaduje mnohem více kroků.',
     },
     recommended: {
       en: '3e-4 — a safe, steady default for PPO.',
@@ -59,8 +63,8 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
 
   gamma: {
     general: {
-      en: 'Discount factor — how much the agent values future rewards versus immediate ones. Near 1.0 it plans far ahead; lower values make it short-sighted, caring mostly about the next few steps.',
-      cz: 'Diskontní faktor — jak moc agent cení budoucí odměny oproti okamžitým. Blízko 1.0 plánuje daleko dopředu; nižší hodnoty ho dělají krátkozrakým, soustředí se hlavně na nejbližší kroky.',
+      en: '**Discount factor** — how much the agent values future rewards versus immediate ones.\nNear 1.0 → it plans far ahead. Lower → short-sighted, caring mostly about the next few steps.',
+      cz: '**Diskontní faktor** — jak moc agent cení budoucí odměny oproti okamžitým.\nBlízko 1.0 → plánuje daleko dopředu. Nižší → krátkozraký, soustředí se hlavně na nejbližší kroky.',
     },
     recommended: {
       en: '0.99 — the standard for most control tasks.',
@@ -77,8 +81,8 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
 
   clip_range: {
     general: {
-      en: "PPO's safety rail. It limits how far the new strategy can move from the old one in a single update, preventing one bad batch from wrecking a good policy.",
-      cz: 'Bezpečnostní zábradlí PPO. Omezuje, jak daleko se nová strategie může v jedné aktualizaci vzdálit od staré, aby jedna špatná dávka nezničila dobrou strategii.',
+      en: "**PPO's safety rail.** It limits how far the new strategy can move from the old one in a single update, preventing one bad batch from wrecking a good policy.",
+      cz: '**Bezpečnostní zábradlí PPO.** Omezuje, jak daleko se nová strategie může v jedné aktualizaci vzdálit od staré, aby jedna špatná dávka nezničila dobrou strategii.',
     },
     recommended: {
       en: '0.2 — the value from the PPO paper, rarely worth changing.',
@@ -95,8 +99,8 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
 
   ent_coef: {
     general: {
-      en: 'Entropy bonus — rewards the agent for staying a bit random and exploring. Raise it if the agent settles too early on a mediocre habit; keep it near 0 when the task is simple enough to solve by exploiting what it learns.',
-      cz: 'Bonus za entropii — odměňuje agenta za to, že zůstane trochu náhodný a zkoumá. Zvyšte ho, pokud agent příliš brzy zapadne do průměrného návyku; nechte ho u 0, když je úloha dost jednoduchá na vyřešení tím, co se naučil.',
+      en: '**Entropy bonus** — rewards the agent for staying a bit random and exploring.\nRaise it if the agent settles too early on a mediocre habit. Keep it near 0 when the task is simple enough to solve by exploiting what it learns.',
+      cz: '**Bonus za entropii** — odměňuje agenta za to, že zůstane trochu náhodný a zkoumá.\nZvyšte ho, pokud agent příliš brzy zapadne do průměrného návyku. Nechte ho u 0, když je úloha dost jednoduchá na vyřešení tím, co se naučil.',
     },
     recommended: {
       en: '0.0 — CartPole needs no extra exploration push.',
@@ -113,8 +117,8 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
 
   n_hidden_layers: {
     general: {
-      en: "How many stacked layers the agent's neural network has — its \"depth\". More layers can capture more complex patterns but train slower and may overfit a simple task.",
-      cz: 'Kolik vrstev má neuronová síť agenta — její „hloubka“. Více vrstev zachytí složitější vzory, ale trénují se pomaleji a na jednoduché úloze se mohou přeučit.',
+      en: "**Network depth** — how many stacked layers the agent's neural network has.\nMore layers can capture more complex patterns but train slower and may overfit a simple task.",
+      cz: '**Hloubka sítě** — kolik vrstev má neuronová síť agenta.\nVíce vrstev zachytí složitější vzory, ale trénují se pomaleji a na jednoduché úloze se mohou přeučit.',
     },
     recommended: {
       en: '2 — the standard small network for control tasks.',
@@ -131,8 +135,8 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
 
   neurons_per_layer: {
     general: {
-      en: 'How wide each layer is — the number of neurons. Wider networks have more capacity but cost more compute; for tiny observations a narrow net learns just as well.',
-      cz: 'Jak široká je každá vrstva — počet neuronů. Širší sítě mají větší kapacitu, ale stojí více výpočtu; pro malá pozorování se úzká síť naučí stejně dobře.',
+      en: '**Network width** — how many neurons each layer has.\nWider networks have more capacity but cost more compute; for tiny observations a narrow net learns just as well.',
+      cz: '**Šířka sítě** — kolik neuronů má každá vrstva.\nŠirší sítě mají větší kapacitu, ale stojí více výpočtu; pro malá pozorování se úzká síť naučí stejně dobře.',
     },
     recommended: {
       en: '64 — paired with 2 layers, the classic 2×64 network.',
@@ -149,8 +153,8 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
 
   activation: {
     general: {
-      en: 'The non-linear function each neuron applies, letting the network learn curved, non-trivial behaviour. tanh is smooth and stable (PPO\'s default); relu is faster and common in larger or vision networks.',
-      cz: 'Nelineární funkce, kterou každý neuron používá, aby se síť mohla naučit zakřivené, netriviální chování. tanh je hladká a stabilní (výchozí pro PPO); relu je rychlejší a běžná u větších či obrazových sítí.',
+      en: "**Activation function** — the non-linearity each neuron applies, letting the network learn curved, non-trivial behaviour.\n**tanh** — smooth and stable (PPO's default). **relu** — faster, common in larger or vision networks.",
+      cz: '**Aktivační funkce** — nelinearita, kterou každý neuron používá, aby se síť naučila zakřivené, netriviální chování.\n**tanh** — hladká a stabilní (výchozí pro PPO). **relu** — rychlejší, běžná u větších či obrazových sítí.',
     },
     recommended: {
       en: "tanh — SB3's PPO default, stable on control tasks.",
@@ -167,8 +171,8 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
 
   seed: {
     general: {
-      en: 'The starting point for all randomness — environment resets, network initialisation, action sampling. Fixing the seed makes a run reproducible: same seed + same settings = same result, which is essential for fair comparisons.',
-      cz: 'Výchozí bod pro veškerou náhodnost — resety prostředí, inicializaci sítě, výběr akcí. Pevné semeno zajistí reprodukovatelnost běhu: stejné semeno + stejná nastavení = stejný výsledek, což je klíčové pro férové porovnání.',
+      en: '**Random seed** — the starting point for all randomness: environment resets, network initialisation, action sampling.\nFixing it makes a run reproducible: same seed + same settings = same result, essential for fair comparisons.',
+      cz: '**Náhodné semeno** — výchozí bod pro veškerou náhodnost: resety prostředí, inicializaci sítě, výběr akcí.\nPevné semeno zajistí reprodukovatelnost: stejné semeno + stejná nastavení = stejný výsledek, klíčové pro férové porovnání.',
     },
     recommended: {
       en: 'Any fixed integer (e.g. 42). Change it to see how much luck affects a run.',
@@ -185,8 +189,8 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
 
   total_steps: {
     general: {
-      en: 'The training budget — how many environment steps the agent gets to learn from before stopping. More steps mean more practice and usually a better policy, up to the point where it has mastered the task.',
-      cz: 'Tréninkový rozpočet — kolik kroků v prostředí agent dostane na učení, než se zastaví. Více kroků znamená více cviku a obvykle lepší strategii, dokud úlohu nezvládne.',
+      en: '**Training budget** — how many environment steps the agent gets to learn from before stopping.\nMore steps mean more practice and usually a better policy, up to the point where it has mastered the task.',
+      cz: '**Tréninkový rozpočet** — kolik kroků v prostředí agent dostane na učení, než se zastaví.\nVíce kroků znamená více cviku a obvykle lepší strategii, dokud úlohu nezvládne.',
     },
     recommended: {
       en: '50k — comfortably solves CartPole on CPU in well under a minute.',
@@ -207,8 +211,8 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
 
   population_size: {
     general: {
-      en: 'How many different networks are tried in each generation — the size of the "herd". A bigger population explores more strategies at once and is more likely to stumble on a good one, but every generation takes proportionally longer to score.',
-      cz: 'Kolik různých sítí se vyzkouší v každé generaci — velikost „stáda“. Větší populace zkouší více strategií najednou a má větší šanci narazit na dobrou, ale ohodnocení každé generace trvá úměrně déle.',
+      en: '**Herd size** — how many different networks are tried in each generation.\nA bigger population explores more strategies at once and is more likely to find a good one, but every generation takes proportionally longer to score.',
+      cz: '**Velikost stáda** — kolik různých sítí se vyzkouší v každé generaci.\nVětší populace zkouší více strategií najednou a má větší šanci najít dobrou, ale ohodnocení každé generace trvá úměrně déle.',
     },
     recommended: {
       en: '50 — plenty of variety while still scoring a generation in a second or two on CPU.',
@@ -225,8 +229,8 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
 
   top_k_parents: {
     general: {
-      en: 'How many of the best performers survive to become parents of the next generation. Too few and the gene pool narrows fast (everyone ends up alike); too many and weak networks keep breeding, slowing progress.',
-      cz: 'Kolik nejlepších jedinců přežije a stane se rodiči další generace. Příliš málo a genofond se rychle zúží (všichni si jsou podobní); příliš mnoho a množí se i slabé sítě, což zpomaluje pokrok.',
+      en: '**Survivors** — how many of the best performers become parents of the next generation.\nToo few → the gene pool narrows fast (everyone ends up alike). Too many → weak networks keep breeding, slowing progress.',
+      cz: '**Přeživší** — kolik nejlepších jedinců se stane rodiči další generace.\nPříliš málo → genofond se rychle zúží (všichni si jsou podobní). Příliš mnoho → množí se i slabé sítě a pokrok se zpomalí.',
     },
     recommended: {
       en: '10 — the top fifth of a 50-network population; a healthy balance of quality and diversity.',
@@ -243,8 +247,8 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
 
   mutation_rate: {
     general: {
-      en: 'How strongly each offspring\'s weights are randomly nudged when it is born — the amount of "creative noise". Higher values explore boldly but unpredictably; lower values fine-tune carefully but can get stuck on a so-so strategy.',
-      cz: 'Jak silně se náhodně pozmění váhy každého potomka při jeho „narození“ — míra „tvůrčího šumu“. Vyšší hodnoty zkoumají odvážně, ale nepředvídatelně; nižší hodnoty pečlivě dolaďují, ale mohou uvíznout u průměrné strategie.',
+      en: "**Creative noise** — how strongly each offspring's weights are randomly nudged when it is born.\nHigher → explores boldly but unpredictably. Lower → fine-tunes carefully but can get stuck on a so-so strategy.",
+      cz: '**Tvůrčí šum** — jak silně se náhodně pozmění váhy každého potomka při „narození“.\nVyšší → zkoumá odvážně, ale nepředvídatelně. Nižší → pečlivě dolaďuje, ale může uvíznout u průměrné strategie.',
     },
     recommended: {
       en: '0.1 — small, steady tweaks that improve the herd without scrambling good networks.',
@@ -261,8 +265,8 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
 
   crossover_rate: {
     general: {
-      en: 'The chance that a new network is a mix of two parents (combining their strengths) rather than a copy of one. Crossover blends ideas across the population; with it at 0 each child just descends from a single parent plus mutation.',
-      cz: 'Pravděpodobnost, že nová síť je směsí dvou rodičů (kombinuje jejich přednosti) místo kopie jednoho. Křížení míchá nápady napříč populací; při 0 každý potomek pochází jen z jediného rodiče plus mutace.',
+      en: '**Parent mixing** — the chance a new network blends two parents (combining their strengths) rather than copying one.\nCrossover spreads ideas across the population; at 0 each child descends from a single parent plus mutation.',
+      cz: '**Mísení rodičů** — pravděpodobnost, že nová síť mísí dva rodiče (kombinuje jejich přednosti) místo kopie jednoho.\nKřížení šíří nápady napříč populací; při 0 každý potomek pochází jen z jednoho rodiče plus mutace.',
     },
     recommended: {
       en: '0.5 — half the offspring blend two parents, half refine one; a common, well-rounded default.',
@@ -279,8 +283,8 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
 
   generations: {
     general: {
-      en: 'How many breeding rounds to run — the evolution equivalent of training length. Each generation scores the whole population, keeps the best, and breeds the next. More generations give more chances to refine, up to the point the task is mastered.',
-      cz: 'Kolik kol šlechtění proběhne — evoluční obdoba délky tréninku. Každá generace ohodnotí celou populaci, ponechá nejlepší a vyšlechtí další. Více generací dává více příležitostí k vylepšení, dokud úloha není zvládnuta.',
+      en: '**Breeding rounds** — the evolution equivalent of training length.\nEach generation scores the whole population, keeps the best, and breeds the next. More generations give more chances to refine, up to the point the task is mastered.',
+      cz: '**Kola šlechtění** — evoluční obdoba délky tréninku.\nKaždá generace ohodnotí celou populaci, ponechá nejlepší a vyšlechtí další. Více generací dává více příležitostí k vylepšení, dokud úloha není zvládnuta.',
     },
     recommended: {
       en: '30 — comfortably enough for the herd to reach a near-perfect CartPole score.',
@@ -301,8 +305,8 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
 
   reward: {
     general: {
-      en: 'The average score the agent earns per episode — the headline number for how well it is playing. The agent\'s entire objective is to push this curve upward over training, so a rising reward means it is learning.',
-      cz: 'Průměrné skóre, které agent získá za epizodu — hlavní číslo udávající, jak dobře si vede. Celým cílem agenta je tuto křivku během tréninku tlačit nahoru, takže rostoucí odměna znamená, že se učí.',
+      en: "**Average score per episode** — the headline number for how well the agent is playing.\nThe agent's entire objective is to push this curve upward over training, so a rising reward means it is learning.",
+      cz: '**Průměrné skóre za epizodu** — hlavní číslo udávající, jak dobře si agent vede.\nCelým cílem agenta je tuto křivku během tréninku tlačit nahoru, takže rostoucí odměna znamená, že se učí.',
     },
     perEnv: {
       cartpole: {
@@ -314,8 +318,8 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
 
   loss: {
     general: {
-      en: 'A training diagnostic — roughly how much the network adjusts itself on each update. Unlike reward, lower is not automatically better and it does not climb steadily; it wobbles as the agent learns. Use it to spot instability (wild spikes), not as a score.',
-      cz: 'Diagnostika tréninku — zhruba jak moc se síť při každé aktualizaci upraví. Na rozdíl od odměny zde nižší hodnota není automaticky lepší a neroste plynule; kolísá, jak se agent učí. Slouží k odhalení nestability (divoké výkyvy), ne jako skóre.',
+      en: '**Training diagnostic** — roughly how much the network adjusts itself on each update.\nUnlike reward, lower is not automatically better and it does not climb steadily; it wobbles as the agent learns. Use it to spot instability (wild spikes), not as a score.',
+      cz: '**Diagnostika tréninku** — zhruba jak moc se síť při každé aktualizaci upraví.\nNa rozdíl od odměny zde nižší hodnota není automaticky lepší a neroste plynule; kolísá, jak se agent učí. Slouží k odhalení nestability (divoké výkyvy), ne jako skóre.',
     },
     perEnv: {
       cartpole: {
@@ -327,8 +331,8 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
 
   fitness: {
     general: {
-      en: 'The neuroevolution counterpart of reward. Instead of one agent improving by gradient steps, a whole population is scored each generation and the best "genomes" are bred together. Fitness is that score — the chart shows best / average / worst across generations.',
-      cz: 'Protějšek odměny u neuroevoluce. Místo jednoho agenta, který se zlepšuje gradientními kroky, se každou generaci ohodnotí celá populace a nejlepší „genomy“ se zkříží. Fitness je toto skóre — graf ukazuje nejlepší / průměrnou / nejhorší hodnotu napříč generacemi.',
+      en: '**The neuroevolution counterpart of reward.**\nInstead of one agent improving by gradient steps, a whole population is scored each generation and the best "genomes" are bred together. The chart shows best / average / worst across generations.',
+      cz: '**Protějšek odměny u neuroevoluce.**\nMísto jednoho agenta zlepšujícího se gradientními kroky se každou generaci ohodnotí celá populace a nejlepší „genomy“ se zkříží. Graf ukazuje nejlepší / průměrnou / nejhorší hodnotu napříč generacemi.',
     },
     perEnv: {
       cartpole: {
@@ -340,8 +344,8 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
 
   smooth: {
     general: {
-      en: 'A display-only smoothing for the chart — it does not change training. The chart draws the raw values as a faint line and overlays a bold smoothed line (an exponential moving average). Lower the slider for a calmer, more readable trend; set it to 1.0 to see every noisy data point exactly.',
-      cz: 'Vyhlazení pouze pro zobrazení grafu — trénink nijak nemění. Graf kreslí surové hodnoty slabou čarou a překrývá je výraznou vyhlazenou čarou (exponenciální klouzavý průměr). Snižte posuvník pro klidnější, čitelnější trend; nastavte na 1.0, abyste viděli každý zašuměný bod přesně.',
+      en: '**Display-only smoothing** for the chart — it does not change training.\nThe chart draws the raw values as a faint line and overlays a bold smoothed line (an exponential moving average). Lower the slider for a calmer, more readable trend; set it to 1.0 to see every noisy data point exactly.',
+      cz: '**Vyhlazení pouze pro zobrazení** grafu — trénink nijak nemění.\nGraf kreslí surové hodnoty slabou čarou a překrývá je výraznou vyhlazenou čarou (exponenciální klouzavý průměr). Snižte posuvník pro klidnější, čitelnější trend; nastavte na 1.0, abyste viděli každý zašuměný bod přesně.',
     },
     recommended: {
       en: 'Around 0.3 — smooth enough to read the trend without hiding real changes.',
@@ -355,36 +359,36 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
 
   topbar_gen: {
     general: {
-      en: 'Generation — which breeding round neuroevolution is currently on, shown as current / total. Each generation scores the whole population, keeps the best, and breeds the next. PPO does not evolve a population, so this stays "—" in PPO mode.',
-      cz: 'Generace — kolikáté kolo šlechtění právě neuroevoluce zpracovává, zobrazeno jako aktuální / celkem. Každá generace ohodnotí celou populaci, ponechá nejlepší a vyšlechtí další. PPO populaci nešlechtí, takže v režimu PPO zůstává „—“.',
+      en: '**Generation** — which breeding round neuroevolution is currently on, shown as current / total.\nEach generation scores the whole population, keeps the best, and breeds the next. PPO does not evolve a population, so this stays "—" in PPO mode.',
+      cz: '**Generace** — kolikáté kolo šlechtění právě neuroevoluce zpracovává, zobrazeno jako aktuální / celkem.\nKaždá generace ohodnotí celou populaci, ponechá nejlepší a vyšlechtí další. PPO populaci nešlechtí, takže v režimu PPO zůstává „—“.',
     },
   },
 
   topbar_iter: {
     general: {
-      en: 'Iterations — a measure of how much work the run has done. For PPO it counts completed rollout-and-update cycles; for neuroevolution it counts the total network evaluations so far (generation × population).',
-      cz: 'Iterace — měřítko, kolik práce běh odvedl. U PPO počítá dokončené cykly „sběr dat + úprava“; u neuroevoluce počítá celkový počet vyhodnocení sítí dosud (generace × populace).',
+      en: '**Iterations** — a measure of how much work the run has done.\nFor PPO it counts completed rollout-and-update cycles; for neuroevolution it counts the total network evaluations so far (generation × population).',
+      cz: '**Iterace** — měřítko, kolik práce běh odvedl.\nU PPO počítá dokončené cykly „sběr dat + úprava“; u neuroevoluce počítá celkový počet vyhodnocení sítí dosud (generace × populace).',
     },
   },
 
   topbar_best: {
     general: {
-      en: 'The all-time best score this environment has ever reached on this machine. It is saved to disk and survives restarts — distinct from the live session high. For CartPole the ceiling is 500 (a pole balanced for the whole episode).',
-      cz: 'Nejlepší skóre, jakého kdy toto prostředí na tomto počítači dosáhlo. Ukládá se na disk a přežije restart — na rozdíl od nejlepšího skóre aktuální relace. U CartPole je strop 500 (tyč udržená po celou epizodu).',
+      en: '**All-time best** score this environment has ever reached on this machine.\nIt is saved to disk and survives restarts — distinct from the live session high. For CartPole the ceiling is 500 (a pole balanced for the whole episode).',
+      cz: '**Vůbec nejlepší** skóre, jakého kdy toto prostředí na tomto počítači dosáhlo.\nUkládá se na disk a přežije restart — na rozdíl od nejlepšího skóre aktuální relace. U CartPole je strop 500 (tyč udržená po celou epizodu).',
     },
   },
 
   topbar_pop: {
     general: {
-      en: 'Population — how many neural networks compete in each neuroevolution generation. A bigger population explores more strategies per generation but is slower to score. PPO trains a single network, so this stays "—" in PPO mode.',
-      cz: 'Populace — kolik neuronových sítí soutěží v každé generaci neuroevoluce. Větší populace zkouší více strategií za generaci, ale ohodnocení je pomalejší. PPO trénuje jedinou síť, takže v režimu PPO zůstává „—“.',
+      en: '**Population** — how many neural networks compete in each neuroevolution generation.\nA bigger population explores more strategies per generation but is slower to score. PPO trains a single network, so this stays "—" in PPO mode.',
+      cz: '**Populace** — kolik neuronových sítí soutěží v každé generaci neuroevoluce.\nVětší populace zkouší více strategií za generaci, ale ohodnocení je pomalejší. PPO trénuje jedinou síť, takže v režimu PPO zůstává „—“.',
     },
   },
 
   evolution_stats: {
     general: {
-      en: "This panel summarises the current neuroevolution generation. Generation is the breeding round (current / total). Total Iters is how many networks have been scored so far (generation × population). Best, Avg and Worst are the fitness scores of the top, mean and bottom network this generation — fitness is the average reward over the evaluation episodes (0–500 for CartPole, where ~500 means solved); a healthy run pushes Best upward and Avg follows it. Mutation spread is a histogram of the random weight tweaks used to breed this generation's offspring: it is centred on zero and shaped like a bell, and grows wider when the Mutation Rate is higher. Watch Best climb generation by generation — once it nears the ceiling, the population has mastered the task.",
-      cz: "Tento panel shrnuje aktuální generaci neuroevoluce. Generace je kolo šlechtění (aktuální / celkem). Celkem iterací je, kolik sítí už bylo ohodnoceno (generace × populace). Nejlepší, Průměr a Nejhorší jsou fitness skóre nejlepší, průměrné a nejhorší sítě v této generaci — fitness je průměrná odměna za vyhodnocovací epizody (0–500 pro CartPole, kde ~500 znamená vyřešeno); zdravý běh tlačí Nejlepší nahoru a Průměr ho následuje. Rozptyl mutací je histogram náhodných úprav vah použitých k vyšlechtění potomků této generace: je vystředěný na nule a tvarem připomíná zvon, širší při vyšší Míře mutace. Sleduj, jak Nejlepší stoupá generaci za generací — jakmile se přiblíží stropu, populace úlohu zvládla.",
+      en: "This panel summarises the current neuroevolution generation.\n**Generation** — the breeding round (current / total).\n**Total Iters** — how many networks have been scored so far (generation × population).\n**Best / Avg / Worst** — the fitness of the top, mean and bottom network this generation. Fitness = the average reward over the evaluation episodes (0–500 for CartPole, ~500 = solved); a healthy run pushes Best up and Avg follows.\n**Mutation spread** — a histogram of the random weight tweaks used to breed this generation's offspring: centred on zero, bell-shaped, and wider when the Mutation Rate is higher.\nWatch Best climb generation by generation — once it nears the ceiling, the population has mastered the task.",
+      cz: 'Tento panel shrnuje aktuální generaci neuroevoluce.\n**Generace** — kolo šlechtění (aktuální / celkem).\n**Celkem iterací** — kolik sítí už bylo ohodnoceno (generace × populace).\n**Nejlepší / Průměr / Nejhorší** — fitness nejlepší, průměrné a nejhorší sítě v této generaci. Fitness = průměrná odměna za vyhodnocovací epizody (0–500 pro CartPole, ~500 = vyřešeno); zdravý běh tlačí Nejlepší nahoru a Průměr ho následuje.\n**Rozptyl mutací** — histogram náhodných úprav vah použitých k vyšlechtění potomků této generace: vystředěný na nule, tvarem jako zvon, širší při vyšší Míře mutace.\nSleduj, jak Nejlepší stoupá generaci za generací — jakmile se přiblíží stropu, populace úlohu zvládla.',
     },
   },
 }

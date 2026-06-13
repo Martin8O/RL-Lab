@@ -120,7 +120,7 @@ function InfoModal({ paramId, label, onClose }: { paramId: string; label: string
         {/* Body */}
         <div style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 14 }}>
           <Section title={t('info.general')}>
-            <p style={bodyText}>{info.general[locale]}</p>
+            <RichText text={info.general[locale]} />
           </Section>
 
           {info.recommended && (
@@ -137,7 +137,7 @@ function InfoModal({ paramId, label, onClose }: { paramId: string; label: string
 
           {envNote && (
             <Section title={t('info.for_env', { env: envName })}>
-              <p style={bodyText}>{envNote[locale]}</p>
+              <RichText text={envNote[locale]} />
             </Section>
           )}
         </div>
@@ -147,6 +147,28 @@ function InfoModal({ paramId, label, onClose }: { paramId: string; label: string
 }
 
 const bodyText: CSSProperties = { margin: 0, fontSize: 13, lineHeight: 1.5, color: 'var(--text)' }
+
+// Lightweight renderer for the info content: each line (split on "\n") becomes its own block, and
+// **term** spans render bold — so a multi-concept popup reads as a scannable bolded list instead of
+// one wall of text. Content lives in content/parameters.ts using that simple markup.
+function renderInline(line: string): React.ReactNode[] {
+  return line.split(/(\*\*[^*]+\*\*)/g).filter(Boolean).map((part, i) =>
+    part.startsWith('**') && part.endsWith('**')
+      ? <strong key={i} style={{ fontWeight: 700, color: 'var(--text-strong)' }}>{part.slice(2, -2)}</strong>
+      : <span key={i}>{part}</span>,
+  )
+}
+
+function RichText({ text }: { text: string }) {
+  const lines = text.split('\n')
+  return (
+    <div style={bodyText}>
+      {lines.map((line, i) => (
+        <p key={i} style={{ margin: i === 0 ? 0 : '5px 0 0' }}>{renderInline(line)}</p>
+      ))}
+    </div>
+  )
+}
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (

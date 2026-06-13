@@ -144,11 +144,11 @@ function MutationBars({ dist }: { dist: MutationDist }) {
   const { t } = useTranslation()
   const max = Math.max(1, ...dist.counts)
   return (
-    <div>
-      <div style={{ fontSize: 9, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 2 }}>
+    <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+      <div style={{ fontSize: 9, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 3 }}>
         {t('evolution.mutation_dist')}
       </div>
-      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 1, height: 26 }}>
+      <div style={{ flex: 1, minHeight: 24, display: 'flex', alignItems: 'flex-end', gap: 1 }}>
         {dist.counts.map((c, i) => (
           <div
             key={i}
@@ -194,7 +194,7 @@ function EvolutionStats() {
       <div style={{ flex: 1, overflowY: 'auto', padding: '6px 12px', display: 'flex', flexDirection: 'column', gap: 7 }}>
         {/* Fixed 3-column grid keeps the five stats to two tidy rows so the mutation bars
             below always stay in view inside the short panel. */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '5px 8px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, max-content)', justifyContent: 'space-between', gap: '6px 8px' }}>
           <StatCell label={t('evolution.generation')} value={`${e.generation}/${e.total_generations}`} />
           <StatCell label={t('evolution.total_iters')} value={String(e.generation * population)} />
           <StatCell label={t('evolution.best')}  value={e.best_fitness.toFixed(1)}  color="var(--ok)" />
