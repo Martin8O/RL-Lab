@@ -35,7 +35,7 @@ from PIL import Image
 
 from app.core.logging import get_logger
 from app.schemas.preview import PreviewState
-from app.services.client_render import cart_state
+from app.services.client_render import client_state, terrain
 from app.services.connection_manager import ConnectionManager, manager
 
 logger = get_logger(__name__)
@@ -175,9 +175,8 @@ class PreviewStreamer:
                     if self._is_paused():  # training paused → freeze the last frame
                         time.sleep(0.05)
                         continue
-                    obs, reward, terminated, truncated, _ = env.step(
-                        self._choose_action(env, obs)
-                    )
+                    action = self._choose_action(env, obs)
+                    obs, reward, terminated, truncated, _ = env.step(action)
                     ep_reward += float(reward)
                     step += 1
                     done = bool(terminated or truncated)
@@ -185,19 +184,26 @@ class PreviewStreamer:
                     now = time.monotonic()
                     if now - last_sent >= send_interval or done:
                         last_sent = now
-                        self._emit_frame(env, episode, step, ep_reward)
+                        self._emit_frame(env, episode, step, ep_reward, obs, action)
 
                     time.sleep(base_dt / self._current_speed())
         finally:
             env.close()
 
-    def _emit_frame(self, env: Any, episode: int, step: int, reward: float) -> None:
-        # CartPole is drawn client-side from raw state — skip the rgb render + JPEG entirely.
-        state = cart_state(env)
+    def _emit_frame(self, env: Any, episode: int, step: int, reward: float, obs: Any, action: Any) -> None:
+        # Client-rendered envs draw from raw state — skip rgb render + JPEG. ``action`` (the discrete
+        # action just applied, or None) lets the client draw the firing thruster (LunarLander plumes).
+        act = int(action) if isinstance(action, (int, np.integer)) else None
+        state = client_state(env, obs)
         if state is not None:
-            self._broadcast(
-                {"type": "frame", "episode": episode, "step": step, "reward": reward, "state": state}
-            )
+            frame = {
+                "type": "frame", "episode": episode, "step": step,
+                "reward": reward, "state": state, "action": act,
+            }
+            scene = terrain(env)  # LunarLander streams its real moon surface; None elsewhere
+            if scene is not None:
+                frame["terrain"] = scene
+            self._broadcast(frame)
             return
         try:
             rgb = np.asarray(env.render(), dtype=np.uint8)
@@ -224,7 +230,10 @@ class PreviewStreamer:
         if predict is None:
             return env.action_space.sample()
         try:
-            return int(np.asarray(predict(obs)).flatten()[0])
+            # The predict fn already returns the right shape for the env: an int for a discrete
+            # action space, a clipped float vector for a continuous (box) one — pass it straight
+            # to env.step() (no int() cast, which would truncate a continuous action to 0/1).
+            return predict(obs)
         except Exception:  # noqa: BLE001 — never let inference contention disturb the run
             logger.debug("Preview predict failed; using random action", exc_info=True)
             return env.action_space.sample()

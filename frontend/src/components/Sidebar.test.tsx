@@ -9,11 +9,12 @@ describe('<Sidebar />', () => {
     useAppStore.setState({ envs: [cartpoleEnv], selectedEnvId: 'cartpole' })
   })
 
-  it('renders the panel title and both algorithm options', () => {
+  it('renders the panel title and the algorithm options (a dropdown, env-gated)', () => {
     render(<Sidebar />)
     expect(screen.getByText('Parameters')).toBeInTheDocument()
-    expect(screen.getByRole('tab', { name: 'PPO' })).toBeInTheDocument()
-    expect(screen.getByRole('tab', { name: 'Neuroevolution' })).toBeInTheDocument()
+    expect(screen.getByRole('combobox', { name: 'Algorithm' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'PPO' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'Neuroevolution' })).toBeInTheDocument()
   })
 
   it('shows PPO hyperparameters by default and switches to evolution settings', () => {
@@ -21,7 +22,7 @@ describe('<Sidebar />', () => {
     expect(screen.getByText('PPO Hyperparameters')).toBeInTheDocument()
     expect(screen.getByLabelText('Learning Rate')).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('tab', { name: 'Neuroevolution' }))
+    fireEvent.change(screen.getByRole('combobox', { name: 'Algorithm' }), { target: { value: 'neuroevolution' } })
 
     expect(screen.getByText('Evolution Settings')).toBeInTheDocument()
     expect(screen.getByLabelText('Population Size')).toBeInTheDocument()

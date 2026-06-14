@@ -6,6 +6,12 @@ import type { PlayFrame, PreviewFrame } from '../api/types'
 import { keymapFor } from '../content/playKeymaps'
 import PlayControls from './PlayControls'
 import SkillMeter from './SkillMeter'
+import {
+  CART_X_LIMIT, CART_X_SCALE, MC_START, mcCarTransform,
+  PEND_CX, PEND_CY, ACRO_CX, ACRO_CY, ACRO_JOINT_Y,
+  LL_START, llLanderTransform, llTerrainPaths, LL_DEFAULT_TERRAIN, llX, llY,
+} from './envGeometry'
+import { CartPoleStage, MountainCarStage, PendulumStage, AcrobotStage, LunarLanderStage } from './EnvStages'
 
 const MIN_SPEED = 1
 const MAX_SPEED = 20
@@ -13,11 +19,9 @@ const MAX_SPEED = 20
 // rapidly alternate them (≈ each at half thrust). ~30 ms keeps pace with the sim step rate.
 const MULTI_KEY_ALTERNATE_MS = 30
 
-// Envs the frontend draws itself from raw physics state (keep in sync with the backend's
-// app/services/client_render.py). For these, the server streams state instead of an image.
-const CLIENT_RENDER_ENVS = new Set(['cartpole'])
-const CART_X_LIMIT = 2.4   // CartPole fails at |x| ≈ 2.4
-const CART_X_SCALE = 250   // px of horizontal travel from ±x-limit (wide track 30..570, centre 300)
+// Client-side rendered envs draw from the raw physics state the backend streams (client_render.py)
+// instead of a JPEG — crisper + lighter on CPU. The SVG stages + their geometry live in ./EnvStages;
+// `clientKind` (below) maps each env id to its renderer. Keep both in sync with the backend.
 
 const EyeOn = (
   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden>
@@ -52,6 +56,17 @@ export default function EnvPreview() {
   const canvasRef     = useRef<HTMLCanvasElement | null>(null)
   const cartGroupRef  = useRef<SVGGElement | null>(null)   // CartPole: horizontal cart travel
   const poleGroupRef  = useRef<SVGGElement | null>(null)   // CartPole: pole angle
+  const carRef        = useRef<SVGGElement | null>(null)   // MountainCar: car along the hill
+  const pendRodRef    = useRef<SVGGElement | null>(null)   // Pendulum: rod angle
+  const acroLink1Ref  = useRef<SVGGElement | null>(null)   // Acrobot: first link angle
+  const acroLink2Ref  = useRef<SVGGElement | null>(null)   // Acrobot: second link angle
+  const landerRef     = useRef<SVGGElement | null>(null)   // LunarLander: lander pose
+  const llMainRef     = useRef<SVGGElement | null>(null)   // LunarLander: main-engine plume
+  const llLeftRef     = useRef<SVGGElement | null>(null)   // LunarLander: left-engine puff
+  const llRightRef    = useRef<SVGGElement | null>(null)   // LunarLander: right-engine puff
+  const llGroundRef   = useRef<SVGPathElement | null>(null) // LunarLander: filled moon ground
+  const llSurfaceRef  = useRef<SVGPathElement | null>(null) // LunarLander: moon surface stroke
+  const llTerrainObs  = useRef<readonly (readonly number[])[] | null>(null) // last moon surface (obs pts)
   // True once a frame has actually arrived this session — lets a finished session linger, but
   // falls back to the idle (centred) cart after a reload that reconciled a finished session.
   const [hasFrame, setHasFrame] = useState(false)
@@ -60,7 +75,15 @@ export default function EnvPreview() {
   const playVisible  = playState !== 'idle'
   // "live" = frames are (or just were) flowing for this env.
   const live         = (visual && runLive) || playState === 'playing' || (playVisible && hasFrame)
-  const clientRender = !!selectedEnvId && CLIENT_RENDER_ENVS.has(selectedEnvId)
+  // Which client-side renderer to use (else a server JPEG on the canvas).
+  const clientKind: 'cartpole' | 'mountaincar' | 'pendulum' | 'acrobot' | 'lunarlander' | null =
+    selectedEnvId === 'cartpole' ? 'cartpole'
+    : selectedEnvId === 'mountaincar' || selectedEnvId === 'mountaincarcontinuous' ? 'mountaincar'
+    : selectedEnvId === 'pendulum' ? 'pendulum'
+    : selectedEnvId === 'acrobot' ? 'acrobot'
+    : selectedEnvId === 'lunarlander' ? 'lunarlander'
+    : null
+  const clientRender = clientKind !== null
 
   // Sync persisted toggle/speed to the backend whenever it comes online (UI is source of truth).
   useEffect(() => {
@@ -91,10 +114,68 @@ export default function EnvPreview() {
       }
       if (pg) pg.setAttribute('transform', `rotate(${((theta * 180) / Math.PI).toFixed(2)} 300 190)`)
     }
+    const drawCar = (pos: number) => {  // MountainCar: slide + tilt the car along the hill
+      carRef.current?.setAttribute('transform', mcCarTransform(pos))
+    }
+    const drawPendulum = (theta: number) => {  // rotate the rod around the pivot (θ = 0 is upright)
+      pendRodRef.current?.setAttribute('transform', `rotate(${((theta * 180) / Math.PI).toFixed(1)} ${PEND_CX} ${PEND_CY})`)
+    }
+    const drawAcrobot = (th1: number, th2: number) => {  // link1 around the pivot, link2 around the joint
+      acroLink1Ref.current?.setAttribute('transform', `rotate(${((th1 * 180) / Math.PI).toFixed(1)} ${ACRO_CX} ${ACRO_CY})`)
+      acroLink2Ref.current?.setAttribute('transform', `rotate(${((th2 * 180) / Math.PI).toFixed(1)} ${ACRO_CX} ${ACRO_JOINT_Y})`)
+    }
+    const applyTerrain = (pts: readonly (readonly number[])[]) => {  // store + redraw the moon
+      llTerrainObs.current = pts
+      const { ground, surface } = llTerrainPaths(pts)
+      llGroundRef.current?.setAttribute('d', ground)
+      llSurfaceRef.current?.setAttribute('d', surface)
+    }
+    const terrainScreenYAt = (screenX: number): number | null => {  // surface height under the lander
+      const pts = llTerrainObs.current
+      if (!pts || pts.length < 2) return null
+      for (let i = 0; i < pts.length - 1; i++) {
+        const x0 = llX(pts[i][0]), x1 = llX(pts[i + 1][0])
+        if (screenX >= x0 && screenX <= x1) {
+          const f = (screenX - x0) / (x1 - x0)
+          return llY(pts[i][1]) + f * (llY(pts[i + 1][1]) - llY(pts[i][1]))
+        }
+      }
+      return llY(pts[screenX < llX(pts[0][0]) ? 0 : pts.length - 1][1])
+    }
+    // Local extremities of the lander art — the two outer leg tips + the hull's lower corners — used
+    // to keep its lowest point resting ON the surface (so legs never sink into the ground, even on a
+    // tilted crash or a sloped touchdown). obs-y alone is relative to the pad, so on a hard/tilted
+    // contact the body can penetrate before the episode ends; this clamp fixes that visually.
+    const LANDER_FOOT_PTS: ReadonlyArray<readonly [number, number]> = [[-20, 21], [20, 21], [-10, 12], [10, 12]]
+    const drawLunarLander = (s: number[], action: number | null | undefined, terrain: number[][] | null | undefined) => {
+      if (terrain && terrain.length) applyTerrain(terrain)
+      // s = obs [x, y, vx, vy, angle, …]. Plume per firing engine: exhaust shoots opposite to the push
+      // — action 1 (left engine) pushes left → plume on the RIGHT; action 3 → LEFT; 2 = main = down.
+      const angleDeg = -(s[4] * 180) / Math.PI
+      const lx = llX(s[0])
+      let ly = llY(s[1])
+      const ty = terrainScreenYAt(lx)
+      if (ty != null) {  // raise the lander so its lowest (rotated) extremity sits on the surface
+        const rad = (angleDeg * Math.PI) / 180, sin = Math.sin(rad), cos = Math.cos(rad)
+        let lowest = -Infinity
+        for (const [px, py] of LANDER_FOOT_PTS) { const sy = px * sin + py * cos; if (sy > lowest) lowest = sy }
+        const overlap = ly + lowest - ty
+        if (overlap > 0) ly -= overlap
+      }
+      landerRef.current?.setAttribute('transform', `translate(${lx.toFixed(1)} ${ly.toFixed(1)}) rotate(${angleDeg.toFixed(1)})`)
+      llMainRef.current?.setAttribute('opacity', action === 2 ? '1' : '0')
+      llLeftRef.current?.setAttribute('opacity', action === 3 ? '1' : '0')
+      llRightRef.current?.setAttribute('opacity', action === 1 ? '1' : '0')
+    }
     const onFrame = (frame: PreviewFrame | PlayFrame) => {
       if (frame.state && frame.state.length >= 2) {
         setHasFrame(true)
-        drawCart(frame.state[0], frame.state[1])
+        const s = frame.state
+        if (clientKind === 'mountaincar') drawCar(s[0])             // [position, velocity]
+        else if (clientKind === 'pendulum') drawPendulum(s[0])      // [theta, theta_dot]
+        else if (clientKind === 'acrobot') drawAcrobot(s[0], s[1])  // [theta1, theta2]
+        else if (clientKind === 'lunarlander') drawLunarLander(s, frame.action, frame.terrain)  // obs + action + moon
+        else drawCart(s[0], s[1])                                   // [x, theta]
       } else if (frame.image) {
         setHasFrame(true)
         img.src = `data:image/jpeg;base64,${frame.image}`
@@ -103,15 +184,29 @@ export default function EnvPreview() {
     setFrameHandler(onFrame)
     setPlayFrameHandler(onFrame)
     return () => { setFrameHandler(null); setPlayFrameHandler(null) }
-  }, [])
+  }, [clientKind])
 
-  // When nothing is live, re-centre the cart (drop the last streamed transform).
+  // When nothing is live, reset to a resting pose (drop the last streamed transform): the cart
+  // re-centres, the MountainCar car parks in the valley (its typical start) — also on env switch.
   useEffect(() => {
     if (!live) {
       cartGroupRef.current?.removeAttribute('transform')
       poleGroupRef.current?.removeAttribute('transform')
+      carRef.current?.setAttribute('transform', mcCarTransform(MC_START))
+      pendRodRef.current?.setAttribute('transform', `rotate(180 ${PEND_CX} ${PEND_CY})`)  // hang down
+      acroLink1Ref.current?.removeAttribute('transform')  // rest pose = links hang straight down
+      acroLink2Ref.current?.removeAttribute('transform')
+      // LunarLander: park near the top centre, engines off, moon flat (real terrain arrives with play)
+      landerRef.current?.setAttribute('transform', llLanderTransform(LL_START.x, LL_START.y, 0))
+      llMainRef.current?.setAttribute('opacity', '0')
+      llLeftRef.current?.setAttribute('opacity', '0')
+      llRightRef.current?.setAttribute('opacity', '0')
+      llTerrainObs.current = LL_DEFAULT_TERRAIN
+      const { ground, surface } = llTerrainPaths(LL_DEFAULT_TERRAIN)
+      llGroundRef.current?.setAttribute('d', ground)
+      llSurfaceRef.current?.setAttribute('d', surface)
     }
-  }, [live])
+  }, [live, clientKind])
 
   // Keyboard control for human play, driven by the per-env keymap (content/playKeymaps.ts).
   // Latency-tolerant — the backend holds the last action between WS frames. We track every held
@@ -260,19 +355,21 @@ export default function EnvPreview() {
       }}>
         {clientRender ? (
           <div style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16 }}>
-            <svg viewBox="0 0 600 260" preserveAspectRatio="xMidYMid meet"
-              style={{ width: '100%', maxWidth: 820, maxHeight: '100%' }} role="img" aria-label={envName}>
-              <line x1="30" y1="210" x2="570" y2="210" stroke="var(--border-strong)" strokeWidth="2.5" />
-              <g ref={cartGroupRef}>
-                <g ref={poleGroupRef}>
-                  <line x1="300" y1="190" x2="300" y2="70" stroke="var(--accent)" strokeWidth="7" strokeLinecap="round" />
-                  <circle cx="300" cy="66" r="9" fill="var(--accent)" />
-                </g>
-                <rect x="268" y="184" width="64" height="26" rx="5" fill="var(--surface-3)" stroke="var(--border-strong)" strokeWidth="2.5" />
-                <circle cx="282" cy="214" r="6" fill="var(--text-faint)" />
-                <circle cx="318" cy="214" r="6" fill="var(--text-faint)" />
-              </g>
-            </svg>
+            {clientKind === 'cartpole' ? (
+              <CartPoleStage envName={envName} cartRef={cartGroupRef} poleRef={poleGroupRef} />
+            ) : clientKind === 'mountaincar' ? (
+              <MountainCarStage envName={envName} carRef={carRef} />
+            ) : clientKind === 'pendulum' ? (
+              <PendulumStage envName={envName} rodRef={pendRodRef} />
+            ) : clientKind === 'acrobot' ? (
+              <AcrobotStage envName={envName} link1Ref={acroLink1Ref} link2Ref={acroLink2Ref} />
+            ) : (
+              <LunarLanderStage
+                envName={envName} landerRef={landerRef}
+                mainPlumeRef={llMainRef} leftPlumeRef={llLeftRef} rightPlumeRef={llRightRef}
+                groundRef={llGroundRef} surfaceRef={llSurfaceRef}
+              />
+            )}
             {!live && (
               <span style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-sm)', textAlign: 'center', maxWidth: 360 }}>
                 {hint}

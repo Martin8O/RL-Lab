@@ -32,10 +32,11 @@ MetricsSink = Callable[[TrainingMetrics], None]
 ProgressSink = Callable[[TrainingProgress], None]
 SnapshotSink = Callable[[CheckpointArtifact], None]
 # Hands the decoupled preview a self-contained predict fn (obs → action) over a weight snapshot.
-PredictPublisher = Callable[[Callable[[object], int]], None]
+# The action is an int (discrete) or a numpy float vector (continuous box) — Any.
+PredictPublisher = Callable[[Callable[[object], Any]], None]
 
 
-def _build_numpy_predict(model: BaseAlgorithm) -> Callable[[object], int]:
+def _build_numpy_predict(model: BaseAlgorithm) -> Callable[[object], Any]:
     """A standalone **numpy** forward over a snapshot of the policy's action path.
 
     The preview must never call ``model.predict`` on the *live* model: doing so concurrently with
@@ -45,8 +46,9 @@ def _build_numpy_predict(model: BaseAlgorithm) -> Callable[[object], int]:
     observer (mirrors how the neuroevolution trainer already publishes its preview policy).
 
     Built at a rollout boundary on the trainer thread (a quiescent point), so the weight copy
-    never races the optimizer. Handles any ``net_arch`` depth + tanh/relu; discrete actions only
-    (argmax of the action logits == SB3's ``deterministic=True``).
+    never races the optimizer. Handles any ``net_arch`` depth + tanh/relu. For a **discrete** env
+    the head is action logits → arg-max (== SB3's ``deterministic=True``); for a **continuous**
+    (box) env the head is the Gaussian mean → clipped to the action bounds (what the env does).
     """
     policy: Any = model.policy  # torch dynamic attrs (mlp_extractor/action_net) aren't typed
 
@@ -57,13 +59,19 @@ def _build_numpy_predict(model: BaseAlgorithm) -> Callable[[object], int]:
     layers = [(arr(m.weight), arr(m.bias)) for m in pi_net if isinstance(m, nn.Linear)]
     act_w, act_b = arr(policy.action_net.weight), arr(policy.action_net.bias)
     relu = any(isinstance(m, nn.ReLU) for m in pi_net)
+    is_box = getattr(model.action_space, "n", None) is None
+    low = np.asarray(getattr(model.action_space, "low", 0.0), dtype=np.float64)
+    high = np.asarray(getattr(model.action_space, "high", 0.0), dtype=np.float64)
 
-    def predict(obs: object) -> int:
+    def predict(obs: object) -> Any:
         x = np.asarray(obs, dtype=np.float64)
         for w, b in layers:
             x = x @ w.T + b
             x = np.maximum(0.0, x) if relu else np.tanh(x)
-        return int(np.argmax(x @ act_w.T + act_b))
+        out = x @ act_w.T + act_b
+        if is_box:  # continuous: the mean action, clipped into [low, high]
+            return np.clip(out, low, high).astype(np.float32)
+        return int(np.argmax(out))
 
     return predict
 

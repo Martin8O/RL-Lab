@@ -121,6 +121,66 @@ export const PLAY_GUIDES: Record<string, PlayGuide> = {
         + 'AI“ a uvidíte ten rytmus.',
     },
   },
+
+  pendulum: {
+    goal: {
+      en: 'Swing the pendulum up and balance it pointing straight up, as still as you can. This is the '
+        + 'first continuous-control game: instead of buttons, the torque is a dial. Every step costs a '
+        + 'little — more when the pendulum is far from upright, spinning fast, or you push hard — so the '
+        + 'score is always negative and you want it as close to 0 as possible (a good run reaches around '
+        + '−150). The episode always runs 200 steps; there is no crash, only the running cost.',
+      cz: 'Vyhoupněte kyvadlo nahoru a udržte ho co nejklidněji ve svislé poloze špičkou vzhůru. Tohle je '
+        + 'první hra se spojitým řízením: místo tlačítek je točivý moment plynulý „knoflík“. Každý krok '
+        + 'něco stojí — víc, když je kyvadlo daleko od svislé polohy, rychle se točí nebo silně tlačíte — '
+        + 'takže skóre je vždy záporné a chcete ho mít co nejblíž 0 (dobrý běh se dostane kolem −150). '
+        + 'Epizoda trvá vždy 200 kroků; není žádná havárie, jen průběžná penalizace.',
+    },
+    controls: [
+      { keys: '← / A', action: { en: 'Full torque counter-clockwise', cz: 'Plný moment proti směru hodin' } },
+      { keys: '→ / D', action: { en: 'Full torque clockwise', cz: 'Plný moment po směru hodin' } },
+      { keys: '(release)', action: { en: 'No torque — let it swing', cz: 'Bez momentu — nech houpat' } },
+    ],
+    tips: {
+      en: 'From hanging down you usually cannot push straight up — pump left and right in time with the '
+        + 'swing to build height (like Acrobot), then, as it nears the top, ease off and make small '
+        + 'corrections to hold it upright. Holding full torque wastes points once you are balanced. '
+        + 'Switch to "Watch AI" to see a smooth swing-up and hold.',
+      cz: 'Ze svěšené polohy se obvykle přímo nahoru nevytlačíte — pumpujte doleva a doprava do rytmu '
+        + 'houpání, ať naberete výšku (jako u Acrobotu), a jak se blíží k vrcholu, uberte a malými '
+        + 'korekcemi ho udržte svisle. Držet plný moment, když už balancujete, jen plýtvá body. '
+        + 'Přepněte na „Sledovat AI“ a uvidíte plynulé vyhoupnutí a udržení.',
+    },
+  },
+
+  mountaincarcontinuous: {
+    goal: {
+      en: 'Reach the flag on the right-hand hill — same hill as MountainCar, but the throttle is now '
+        + 'continuous (you dial how hard to push, not just left/right/off). Reaching the flag pays a big '
+        + '+100, while using force costs a tiny amount, so doing nothing scores 0 and a successful run '
+        + 'scores around +90 (the "solved" mark). The episode ends at the flag or after 999 steps.',
+      cz: 'Dojeďte k vlajce na pravém kopci — stejný kopec jako u MountainCar, ale plyn je teď spojitý '
+        + '(nastavujete, jak silně tlačit, ne jen doleva/doprava/nic). Dosažení vlajky vyplatí velkých '
+        + '+100, zatímco použití síly stojí drobnost, takže nicnedělání dá 0 a úspěšný běh kolem +90 '
+        + '(hranice „vyřešeno“). Epizoda končí u vlajky nebo po 999 krocích.',
+    },
+    controls: [
+      { keys: '← / A', action: { en: 'Full throttle left', cz: 'Plný plyn doleva' } },
+      { keys: '→ / D', action: { en: 'Full throttle right', cz: 'Plný plyn doprava' } },
+      { keys: '(release)', action: { en: 'No throttle — coast', cz: 'Bez plynu — setrvačnost' } },
+    ],
+    tips: {
+      en: 'The engine is too weak to climb straight up, so use the same trick as MountainCar: drive left '
+        + 'up the back slope, then throttle in the direction you are already moving to swing higher each '
+        + 'pass until you crest the right hill. Because force costs points, do not pin the throttle '
+        + 'pointlessly. Switch to "Watch AI" — or try Neuroevolution, whose population search is good at '
+        + 'finding the flag.',
+      cz: 'Motor je příliš slabý na přímý výjezd, takže použijte stejný trik jako u MountainCar: vyjeďte '
+        + 'doleva na zadní svah a pak přidávejte plyn ve směru, kterým už jedete, ať se každým průjezdem '
+        + 'rozhoupete výš, dokud nepřejedete pravý kopec. Protože síla stojí body, nedržte plyn zbytečně '
+        + 'na doraz. Přepněte na „Sledovat AI“ — nebo zkuste Neuroevoluci, jejíž populační hledání vlajku '
+        + 'nachází dobře.',
+    },
+  },
 }
 
 export const DEFAULT_PLAY_GUIDE: PlayGuide = PLAY_GUIDES.cartpole

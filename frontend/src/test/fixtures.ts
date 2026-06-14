@@ -35,6 +35,8 @@ export const cartpoleEnv: EnvSpec = {
       generations:     num({ type: 'int', default: 30, recommended: 30, min: 5, max: 200, step: 5 }),
     },
   },
+  default_total_timesteps: 50_000,
+  play_step_scale: 1,
   human_playable: true,
   competitive: false,
   difficulty: 'beginner',

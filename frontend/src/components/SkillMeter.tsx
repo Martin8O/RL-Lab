@@ -1,7 +1,7 @@
 import type { CSSProperties } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAppStore } from '../store/useAppStore'
-import { currentBand, scaleFromEnvSkill, scaleFromEnvSpec, skillScaleFor } from '../content/skill'
+import { currentBand, scaleForPlay, scaleFromEnvSkill, scaleFromEnvSpec, skillScaleFor } from '../content/skill'
 
 // Fixed low→high skill gradient (red = beginner, green = superhuman). Theme-agnostic.
 const GRADIENT =
@@ -76,10 +76,14 @@ export default function SkillMeter({ slot, overlay = false }: {
   // only when they're for the *currently selected* env — a stale fetch from a previous env must
   // never scale this one. Otherwise derive the scale from the selected env's own spec (so e.g.
   // CartPole's 0–500 can't leak onto LunarLander), and only then the local table.
-  const scale =
+  const baseScale =
     envSkill && envSkill.env_id === envId
       ? scaleFromEnvSkill(envSkill)
       : scaleFromEnvSpec(envs.find((e) => e.id === envId)) ?? skillScaleFor(envId)
+  // While playing, widen the floor for envs whose play episode runs longer than training
+  // (play_step_scale) so the meter span matches the longer episode (mirrors the backend rating).
+  const playStepScale = envs.find((e) => e.id === envId)?.play_step_scale ?? 1
+  const scale = playVisible ? scaleForPlay(baseScale, playStepScale) : baseScale
 
   const hasScore = score !== null
   const value = score ?? 0

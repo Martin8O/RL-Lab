@@ -11,7 +11,13 @@
 export interface KeyBinding {
   /** KeyboardEvent.key values that trigger this action (e.g. ['ArrowLeft', 'a', 'A']). */
   keys: string[]
-  /** The discrete action id to send for the env (e.g. CartPole 0=left, LunarLander 2=main engine). */
+  /**
+   * The value to send for the env. For a *discrete* env this is the action id (CartPole 0=left,
+   * LunarLander 2=main engine). For a *continuous* (box) env it is the analog command — a real
+   * number the backend wraps into the env's action vector (Pendulum ±2 = full torque each way,
+   * MountainCarContinuous ±1 = full throttle each way). A keyboard can only do "full one way /
+   * full the other / nothing", which is plenty to play these by hand.
+   */
   action: number
 }
 
@@ -61,6 +67,24 @@ export const PLAY_KEYMAPS: Record<string, PlayKeymap> = {
       { keys: ['ArrowRight', 'd', 'D'], action: 2 },
     ],
     idleAction: 1,
+  },
+  // Pendulum (continuous): torque ∈ [-2, 2]. ← / → apply full torque each way; releasing all
+  // keys applies zero torque (idle = 0) so the pendulum coasts. Bang-bang keyboard control.
+  pendulum: {
+    bindings: [
+      { keys: ['ArrowLeft', 'a', 'A'], action: -2 },
+      { keys: ['ArrowRight', 'd', 'D'], action: 2 },
+    ],
+    idleAction: 0,
+  },
+  // MountainCarContinuous (continuous): force ∈ [-1, 1]. ← / → apply full throttle each way;
+  // releasing all keys cuts the throttle (idle = 0). Bang-bang keyboard control.
+  mountaincarcontinuous: {
+    bindings: [
+      { keys: ['ArrowLeft', 'a', 'A'], action: -1 },
+      { keys: ['ArrowRight', 'd', 'D'], action: 1 },
+    ],
+    idleAction: 0,
   },
 }
 

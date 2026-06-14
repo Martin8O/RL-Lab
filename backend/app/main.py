@@ -99,8 +99,14 @@ def _parse_json(data: str) -> object | None:
 
 
 def _route_action(message: dict) -> None:
-    """Forward a human ``{type:"action"}`` frame to the play session (ignoring malformed ones)."""
-    try:
-        play_session.submit_action(int(message["action"]))
-    except (KeyError, TypeError, ValueError):
+    """Forward a human ``{type:"action"}`` frame to the play session (ignoring malformed ones).
+
+    The action is passed through as received — an int/float for a discrete/continuous scalar
+    action, or a list of floats for a continuous vector — and the play session interprets it
+    against the live env's action space (no int() cast, which would break continuous actions).
+    """
+    action = message.get("action")
+    if isinstance(action, (int, float, list)):
+        play_session.submit_action(action)
+    else:
         logger.debug("Ignoring malformed action frame: %r", message)

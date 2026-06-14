@@ -41,6 +41,11 @@ class EnvSpec(BaseModel):
     # need far more steps than CartPole, so this is per-env data; the sidebar builds its step
     # dropdown as a ladder around this value (×0.2 … ×4) and the store seeds it on env switch.
     default_total_timesteps: int
+    # PLAY sessions (human + AI) multiply the env's max_episode_steps by this so a person has time
+    # to actually play short envs; training keeps the standard length. The skill meter's 0% floor
+    # (min_score) is scaled by the same factor for play, because a step-penalty env's failure floor
+    # (≈ −1 × max_steps) grows with the episode length while a *success* score does not. 1 = no change.
+    play_step_scale: int = 1
     human_playable: bool
     competitive: bool
     difficulty: Literal["beginner", "intermediate", "advanced"]
@@ -196,6 +201,7 @@ register(
         default_total_timesteps=500_000,  # much harder than CartPole — needs a far larger budget
         human_playable=True,
         competitive=False,
+        play_step_scale=3,  # Box2D landing takes a while by hand — give a human ~3× the episode length
         difficulty="intermediate",
         hw_requirement="cpu",
     )
@@ -233,6 +239,7 @@ register(
         solved_score=-110.0,  # MountainCar-v0 reward_threshold; reward is -1/step (max 200 steps)
         min_score=-200.0,  # 0% reference: never reaching the flag = -1 × 200 steps (worst case)
         default_total_timesteps=200_000,  # sparse reward — needs lots of practice + exploration
+        play_step_scale=3,  # 200 steps is over in seconds by hand — give a human 3× longer to play
         human_playable=True,
         competitive=False,
         difficulty="intermediate",
@@ -262,9 +269,99 @@ register(
         solved_score=-100.0,  # Acrobot-v1 reward_threshold; reward is -1/step (max 500 steps)
         min_score=-500.0,  # 0% reference: never swinging up = -1 × 500 steps (worst case)
         default_total_timesteps=200_000,  # PPO reaches the goal within a few hundred thousand steps
+        play_step_scale=3,  # 500 steps is brief by hand — give a human 3× longer to swing it up
         human_playable=True,
         competitive=False,
         difficulty="intermediate",
+        hw_requirement="cpu",
+    )
+)
+
+
+# ---------------------------------------------------------------------------
+# Classic Control family — the continuous-action members (G1b). Unlike the
+# discrete envs above, these have a `box` (continuous) action space, which is a
+# real engine seam rather than a data row: the trained policy outputs a real
+# number (a torque / a throttle) instead of picking one of N buttons, so the
+# play session, the AI-policy loader, the preview forward and the neuroevolution
+# genome all had to learn to emit + step a continuous action. PPO's MlpPolicy
+# already switches to a Gaussian action head for a box space automatically; the
+# numpy forwards (preview + neuroevolution) tanh-scale their output into
+# [low, high]. Still vector-obs + CPU, so they reuse the standard hyperparams.
+# ---------------------------------------------------------------------------
+
+register(
+    EnvSpec(
+        id="pendulum",
+        gym_id="Pendulum-v1",
+        display_name=Bilingual(en="Pendulum-v1", cz="Pendulum-v1"),
+        description=Bilingual(
+            en="Swing a frictionless pendulum upright and hold it there, using a continuous "
+            "torque you dial anywhere from full one way to full the other. The first "
+            "continuous-control task — there are no buttons, the agent chooses a real number "
+            "each step (a three-number state, one continuous action).",
+            cz="Vyhoupněte bezfrikční kyvadlo do svislé polohy a udržte ho tam pomocí spojitého "
+            "točivého momentu, který plynule nastavíte od plného v jednom směru po plný v "
+            "druhém. První úloha se spojitým řízením — nejsou žádná tlačítka, agent v každém "
+            "kroku volí reálné číslo (stav o třech číslech, jedna spojitá akce).",
+        ),
+        family="classic_control",
+        obs_type="vector",
+        action_space="box",
+        supported_algos=["ppo", "neuroevolution"],
+        hyperparams=_standard_hyperparams(),
+        # Pendulum-v1 has NO official gym reward_threshold (verified: gym.spec(...).reward_threshold
+        # is None). Reward is a per-step cost (angle² + 0.1·speed² + 0.001·torque²), so the return is
+        # always negative and the best achievable is near 0. -150 is the widely-used "near-optimal /
+        # solved" return for a 200-step episode (a strong PPO/SAC agent lands roughly -150…-250).
+        solved_score=-150.0,
+        # 0% reference: a flailing/do-nothing agent scores around -1200…-1400 (measured), worst runs
+        # reach ~-1700; -1600 is a representative floor so the meter fills through the deep negatives.
+        min_score=-1600.0,
+        default_total_timesteps=200_000,  # PPO learns a good swing-up-and-hold within a few 100k steps
+        play_step_scale=3,  # 200 steps is over in seconds by hand — give a human 3× longer to play
+        human_playable=True,
+        competitive=False,
+        difficulty="intermediate",
+        hw_requirement="cpu",
+    )
+)
+
+
+register(
+    EnvSpec(
+        id="mountaincarcontinuous",
+        gym_id="MountainCarContinuous-v0",
+        display_name=Bilingual(
+            en="MountainCarContinuous-v0", cz="MountainCarContinuous-v0"
+        ),
+        description=Bilingual(
+            en="The mountain-car hill again, but the throttle is now continuous — the agent dials "
+            "how hard and which way to push instead of three buttons. Reaching the flag pays a big "
+            "+100 bonus and using force costs a little, so the reward is sparse: the classic "
+            "exploration puzzle in continuous form (a two-number state, one continuous action).",
+            cz="Znovu kopec s autíčkem, ale plyn je teď spojitý — agent nastavuje, jak silně a "
+            "kterým směrem tlačit, místo tří tlačítek. Dosažení vlajky vyplatí velký bonus +100 a "
+            "použití síly stojí trochu, takže odměna je řídká: klasická úloha na zkoumání ve "
+            "spojité podobě (stav o dvou číslech, jedna spojitá akce).",
+        ),
+        family="classic_control",
+        obs_type="vector",
+        action_space="box",
+        supported_algos=["ppo", "neuroevolution"],
+        hyperparams=_standard_hyperparams(),
+        solved_score=90.0,  # MountainCarContinuous-v0 reward_threshold (reach the flag = +100 bonus)
+        # 0% reference: a do-nothing agent scores 0.0 (no force cost, never solves); the reward only
+        # climbs above ~0 once the flag is reached (+100), so the meter behaves like CartPole's
+        # (fills from 0 up). Wasted-force runs go slightly negative and simply read as 0%.
+        min_score=0.0,
+        # Sparse-reward exploration trap: vanilla PPO often never reaches the flag at this budget and
+        # sits near 0 — neuroevolution's population search tends to discover the goal more reliably.
+        # Documented honestly in content/parameters.ts; the budget is a starting point, not a promise.
+        default_total_timesteps=100_000,
+        human_playable=True,
+        competitive=False,
+        difficulty="advanced",
         hw_requirement="cpu",
     )
 )

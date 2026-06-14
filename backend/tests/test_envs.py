@@ -69,8 +69,46 @@ def test_classic_control_g1a_envs(
     assert env["min_score"] == floor < env["solved_score"]
 
 
+def test_play_step_scale_extends_short_envs_only() -> None:
+    """Short/by-hand-slow envs run longer play episodes (play_step_scale=3); CartPole/MCC keep 1×."""
+    scale = {e["id"]: e["play_step_scale"] for e in client.get("/api/envs").json()}
+    assert scale["mountaincar"] == 3 and scale["acrobot"] == 3 and scale["pendulum"] == 3
+    assert scale["lunarlander"] == 3  # Box2D landing takes a while by hand — give a human 3× the steps
+    assert scale["cartpole"] == 1  # balancing has no fixed goal — already runs to the step cap
+    assert scale["mountaincarcontinuous"] == 1  # already 999 steps — long enough
+
+
 def test_standard_hyperparams_shared_across_vector_envs() -> None:
     """Every vector/discrete env exposes the identical PPO + neuroevolution param surface."""
     ids = ["cartpole", "lunarlander", "mountaincar", "acrobot"]
     surfaces = [client.get(f"/api/envs/{i}").json()["hyperparams"] for i in ids]
     assert all(s == surfaces[0] for s in surfaces[1:])
+
+
+# -- G1b: classic-control continuous-action members (Pendulum + MountainCarContinuous) ------
+
+
+@pytest.mark.parametrize(
+    "env_id,gym_id,solved,floor,difficulty",
+    [
+        ("pendulum", "Pendulum-v1", -150.0, -1600.0, "intermediate"),
+        ("mountaincarcontinuous", "MountainCarContinuous-v0", 90.0, 0.0, "advanced"),
+    ],
+)
+def test_classic_control_g1b_continuous_envs(
+    env_id: str, gym_id: str, solved: float, floor: float, difficulty: str
+) -> None:
+    """The continuous (box) members register as vector/CPU envs with a `box` action space — the
+    int→box seam is in the trainers/play loop, not the registry, so these stay data rows."""
+    env = client.get(f"/api/envs/{env_id}").json()
+    assert env["gym_id"] == gym_id
+    assert env["family"] == "classic_control"
+    assert env["obs_type"] == "vector"
+    assert env["action_space"] == "box"  # the distinguishing trait of G1b
+    assert env["hw_requirement"] == "cpu"
+    assert env["supported_algos"] == ["ppo", "neuroevolution"]
+    assert env["solved_score"] == solved
+    assert env["min_score"] == floor
+    assert env["difficulty"] == difficulty
+    # Same shared PPO + neuroevolution param surface as the discrete envs (only the env differs).
+    assert env["hyperparams"] == client.get("/api/envs/cartpole").json()["hyperparams"]

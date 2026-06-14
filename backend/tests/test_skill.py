@@ -65,6 +65,22 @@ def test_rate_maps_scores_to_bands() -> None:
         assert rating is not None and rating.band == band, score
 
 
+def test_min_scale_widens_the_floor_for_longer_play_episodes() -> None:
+    """A play episode at play_step_scale=3 runs 3× the steps, so its failure floor is ~3× deeper.
+    `min_scale` scales min_score (not solved_score), so a mid run rates higher over the longer
+    episode and the bands span the wider range — used by play_session for these envs."""
+    base = env_skill("mountaincar")
+    scaled = env_skill("mountaincar", min_scale=3.0)
+    assert base is not None and scaled is not None
+    assert base.min_score == -200.0 and scaled.min_score == -600.0  # 3× deeper floor
+    assert scaled.max_score == base.max_score == -110.0             # success score unchanged
+    assert scaled.bands[0].min_score == -600.0
+    # A −400 run is below the standard floor (child, 0%) but mid-range over the longer episode.
+    assert rate("mountaincar", -400.0).band == "child"
+    longer = rate("mountaincar", -400.0, min_scale=3.0)
+    assert longer is not None and longer.band in {"below_average", "average"} and longer.ratio > 0.0
+
+
 def test_rate_ratio_clamped_to_unit_interval() -> None:
     # below 0 → child, ratio floored at 0; above max → superhuman, ratio capped at 1
     low = rate("cartpole", -10.0)

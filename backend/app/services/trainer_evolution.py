@@ -34,7 +34,8 @@ from app.services.checkpoints import CheckpointArtifact
 from app.services.train_control import TrainControl
 
 EvolutionSink = Callable[[EvolutionMetrics], None]
-PredictPublisher = Callable[[Callable[[object], int]], None]
+# The predict fn returns an int (discrete) or a numpy action vector (continuous box) — Any.
+PredictPublisher = Callable[[Callable[[object], Any]], None]
 SnapshotSink = Callable[[CheckpointArtifact], None]
 
 _HIDDEN = 16  # single hidden layer — ample for CartPole, fast to evolve
@@ -44,9 +45,23 @@ _TOP_CHILDREN = 5  # leaderboard size emitted each generation
 
 
 class _Policy:
-    """A flat weight vector viewed as a 2-layer tanh MLP (obs → hidden → action logits)."""
+    """A flat weight vector viewed as a 2-layer tanh MLP (obs → hidden → action head).
 
-    def __init__(self, obs_dim: int, hidden: int, act_dim: int, flat: np.ndarray) -> None:
+    Discrete envs (``act_low``/``act_high`` is ``None``) read the head as action logits and pick
+    the arg-max button. Continuous (box) envs squash the head through ``tanh`` and affine-map it
+    into ``[act_low, act_high]``, so the genome emits a real-valued action vector that is always
+    in range — the continuous-action seam (G1b) for neuroevolution.
+    """
+
+    def __init__(
+        self,
+        obs_dim: int,
+        hidden: int,
+        act_dim: int,
+        flat: np.ndarray,
+        act_low: np.ndarray | None = None,
+        act_high: np.ndarray | None = None,
+    ) -> None:
         s1 = obs_dim * hidden
         s2 = s1 + hidden
         s3 = s2 + hidden * act_dim
@@ -54,10 +69,18 @@ class _Policy:
         self.b1 = flat[s1:s2]
         self.w2 = flat[s2:s3].reshape(hidden, act_dim)
         self.b2 = flat[s3:]
+        self.act_low = None if act_low is None else np.asarray(act_low, dtype=np.float64)
+        self.act_high = None if act_high is None else np.asarray(act_high, dtype=np.float64)
 
-    def act(self, obs: np.ndarray) -> int:
+    def act(self, obs: np.ndarray) -> Any:
         hidden = np.tanh(obs @ self.w1 + self.b1)
-        return int(np.argmax(hidden @ self.w2 + self.b2))
+        out = hidden @ self.w2 + self.b2
+        low, high = self.act_low, self.act_high
+        if low is None or high is None:  # discrete: pick the highest-scoring action
+            return int(np.argmax(out))
+        # continuous: tanh ∈ [-1, 1] → affine into [low, high]; always a valid in-bounds action
+        scaled = low + (np.tanh(out) + 1.0) * 0.5 * (high - low)
+        return scaled.astype(np.float32)
 
 
 def _genome_size(obs_dim: int, hidden: int, act_dim: int) -> int:
@@ -70,10 +93,17 @@ def _child_seed(seed: int, generation: int, rank: int) -> int:
 
 
 def _evaluate(
-    flat: np.ndarray, env: Any, obs_dim: int, act_dim: int, episodes: int, base_seed: int
+    flat: np.ndarray,
+    env: Any,
+    obs_dim: int,
+    act_dim: int,
+    episodes: int,
+    base_seed: int,
+    act_low: np.ndarray | None = None,
+    act_high: np.ndarray | None = None,
 ) -> tuple[float, int]:
     """Play ``episodes`` episodes with this genome; return (total_reward, total_steps)."""
-    policy = _Policy(obs_dim, _HIDDEN, act_dim, flat)
+    policy = _Policy(obs_dim, _HIDDEN, act_dim, flat, act_low=act_low, act_high=act_high)
     total_reward = 0.0
     total_steps = 0
     for ep in range(episodes):
@@ -87,10 +117,10 @@ def _evaluate(
     return total_reward, total_steps
 
 
-def _make_predict(net: _Policy) -> Callable[[object], int]:
+def _make_predict(net: _Policy) -> Callable[[object], Any]:
     """A standalone predict fn over a snapshot genome — handed to the live preview."""
 
-    def predict(obs: object) -> int:
+    def predict(obs: object) -> Any:
         return net.act(np.asarray(obs, dtype=np.float64))
 
     return predict
@@ -141,18 +171,28 @@ def _snapshot(
     total_generations: int,
     best_fitness: float,
     total_steps: int,
+    act_low: np.ndarray | None = None,
+    act_high: np.ndarray | None = None,
 ) -> CheckpointArtifact:
     """Serialize the bred population to an in-memory ``population.npz`` for the store.
 
     The saved ``generation`` is the one that just finished, so resume continues at
     ``generation + 1`` evaluating this already-bred population. ``population[0]`` is the
-    elite (champion) carried over by :func:`_breed`.
+    elite (champion) carried over by :func:`_breed`. For a continuous (box) env the action
+    bounds are stored too, so :func:`app.services.policy._evolution_predict` can rebuild a
+    champion that squashes into range; discrete checkpoints omit them (back-compatible).
     """
     buf = io.BytesIO()
-    np.savez(
-        buf, population=population, obs_dim=obs_dim, act_dim=act_dim,
-        hidden=_HIDDEN, generation=generation,
-    )
+    if act_low is not None and act_high is not None:  # continuous: also store the action bounds
+        np.savez(
+            buf, population=population, obs_dim=obs_dim, act_dim=act_dim,
+            hidden=_HIDDEN, generation=generation, act_low=act_low, act_high=act_high,
+        )
+    else:  # discrete: bounds omitted (back-compatible with pre-G1b checkpoints)
+        np.savez(
+            buf, population=population, obs_dim=obs_dim, act_dim=act_dim,
+            hidden=_HIDDEN, generation=generation,
+        )
     return CheckpointArtifact(
         algo="neuroevolution",
         blob=buf.getvalue(),
@@ -210,7 +250,17 @@ def train_evolution(
     total_steps = 0
     try:
         obs_dim = int(env.observation_space.shape[0])
-        act_dim = int(env.action_space.n)
+        # Discrete envs expose `.n` (one of N buttons); Box (continuous) envs expose `.low`/`.high`
+        # and a `.shape` — the genome then emits `act_dim` real numbers squashed into those bounds.
+        action_space = env.action_space
+        if getattr(action_space, "n", None) is not None:
+            act_dim = int(action_space.n)
+            act_low: np.ndarray | None = None
+            act_high: np.ndarray | None = None
+        else:
+            act_dim = int(action_space.shape[0])
+            act_low = np.asarray(action_space.low, dtype=np.float64)
+            act_high = np.asarray(action_space.high, dtype=np.float64)
         dim = _genome_size(obs_dim, _HIDDEN, act_dim)
 
         if resume_blob is not None:
@@ -236,7 +286,8 @@ def train_evolution(
                     return "stopped"
                 base_seed = _child_seed(config.seed, generation, idx)
                 total_reward, ep_steps = _evaluate(
-                    population[idx], env, obs_dim, act_dim, hp.episodes, base_seed
+                    population[idx], env, obs_dim, act_dim, hp.episodes, base_seed,
+                    act_low=act_low, act_high=act_high,
                 )
                 totals[idx] = total_reward
                 avg_rewards[idx] = total_reward / hp.episodes
@@ -248,7 +299,10 @@ def train_evolution(
 
             # Publish the generation's best genome (a snapshot copy, so the next
             # generation's mutation can't race the preset live preview reads).
-            best_net = _Policy(obs_dim, _HIDDEN, act_dim, population[order[0]].copy())
+            best_net = _Policy(
+                obs_dim, _HIDDEN, act_dim, population[order[0]].copy(),
+                act_low=act_low, act_high=act_high,
+            )
             on_policy(_make_predict(best_net))
 
             children = [
@@ -284,6 +338,7 @@ def train_evolution(
                     _snapshot(
                         population, obs_dim, act_dim, generation,
                         total_generations, best_fitness, total_steps,
+                        act_low=act_low, act_high=act_high,
                     )
                 )
         return "finished"

@@ -5,6 +5,7 @@ import { useRunControls } from '../api/trainingControls'
 import type { Algo } from '../api/types'
 import ParamInfo from './ParamInfo'
 import SaveLoadControls from './SaveLoadControls'
+import EnvSelector from './EnvSelector'
 
 // ── Shared style helpers ─────────────────────────────────────────────────────
 
@@ -206,27 +207,41 @@ function ActivationToggle({ value, label, disabled, onChange }: {
 
 // ── AlgoSwitch ───────────────────────────────────────────────────────────────
 
-function AlgoSwitch({ value, disabled, onChange }: {
+// Algorithm picker — a dropdown (not a 2-button switch) because the catalogue of algorithms will
+// grow (Q-learning, DQN, SAC…). The options are the *selected env's* supported_algos, so a game can
+// opt out of one (e.g. an image env may be PPO-only); the store snaps to a valid algo on env switch.
+function ALGO_LABEL(t: (k: string) => string, id: string): string {
+  switch (id) {
+    case 'ppo':            return t('sidebar.algo_ppo')
+    case 'neuroevolution': return t('sidebar.algo_evo')
+    default:               return id
+  }
+}
+
+function AlgoSwitch({ value, options, disabled, onChange }: {
   value: Algo
+  options: string[]
   disabled?: boolean
   onChange: (a: Algo) => void
 }) {
   const { t } = useTranslation()
   return (
-    <div>
-      <label style={{ ...fieldLabel, marginBottom: 8 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <label style={fieldLabel}>
         {t('sidebar.algorithm')}
         <ParamInfo paramId="algorithm" label={t('sidebar.algorithm')} />
       </label>
-      <Segmented
+      <select
+        aria-label={t('sidebar.algorithm')}
         value={value}
-        disabled={disabled}
-        onChange={onChange}
-        options={[
-          { id: 'ppo', label: t('sidebar.algo_ppo') },
-          { id: 'neuroevolution', label: t('sidebar.algo_evo') },
-        ]}
-      />
+        disabled={disabled || options.length === 0}
+        onChange={(e) => onChange(e.target.value as Algo)}
+        style={{ ...selectStyle, cursor: disabled || options.length === 0 ? 'default' : 'pointer' }}
+      >
+        {options.map((id) => (
+          <option key={id} value={id}>{ALGO_LABEL(t, id)}</option>
+        ))}
+      </select>
     </div>
   )
 }
@@ -273,8 +288,6 @@ export default function Sidebar() {
 
   const envs            = useAppStore((s) => s.envs)
   const selectedEnvId   = useAppStore((s) => s.selectedEnvId)
-  const locale          = useAppStore((s) => s.locale)
-  const setSelectedEnvId = useAppStore((s) => s.setSelectedEnvId)
 
   const algo            = useAppStore((s) => s.algo)
   const setAlgo         = useAppStore((s) => s.setAlgo)
@@ -321,27 +334,14 @@ export default function Sidebar() {
         padding: 'var(--space-4) var(--space-5)', borderBottom: '1px solid var(--border-default)',
         flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 'var(--space-4)',
       }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <label style={fieldLabel}>{t('sidebar.game_selector')}</label>
-          <select
-            aria-label={t('sidebar.game_selector')}
-            value={selectedEnvId ?? ''}
-            onChange={(e) => setSelectedEnvId(e.target.value || null)}
-            disabled={envs.length === 0 || isActive}
-            style={{ ...selectStyle, cursor: envs.length === 0 || isActive ? 'default' : 'pointer' }}
-          >
-            {envs.length === 0
-              ? <option value="">{t('sidebar.loading_envs')}</option>
-              : envs.map((env) => (
-                  <option key={env.id} value={env.id}>
-                    {env.display_name[locale]}
-                  </option>
-                ))
-            }
-          </select>
-        </div>
+        <EnvSelector disabled={isActive} />
 
-        <AlgoSwitch value={algo} disabled={isActive} onChange={setAlgo} />
+        <AlgoSwitch
+          value={algo}
+          options={selectedEnv?.supported_algos ?? ['ppo', 'neuroevolution']}
+          disabled={isActive}
+          onChange={setAlgo}
+        />
       </div>
 
       {/* Scrollable params */}

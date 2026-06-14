@@ -28,7 +28,7 @@ from app.envs.registry import get_env
 from app.schemas.play import PlayConfig, PlayMode, PlayResult, PlayState, PlayStatus
 from app.services import skill
 from app.services.checkpoints import CheckpointStore, checkpoint_store
-from app.services.client_render import cart_state
+from app.services.client_render import client_state, terrain
 from app.services.connection_manager import ConnectionManager, manager
 from app.services.policy import PolicyLoadError, PredictFn, predict_from_checkpoint
 from app.services.preview_streamer import encode_frame
@@ -90,8 +90,18 @@ class PlaySession:
         self._error: str | None = None
 
         self._predict: PredictFn | None = None
-        self._latest_action = 0  # latest human action, held between WS frames
+        # Latest human action, held between WS frames. For a discrete env this is an action index
+        # (int); for a continuous (box) env it is the analog command from the keymap (a float, e.g.
+        # full torque one way) which _choose_action wraps into the env's action vector.
+        self._latest_action: Any = 0
         self._n_actions: int | None = None  # discrete action count, known once the env is made
+        # Continuous (box) action space, captured once the env is made (None ⇒ discrete env).
+        self._box_low: np.ndarray | None = None
+        self._box_high: np.ndarray | None = None
+        self._box_shape: tuple[int, ...] | None = None
+        # How much longer a play episode runs vs training (EnvSpec.play_step_scale) — also widens
+        # the skill floor so the rating span matches the longer episode.
+        self._play_step_scale = 1
         self._stop = False
 
     # -- wiring -----------------------------------------------------------------
@@ -129,9 +139,12 @@ class PlaySession:
             self._predict = predict
             # Hold the env's idle action (no-op) until the human presses a key — otherwise the
             # default 0 means "push left" on MountainCar/Acrobot, shoving the agent before any
-            # input. CartPole has no idle (idle_action None) so 0 is as good as any there.
+            # input. CartPole has no idle (idle_action None) so 0 is as good as any there. For a
+            # continuous env the idle is the analog rest command (0 = no torque/force).
             self._latest_action = config.idle_action if config.idle_action is not None else 0
             self._n_actions = None
+            self._box_low = self._box_high = self._box_shape = None
+            self._play_step_scale = spec.play_step_scale
             self._step = 0
             self._score = 0.0
             self._result = None
@@ -166,15 +179,18 @@ class PlaySession:
         except PolicyLoadError as exc:
             raise InvalidPlayConfigError(str(exc)) from exc
 
-    def submit_action(self, action: int) -> None:
+    def submit_action(self, action: float | list[float]) -> None:
         """Record the latest human action (from a WS ``{type:"action"}`` frame).
 
-        A no-op unless a session is actually playing, so stray input is harmless.
+        Stored raw — an int/float action index for a discrete env, or a float / list of floats
+        (the analog command) for a continuous (box) env; :meth:`_choose_action` interprets it per
+        the env's action space. A no-op unless a session is actually playing, so stray input is
+        harmless.
         """
         with self._lock:
             if self._state != "playing":
                 return
-            self._latest_action = int(action)
+            self._latest_action = action
 
     def set_speed(self, speed: float) -> PlayStatus:
         """Change playback pacing mid-session (the speed selector while a session runs).
@@ -209,7 +225,17 @@ class PlaySession:
         import gymnasium as gym  # lazy: keep gym out of startup
 
         try:
-            env = gym.make(gym_id, render_mode="rgb_array")
+            # Longer play episodes for short envs (play_step_scale): override the env's TimeLimit
+            # so a person has time to play. Only extends truncation — early termination (reaching
+            # the flag / swinging up) still ends the episode normally.
+            base_steps = gym.spec(gym_id).max_episode_steps
+            if self._play_step_scale > 1 and base_steps:
+                env = gym.make(
+                    gym_id, render_mode="rgb_array",
+                    max_episode_steps=base_steps * self._play_step_scale,
+                )
+            else:
+                env = gym.make(gym_id, render_mode="rgb_array")
         except Exception:  # noqa: BLE001 — a bad env must surface as state, not crash
             logger.exception("Play env creation failed for %s", gym_id)
             self._finalize(0.0, 0, completed=False, error="Could not create play environment")
@@ -217,6 +243,7 @@ class PlaySession:
 
         with self._lock:
             self._n_actions = self._discrete_n(env)
+            self._capture_action_space(env)
         render_fps = float(env.metadata.get("render_fps", _DEFAULT_RENDER_FPS))
         base_dt = 1.0 / (render_fps or _DEFAULT_RENDER_FPS)
         send_interval = 1.0 / _SEND_FPS_CAP
@@ -228,12 +255,11 @@ class PlaySession:
         error: str | None = None
         try:
             obs, _ = env.reset(seed=seed)
-            self._emit_frame(env, step, score)  # show the starting state immediately
+            self._emit_frame(env, step, score, obs, None)  # show the starting state immediately
             done = False
             while not done and not self._stopped():
-                obs, reward, terminated, truncated, _ = env.step(
-                    self._choose_action(env, obs)
-                )
+                action = self._choose_action(env, obs)
+                obs, reward, terminated, truncated, _ = env.step(action)
                 score += float(reward)
                 step += 1
                 done = bool(terminated or truncated)
@@ -244,7 +270,7 @@ class PlaySession:
                 now = time.monotonic()
                 if now - last_sent >= send_interval or done:
                     last_sent = now
-                    self._emit_frame(env, step, score)
+                    self._emit_frame(env, step, score, obs, action)
                 time.sleep(base_dt / self._current_speed())
             completed = done
         except Exception:  # noqa: BLE001 — never let a step/render fault crash the thread
@@ -254,20 +280,33 @@ class PlaySession:
             env.close()
         self._finalize(score, step, completed=completed, error=error)
 
-    def _choose_action(self, env: Any, obs: Any) -> int:
+    def _choose_action(self, env: Any, obs: Any) -> Any:
         with self._lock:
             mode = self._mode
             predict = self._predict
             held = self._latest_action
             n = self._n_actions
+            box_low = self._box_low
+            box_high = self._box_high
+            box_shape = self._box_shape
         if mode == "ai" and predict is not None:
             try:
-                return int(np.asarray(predict(obs)).flatten()[0])
+                out = predict(obs)
             except Exception:  # noqa: BLE001 — a flaky predict falls back to a random action
                 logger.debug("AI predict failed; using random action", exc_info=True)
-                return int(env.action_space.sample())
-        if n is not None:  # human: keep the held action inside the valid discrete range
-            return max(0, min(n - 1, held))
+                return env.action_space.sample()
+            if box_low is not None:  # continuous: a clipped action vector in [low, high]
+                return np.clip(
+                    np.asarray(out, dtype=np.float32).reshape(box_shape), box_low, box_high
+                )
+            return int(np.asarray(out).flatten()[0])
+        if box_low is not None:  # human, continuous: wrap the analog command into the action vector
+            arr = np.asarray(held, dtype=np.float32).reshape(-1)
+            if arr.size == 1 and box_shape is not None:  # scalar command → fill the action shape
+                arr = np.full(box_shape, arr[0], dtype=np.float32)
+            return np.clip(arr.reshape(box_shape), box_low, box_high)
+        if n is not None:  # human, discrete: keep the held action inside the valid range
+            return max(0, min(n - 1, int(held)))
         return held
 
     def _finalize(
@@ -278,6 +317,7 @@ class PlaySession:
             env_id = self._env_id
             mode = self._mode
             stopped = self._stop
+            min_scale = float(self._play_step_scale)
         if error is not None:
             with self._lock:
                 self._state = "error"
@@ -287,7 +327,7 @@ class PlaySession:
         if stopped:
             # stop() already set + broadcast the "stopped" state; nothing to rate.
             return
-        rating = skill.rate(env_id, score) if env_id is not None else None
+        rating = skill.rate(env_id, score, min_scale) if env_id is not None else None
         result = (
             PlayResult(
                 env_id=env_id or "",
@@ -333,11 +373,30 @@ class PlaySession:
         n = getattr(env.action_space, "n", None)
         return int(n) if n is not None else None
 
-    def _emit_frame(self, env: Any, step: int, score: float) -> None:
-        # CartPole is drawn client-side from raw state — skip the rgb render + JPEG entirely.
-        state = cart_state(env)
+    def _capture_action_space(self, env: Any) -> None:
+        """Record the env's action bounds if it is continuous (box); leave them None if discrete.
+
+        Caller holds the lock. A Box space has ``low``/``high``/``shape`` and no ``n``; a Discrete
+        one has ``n`` (already captured into ``_n_actions``), so ``_box_low`` stays None there.
+        """
+        space = env.action_space
+        if getattr(space, "n", None) is not None:
+            return
+        self._box_low = np.asarray(space.low, dtype=np.float32)
+        self._box_high = np.asarray(space.high, dtype=np.float32)
+        self._box_shape = tuple(int(d) for d in space.shape)
+
+    def _emit_frame(self, env: Any, step: int, score: float, obs: Any, action: Any) -> None:
+        # Client-rendered envs draw from raw state — skip rgb render + JPEG. ``action`` (the discrete
+        # action just applied, or None) lets the client draw the firing thruster (LunarLander plumes).
+        act = int(action) if isinstance(action, (int, np.integer)) else None
+        state = client_state(env, obs)
         if state is not None:
-            self._broadcast({"type": "play_frame", "step": step, "score": score, "state": state})
+            frame = {"type": "play_frame", "step": step, "score": score, "state": state, "action": act}
+            scene = terrain(env)  # LunarLander streams its real moon surface; None elsewhere
+            if scene is not None:
+                frame["terrain"] = scene
+            self._broadcast(frame)
             return
         try:
             rgb = np.asarray(env.render(), dtype=np.uint8)

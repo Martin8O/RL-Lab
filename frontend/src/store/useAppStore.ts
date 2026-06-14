@@ -217,8 +217,19 @@ export const useAppStore = create<AppState>()(
       // values (CartPole and LunarLander want very different settings). The env selector is disabled
       // during a run, so this never fires mid-training.
       setSelectedEnvId:  (selectedEnvId)  => set((s) => {
-        const defaults = envDefaults(s.envs.find((e) => e.id === selectedEnvId), s)
-        return defaults ? { selectedEnvId, ...defaults } : { selectedEnvId }
+        const spec = s.envs.find((e) => e.id === selectedEnvId)
+        const defaults = envDefaults(spec, s)
+        // Keep the algorithm valid for the new game: each env lists its supported_algos (an image
+        // env may be PPO-only), so if the current algo isn't supported, snap to the first allowed one
+        // (and re-point the chart tab, mirroring setAlgo).
+        const algoPatch =
+          spec && spec.supported_algos.length > 0 && !spec.supported_algos.includes(s.algo)
+            ? (() => {
+                const algo = spec.supported_algos[0] as Algo
+                return { algo, activeTab: (algo === 'neuroevolution' ? 'fitness' : 'reward') as ChartTab }
+              })()
+            : {}
+        return { selectedEnvId, ...(defaults ?? {}), ...algoPatch }
       }),
       // Switching algorithm also jumps to the chart tab that algorithm feeds, so the chart
       // never sits empty after a switch (PPO → Reward, neuroevolution → Fitness).

@@ -82,7 +82,10 @@ export default function PlayControls() {
         env_id: selectedEnvId ?? 'cartpole',
         mode,
         checkpoint_id: mode === 'ai' ? playCheckpointId : null,
-        seed,
+        // Human play: a fresh random seed each game, so envs with a randomized scene (LunarLander's
+        // moon terrain) vary like the training preview does — a fixed seed made every game identical.
+        // AI play keeps the configured seed so a checkpoint demo stays reproducible.
+        seed: mode === 'human' ? null : seed,
         speed: playSpeed,
         // Hold the env's "do nothing" until a key is pressed (so MountainCar/Acrobot don't get
         // shoved by the default action 0). null for CartPole, which has no idle.

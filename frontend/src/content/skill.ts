@@ -70,6 +70,18 @@ export function scaleFromEnvSpec(env: EnvSpec | undefined): SkillScale | null {
   return { min, max, bands: BAND_FRACTIONS.map((b) => ({ key: b.key, min: min + b.frac * span })) }
 }
 
+/** Widen a scale's 0% floor for longer **play** episodes (EnvSpec.play_step_scale). A
+ *  step-penalty env played at 3× the steps has a ~3× deeper failure floor, while a *success*
+ *  score is unchanged — so multiply min by the factor and recompute the bands over the new range
+ *  (must mirror the backend's `env_skill(min_scale=...)`). Only meaningful for min < 0; a no-op at
+ *  factor 1. */
+export function scaleForPlay(scale: SkillScale, factor: number): SkillScale {
+  if (factor === 1 || scale.min >= 0) return scale
+  const min = scale.min * factor
+  const span = scale.max - min
+  return { min, max: scale.max, bands: BAND_FRACTIONS.map((b) => ({ key: b.key, min: min + b.frac * span })) }
+}
+
 /** Convert the backend's per-env thresholds into the local SkillScale shape (the meter's
  *  bands + the rating now share one source: the env's solved_score). */
 export function scaleFromEnvSkill(envSkill: EnvSkill): SkillScale {

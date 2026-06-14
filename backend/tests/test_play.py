@@ -126,6 +126,38 @@ def test_human_action_clamped_to_action_space() -> None:
     assert sess._choose_action(fake_env, None) == 0  # clamped to 0
 
 
+def test_continuous_box_action_handling() -> None:
+    """G1b: for a continuous (box) env the human's analog command is wrapped + clipped into the
+    action vector, and an AI predict's vector passes through clipped — not int-cast to 0/1."""
+    import numpy as np
+
+    sess = PlaySession(manager)
+    fake_box = types.SimpleNamespace(
+        action_space=types.SimpleNamespace(
+            low=np.array([-2.0], dtype=np.float32),
+            high=np.array([2.0], dtype=np.float32),
+            shape=(1,),
+            sample=lambda: np.array([0.0], dtype=np.float32),
+        )
+    )
+    sess._capture_action_space(fake_box)
+    assert sess._box_low is not None and sess._box_shape == (1,)
+
+    # human: a full-deflection analog command becomes the action vector; out-of-range is clipped.
+    sess._mode = "human"
+    sess._latest_action = 2.0
+    assert np.allclose(sess._choose_action(fake_box, None), [2.0])
+    sess._latest_action = 9.0  # beyond the bound → clipped to high
+    assert np.allclose(sess._choose_action(fake_box, None), [2.0])
+    sess._latest_action = 0.0  # idle (no torque)
+    assert np.allclose(sess._choose_action(fake_box, None), [0.0])
+
+    # AI: a predict returning a continuous vector passes through, clipped into bounds.
+    sess._mode = "ai"
+    sess._predict = lambda _obs: np.array([5.0], dtype=np.float32)
+    assert np.allclose(sess._choose_action(fake_box, None), [2.0])
+
+
 def test_submit_action_ignored_when_not_playing() -> None:
     sess = PlaySession(manager)
     sess.submit_action(1)  # no active session → no-op

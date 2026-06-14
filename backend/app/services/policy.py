@@ -17,10 +17,13 @@ preview streamer.
 
 from collections.abc import Callable
 from io import BytesIO
+from typing import Any
 
 from app.services.checkpoints import LoadedCheckpoint
 
-PredictFn = Callable[[object], int]
+# Returns a discrete action (int) for a Discrete env, or a continuous action vector
+# (numpy float array) for a Box env — the play loop steps the env with whatever it gets.
+PredictFn = Callable[[object], Any]
 
 
 class PolicyLoadError(RuntimeError):
@@ -44,10 +47,17 @@ def _ppo_predict(blob: bytes) -> PredictFn:
     from stable_baselines3 import PPO
 
     model = PPO.load(BytesIO(blob), device="cpu")  # env not needed for inference
+    # A Discrete action space has `.n`; a Box (continuous) one has `.low`/`.high` instead.
+    is_box = getattr(model.action_space, "n", None) is None
+    low = np.asarray(getattr(model.action_space, "low", 0.0), dtype=np.float32)
+    high = np.asarray(getattr(model.action_space, "high", 0.0), dtype=np.float32)
 
-    def predict(obs: object) -> int:
+    def predict(obs: object) -> Any:
         action, _ = model.predict(np.asarray(obs), deterministic=True)
-        return int(np.asarray(action).flatten()[0])
+        arr = np.asarray(action)
+        if is_box:  # continuous: the deterministic action is the Gaussian mean, clipped to bounds
+            return np.clip(arr.astype(np.float32).reshape(-1), low, high)
+        return int(arr.flatten()[0])
 
     return predict
 
@@ -62,9 +72,15 @@ def _evolution_predict(blob: bytes) -> PredictFn:
     obs_dim = int(data["obs_dim"])
     act_dim = int(data["act_dim"])
     hidden = int(data["hidden"])
-    champion = _Policy(obs_dim, hidden, act_dim, population[0])  # population[0] = elite
+    # Continuous checkpoints store the action bounds so the champion squashes its output into
+    # [low, high]; discrete checkpoints omit them (the genome argmaxes instead) — back-compatible.
+    act_low = data.get("act_low")
+    act_high = data.get("act_high")
+    champion = _Policy(  # population[0] = elite carried over by the trainer's _breed
+        obs_dim, hidden, act_dim, population[0], act_low=act_low, act_high=act_high
+    )
 
-    def predict(obs: object) -> int:
+    def predict(obs: object) -> Any:
         return champion.act(np.asarray(obs, dtype=np.float64))
 
     return predict

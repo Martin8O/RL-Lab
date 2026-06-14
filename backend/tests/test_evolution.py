@@ -73,6 +73,36 @@ def test_evolution_stop_aborts_after_current_generation() -> None:
     assert len(seen) == 1
 
 
+def test_evolution_continuous_box_action() -> None:
+    """G1b: neuroevolution on a continuous (box) env. The genome's output is tanh-scaled into the
+    action bounds (not arg-maxed), the run finishes, and the published champion predict returns a
+    steppable in-range action vector — the argmax→box seam for the evolution trainer."""
+    import gymnasium as gym
+    import numpy as np
+
+    captured: dict = {}
+    seen: list[EvolutionMetrics] = []
+    terminal = train_evolution(
+        TrainConfig(
+            env_id="pendulum", algo="neuroevolution", seed=3,
+            evolution=EvolutionHyperparams(
+                population_size=6, top_k_parents=2, mutation_rate=0.1,
+                crossover_rate=0.5, generations=2, episodes=1,
+            ),
+        ),
+        "Pendulum-v1", TrainControl(), seen.append, lambda fn: captured.update(fn=fn),
+    )
+    assert terminal == "finished"
+    assert len(seen) == 2 and isinstance(seen[-1].best_fitness, float)
+    env = gym.make("Pendulum-v1")
+    obs, _ = env.reset(seed=0)
+    action = captured["fn"](obs)
+    assert np.shape(action) == (1,)
+    assert -2.0 <= float(action[0]) <= 2.0  # tanh-scaled into Pendulum's [-2, 2]
+    env.step(action)
+    env.close()
+
+
 # -- manager ----------------------------------------------------------------
 
 

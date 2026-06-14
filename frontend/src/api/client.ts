@@ -67,9 +67,10 @@ const WS_BASE =
 // (EnvPreview's keyboard handler) without threading the socket through React.
 let activeSocket: WebSocket | null = null
 
-/** Send a human play action over WS: {type:"action", action:<int>} (CartPole: 0=left, 1=right).
+/** Send a human play action over WS: {type:"action", action:<number|number[]>} — a discrete action
+ *  id (CartPole: 0=left, 1=right) or a continuous command (Pendulum: a torque in [-2, 2]).
  *  No-op if the socket isn't open — the play session is latency-tolerant (holds the last action). */
-export function sendPlayAction(action: number): void {
+export function sendPlayAction(action: number | number[]): void {
   if (activeSocket?.readyState === WebSocket.OPEN) {
     activeSocket.send(JSON.stringify({ type: 'action', action }))
   }

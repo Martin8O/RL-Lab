@@ -35,6 +35,9 @@ export interface EnvSpec {
   min_score: number
   /** Recommended PPO training budget (the ★ default); the sidebar builds its step ladder from it. */
   default_total_timesteps: number
+  /** Play episodes run this many times longer than training (so a person has time to play); the
+   *  play skill meter's 0% floor is widened by the same factor. 1 = same length as training. */
+  play_step_scale: number
   human_playable: boolean
   competitive: boolean
   difficulty: Difficulty
@@ -258,6 +261,10 @@ export interface PreviewFrame {
   image?: string
   /** Client-side render state (CartPole: [x, theta]); present instead of image. */
   state?: number[]
+  /** The discrete action just applied (lets the client draw the firing thruster, e.g. LunarLander). */
+  action?: number | null
+  /** Per-episode scene geometry not in the obs — LunarLander's random moon surface as [x, y] points. */
+  terrain?: number[][] | null
 }
 
 /** Partial preview update for POST /api/preview. */
@@ -312,9 +319,10 @@ export interface PlayConfig {
   checkpoint_id?: string | null
   seed?: number | null
   speed: number
-  /** Discrete action held when the human gives no input (the env's "do nothing"); null = no idle
-   *  (CartPole always moves). Source of truth: content/playKeymaps.ts. */
-  idle_action?: number | null
+  /** Action held when the human gives no input (the env's "do nothing"); null = no idle (CartPole
+   *  always moves). A number for a discrete/continuous-scalar env, an array for a continuous vector
+   *  env. Source of truth: content/playKeymaps.ts. */
+  idle_action?: number | number[] | null
 }
 
 /** WS frame: {type:"play_result", ...} — the final score + skill rating of a finished episode. */
@@ -352,12 +360,18 @@ export interface PlayFrame {
   image?: string
   /** Client-side render state (CartPole: [x, theta]); present instead of image. */
   state?: number[]
+  /** The discrete action just applied (lets the client draw the firing thruster, e.g. LunarLander). */
+  action?: number | null
+  /** Per-episode scene geometry not in the obs — LunarLander's random moon surface as [x, y] points. */
+  terrain?: number[][] | null
 }
 
-/** Outbound human input over WS: {type:"action", action:<int>} (CartPole: 0=left, 1=right). */
+/** Outbound human input over WS: {type:"action", action:<number|number[]>}. A discrete action id
+ *  (CartPole: 0=left, 1=right), a continuous scalar command (Pendulum: a torque in [-2, 2]), or a
+ *  continuous vector. */
 export interface PlayActionMessage {
   type: 'action'
-  action: number
+  action: number | number[]
 }
 
 // --- Play leaderboards (E2) -------------------------------------------------

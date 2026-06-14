@@ -26,7 +26,11 @@ class FrameMessage(BaseModel):
     width: int | None = None
     height: int | None = None
     image: str | None = None
-    state: list[float] | None = None  # CartPole: [x, theta] (cart position, pole angle), drawn client-side
+    state: list[float] | None = None  # client-render state (e.g. CartPole [x, theta]), drawn client-side
+    action: int | None = None  # the discrete action just applied (lets the client draw the firing thruster)
+    # Per-episode scene geometry the client can't derive from the obs — currently LunarLander's random
+    # moon surface as obs-space [x, y] points (None for envs whose scene is fixed/derivable).
+    terrain: list[list[float]] | None = None
 
 
 class PreviewState(BaseModel):

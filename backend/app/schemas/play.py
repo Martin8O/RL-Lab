@@ -29,10 +29,11 @@ class PlayConfig(BaseModel):
     ``mode="human"``. ``seed`` makes the episode reproducible; ``None`` lets the env pick.
     ``speed`` (1×–20×) paces playback exactly like the training preview.
 
-    ``idle_action`` is the discrete action the session holds when the human gives no input — the
-    env's "do nothing" (MountainCar/Acrobot 1 = no force/torque, LunarLander 0 = no thrust). The
-    keymap (frontend/src/content/playKeymaps.ts) is its source of truth; ``None`` means the env
-    has no idle (CartPole always moves) and the session falls back to action 0.
+    ``idle_action`` is the action the session holds when the human gives no input — the env's
+    "do nothing" (MountainCar/Acrobot 1 = no force/torque, LunarLander 0 = no thrust, a continuous
+    env 0 = no torque/force). The keymap (frontend/src/content/playKeymaps.ts) is its source of
+    truth; ``None`` means the env has no idle (CartPole always moves) and the session falls back to
+    action 0. A float / list of floats carries a continuous (box) idle command.
     """
 
     env_id: str = "cartpole"
@@ -40,7 +41,7 @@ class PlayConfig(BaseModel):
     checkpoint_id: str | None = None
     seed: int | None = None
     speed: float = 1.0
-    idle_action: int | None = None
+    idle_action: int | float | list[float] | None = None
 
 
 class PlaySpeedRequest(BaseModel):
@@ -92,16 +93,21 @@ class PlayFrame(BaseModel):
     width: int | None = None
     height: int | None = None
     image: str | None = None
-    state: list[float] | None = None  # CartPole: [x, theta] (cart position, pole angle), drawn client-side
+    state: list[float] | None = None  # client-render state (e.g. CartPole [x, theta]), drawn client-side
+    action: int | None = None  # the discrete action just applied (lets the client draw the firing thruster)
+    # Per-episode scene geometry the client can't derive from the obs — currently LunarLander's random
+    # moon surface as obs-space [x, y] points (None for envs whose scene is fixed/derivable).
+    terrain: list[list[float]] | None = None
 
 
 class PlayActionMessage(BaseModel):
-    """Inbound human input over WS: {type:"action", action:<int>}.
+    """Inbound human input over WS: {type:"action", action:<int|float|number[]>}.
 
-    ``action`` is a discrete action index for the current env (CartPole: 0=left, 1=right).
-    Latency-tolerant — the session holds the latest received action and reuses it until the
-    next one arrives, so dropped/late frames just repeat the prior input rather than stall.
+    ``action`` is a discrete action index for a discrete env (CartPole: 0=left, 1=right) or a
+    continuous command — a float / list of floats — for a box env (Pendulum: a torque in [-2, 2]).
+    Latency-tolerant — the session holds the latest received action and reuses it until the next
+    one arrives, so dropped/late frames just repeat the prior input rather than stall.
     """
 
     type: Literal["action"] = "action"
-    action: int
+    action: int | float | list[float]

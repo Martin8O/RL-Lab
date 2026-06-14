@@ -48,6 +48,30 @@ def test_train_ppo_reproducible_with_same_seed() -> None:
     assert first == second
 
 
+def test_train_ppo_continuous_box_action() -> None:
+    """G1b: PPO trains on a continuous (box) env and the decoupled numpy preview predict returns a
+    clipped action *vector* the env can step — not an int (the int→box seam in _build_numpy_predict)."""
+    import gymnasium as gym
+    import numpy as np
+
+    captured: dict = {}
+    train_ppo(
+        TrainConfig(
+            env_id="pendulum", algo="ppo", seed=1, total_timesteps=256,
+            hyperparams=PPOHyperparams(n_steps=64, batch_size=64),
+        ),
+        "Pendulum-v1", TrainControl(),
+        lambda _m: None, lambda _p: None, on_policy=lambda fn: captured.update(fn=fn),
+    )
+    env = gym.make("Pendulum-v1")
+    obs, _ = env.reset(seed=0)
+    action = captured["fn"](obs)
+    assert np.shape(action) == (1,)  # a 1-D action vector, not a scalar/int
+    assert -2.0 <= float(action[0]) <= 2.0  # clipped into Pendulum's [-2, 2] torque bounds
+    env.step(action)  # the env accepts the continuous action without error
+    env.close()
+
+
 def test_train_ppo_stop_aborts_early() -> None:
     control = TrainControl()
     seen: list[object] = []

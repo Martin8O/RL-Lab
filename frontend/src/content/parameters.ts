@@ -52,6 +52,14 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
         en: 'Both handle Acrobot well. PPO reliably learns the pumping motion within a few hundred thousand steps and reaches the target (around −100). Neuroevolution also climbs steadily, since even a tiny network can discover the rhythmic swing. A good task to watch both succeed.',
         cz: 'Acrobot zvládnou obě. PPO se za pár set tisíc kroků spolehlivě naučí „pumpovat“ a dosáhne cíle (kolem −100). Neuroevoluce se tu také plynule zlepšuje, protože i drobná síť objeví rytmické houpání. Pěkná úloha, kde uspějí obě.',
       },
+      pendulum: {
+        en: 'Both work on Pendulum. PPO is the natural fit for smooth continuous control and learns a clean swing-up-and-hold. Neuroevolution also works — its networks output a continuous torque — and is worth comparing, though PPO is usually the steadier of the two here.',
+        cz: 'Na Pendulu fungují obě. PPO je přirozená volba pro plynulé spojité řízení a naučí se čisté vyhoupnutí a udržení. Neuroevoluce také funguje — její sítě vydávají spojitý točivý moment — a stojí za porovnání, i když PPO tu bývá stabilnější.',
+      },
+      mountaincarcontinuous: {
+        en: 'A continuous exploration trap. PPO often stalls near 0: it rarely stumbles onto the flag, and the small force penalty discourages trying. Neuroevolution tends to do better — among a whole population some network reaches the flag and that success spreads. A great task for comparing the two.',
+        cz: 'Spojitá past na zkoumání. PPO často uvázne poblíž 0: na vlajku jen zřídka náhodou narazí a malá penalizace za sílu odrazuje od zkoušení. Neuroevoluce tu bývá lepší — v celé populaci některá síť dojede k vlajce a úspěch se rozšíří. Skvělá úloha pro porovnání obou.',
+      },
     },
   },
 
@@ -81,6 +89,14 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
       acrobot: {
         en: '3e-4 works well for Acrobot. It is a stable task to learn, so there is little reason to change it — give it more steps rather than a higher rate.',
         cz: '3e-4 funguje pro Acrobot dobře. Je to stabilní úloha, takže není důvod ji měnit — dejte mu raději víc kroků než vyšší rychlost.',
+      },
+      pendulum: {
+        en: 'The default 3e-4 is a solid starting point for this smooth task. Pendulum is stable to learn, so give it more steps rather than a higher rate, which can make the swing-up jittery.',
+        cz: 'Výchozí 3e-4 je pro tuto plynulou úlohu dobrý výchozí bod. Pendulum se učí stabilně, takže mu dejte raději víc kroků než vyšší rychlost, která může vyhoupnutí rozkmitat.',
+      },
+      mountaincarcontinuous: {
+        en: 'The default 3e-4 is fine. As with MountainCar the bottleneck is exploration, not step size — if the score sits near 0, raise the Entropy bonus or try Neuroevolution before touching the rate.',
+        cz: 'Výchozí 3e-4 je v pořádku. Stejně jako u MountainCar je překážkou zkoumání, ne velikost kroku — pokud skóre vězí poblíž 0, zvyšte raději bonus za entropii nebo zkuste Neuroevoluci než měnit rychlost.',
       },
     },
   },
@@ -112,6 +128,14 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
         en: 'A swing-up is a long sequence too, so 0.99 is right. The agent must plan several swings ahead rather than chase the next step.',
         cz: 'Vyhoupnutí je také dlouhá řada kroků, takže 0.99 je správně. Agent musí plánovat několik kmitů dopředu, ne honit jen další krok.',
       },
+      pendulum: {
+        en: 'A swing-up followed by a long balancing hold rewards planning ahead, so keep γ high (0.99). Too low and the agent will not value staying upright over the next few steps\' effort.',
+        cz: 'Vyhoupnutí a následné dlouhé udržení rovnováhy odměňuje plánování dopředu, takže nechte γ vysoké (0.99). Při nízkém γ agent nedocení setrvání ve svislé poloze oproti námaze nejbližších kroků.',
+      },
+      mountaincarcontinuous: {
+        en: 'Reaching the flag is a long build-up, so keep γ high (0.99): the agent must value the distant +100 over the small force cost it pays each step.',
+        cz: 'Dojezd k vlajce je dlouhé rozhoupávání, takže nechte γ vysoké (0.99): agent musí cenit vzdálených +100 víc než malou cenu za sílu, kterou platí každý krok.',
+      },
     },
   },
 
@@ -141,6 +165,14 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
       acrobot: {
         en: '0.2 works well; there is rarely a reason to change it on Acrobot.',
         cz: '0.2 funguje dobře; u Acrobotu jen zřídka je důvod ji měnit.',
+      },
+      pendulum: {
+        en: '0.2 works well on Pendulum; there is rarely a reason to change it.',
+        cz: '0.2 na Pendulu funguje dobře; jen zřídka je důvod ji měnit.',
+      },
+      mountaincarcontinuous: {
+        en: '0.2 is fine — clipping is not the bottleneck on MountainCarContinuous; exploration is. Leave it and adjust Entropy and steps instead.',
+        cz: '0.2 je v pořádku — ořezávání není u MountainCarContinuous překážkou; tou je zkoumání. Nechte ji a laďte raději entropii a počet kroků.',
       },
     },
   },
@@ -172,6 +204,14 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
         en: 'A small value can speed up the early search for the pumping motion, but Acrobot is learnable at 0 as well. Nudge it to ~0.01 if progress stalls.',
         cz: 'Malá hodnota může urychlit počáteční hledání „pumpování“, ale Acrobot je řešitelný i při 0. Posuňte ji k ~0.01, pokud pokrok vázne.',
       },
+      pendulum: {
+        en: 'Pendulum is learnable at 0, and PPO\'s continuous action head already explores with its own noise. A small value (~0.01) can still speed the early search for the swing-up.',
+        cz: 'Pendulum je řešitelný i při 0 a spojitá akční hlava PPO už zkoumá vlastním šumem. Drobná hodnota (~0,01) přesto může urychlit počáteční hledání vyhoupnutí.',
+      },
+      mountaincarcontinuous: {
+        en: 'This is the key dial for MountainCarContinuous. The reward is sparse, so a little extra exploration is often what lets PPO find the flag at all — raise it (e.g. 0.01–0.1) if the score is stuck near 0, or try Neuroevolution.',
+        cz: 'U MountainCarContinuous je tohle klíčový knoflík. Odměna je řídká, takže trocha zkoumání navíc je často to, co PPO vůbec umožní najít vlajku — zvyšte ji (např. 0,01–0,1), pokud skóre vězí poblíž 0, nebo zkuste Neuroevoluci.',
+      },
     },
   },
 
@@ -201,6 +241,14 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
       acrobot: {
         en: 'The 6-number observation is still small; 2 layers is plenty for Acrobot.',
         cz: 'Pozorování o šesti číslech je stále malé; pro Acrobot 2 vrstvy bohatě stačí.',
+      },
+      pendulum: {
+        en: 'The 3-number observation is tiny, so 2 layers is ample for Pendulum. Extra depth just slows things down.',
+        cz: 'Pozorování o třech číslech je drobné, takže 2 vrstvy pro Pendulum bohatě stačí. Hloubka navíc jen vše zpomalí.',
+      },
+      mountaincarcontinuous: {
+        en: 'The 2-number observation is tiny, so 2 layers is plenty. Extra depth will not fix MountainCarContinuous — exploration will.',
+        cz: 'Pozorování o dvou číslech je drobné, takže 2 vrstvy bohatě stačí. Hloubka navíc MountainCarContinuous nevyřeší — vyřeší ho zkoumání.',
       },
     },
   },
@@ -232,6 +280,14 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
         en: '64 neurons handle Acrobot well; there is no need to widen the net here.',
         cz: '64 neuronů Acrobot zvládne dobře; síť tu není potřeba rozšiřovat.',
       },
+      pendulum: {
+        en: "64 neurons easily handle Pendulum's small state. Going wider gives no benefit and just uses more CPU.",
+        cz: '64 neuronů drobný stav Pendula hravě zvládne. Více nepřinese žádnou výhodu, jen spotřebuje více CPU.',
+      },
+      mountaincarcontinuous: {
+        en: "64 neurons easily cover MountainCarContinuous's tiny state. Going wider just costs CPU without helping.",
+        cz: '64 neuronů drobný stav MountainCarContinuous hravě pokryje. Širší síť jen spotřebuje CPU, aniž by pomohla.',
+      },
     },
   },
 
@@ -261,6 +317,14 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
       acrobot: {
         en: 'tanh is the proven choice; relu works too but makes little difference on such a small net.',
         cz: 'tanh je osvědčená volba; relu také funguje, ale na tak malé síti je rozdíl malý.',
+      },
+      pendulum: {
+        en: 'tanh is a safe default for Pendulum; relu works too but makes little difference on such a small net.',
+        cz: 'tanh je pro Pendulum bezpečná výchozí volba; relu také funguje, ale na tak malé síti je rozdíl malý.',
+      },
+      mountaincarcontinuous: {
+        en: 'tanh is a safe default. The activation is not the lever on MountainCarContinuous — exploration is.',
+        cz: 'tanh je bezpečná výchozí volba. Aktivační funkce není u MountainCarContinuous ta páka — tou je zkoumání.',
       },
     },
   },
@@ -292,6 +356,14 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
         en: 'Acrobot is fairly robust across seeds, but fixing it still keeps runs reproducible and comparisons fair.',
         cz: 'Acrobot je vůči semenům poměrně robustní, ale zafixování přesto udrží běhy reprodukovatelné a porovnání férové.',
       },
+      pendulum: {
+        en: 'Pendulum starts at a random angle and speed, so luck affects the early swing-up. Fix it for fair comparisons; change it to see how robust a policy is to the starting state.',
+        cz: 'Pendulum začíná v náhodném úhlu a rychlosti, takže náhoda ovlivní počáteční vyhoupnutí. Pro férové porovnání ho zafixujte; změnou uvidíte, jak robustní je strategie vůči počátečnímu stavu.',
+      },
+      mountaincarcontinuous: {
+        en: 'Luck matters a lot here — on some seeds a run stumbles onto the flag early and takes off, on others it never does. Fix it for fair comparisons; change it to feel how much exploration depends on chance.',
+        cz: 'Náhoda tu hraje velkou roli — na některých semenech běh brzy narazí na vlajku a rozjede se, na jiných nikdy. Pro férové porovnání ho zafixujte; změnou ucítíte, jak moc zkoumání závisí na štěstí.',
+      },
     },
   },
 
@@ -321,6 +393,14 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
       acrobot: {
         en: 'Acrobot usually solves within a few hundred thousand steps, so the 200k ★ is a good budget. Give it more if it has not reached the target yet.',
         cz: 'Acrobot se obvykle vyřeší za pár set tisíc kroků, takže 200k (★) je dobrý rozpočet. Dejte mu víc, pokud ještě nedosáhl cíle.',
+      },
+      pendulum: {
+        en: 'Pendulum usually learns a good swing-up-and-hold within a few hundred thousand steps, so the 200k ★ is a reasonable budget. Give it more if the score is not yet climbing toward −150.',
+        cz: 'Pendulum se obvykle naučí dobré vyhoupnutí a udržení za pár set tisíc kroků, takže 200k (★) je rozumný rozpočet. Dejte mu víc, pokud se skóre ještě nešplhá k −150.',
+      },
+      mountaincarcontinuous: {
+        en: 'More steps alone may not solve MountainCarContinuous — with too little exploration the score sits near 0 no matter the budget. Pair a healthy step count with a higher Entropy bonus, or try Neuroevolution.',
+        cz: 'Samotné kroky navíc MountainCarContinuous nemusí vyřešit — při příliš malém zkoumání skóre vězí poblíž 0 bez ohledu na rozpočet. Spojte rozumný počet kroků s vyšším bonusem za entropii, nebo zkuste Neuroevoluci.',
       },
     },
   },
@@ -356,6 +436,14 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
         en: '50 networks find the swing-up within a reasonable number of generations; a larger population helps a little, at a proportional cost in time.',
         cz: '50 sítí najde vyhoupnutí za rozumný počet generací; větší populace pomůže o něco víc, za úměrnou cenu v čase.',
       },
+      pendulum: {
+        en: '50 networks find a swing-up within a reasonable number of generations; a larger population helps a little, at a proportional cost in time.',
+        cz: '50 sítí najde vyhoupnutí Pendula za rozumný počet generací; větší populace pomůže o něco víc, za úměrnou cenu v čase.',
+      },
+      mountaincarcontinuous: {
+        en: 'A bigger population is a real advantage here: with more networks tried per generation, one is far more likely to reach the flag and seed the whole herd. Lean toward the upper end (e.g. 100).',
+        cz: 'Větší populace je tu skutečná výhoda: s víc sítěmi za generaci je mnohem pravděpodobnější, že některá dojede k vlajce a „nasází“ celé stádo. Posuňte se k horní hranici (např. 100).',
+      },
     },
   },
 
@@ -385,6 +473,14 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
       acrobot: {
         en: 'The top ~10 keeps enough diversity for Acrobot to refine the pumping motion across generations.',
         cz: 'Horních ~10 udrží pro Acrobot dost rozmanitosti, aby napříč generacemi vyladil „pumpování“.',
+      },
+      pendulum: {
+        en: 'The top ~10 keeps enough diversity for Pendulum to refine the swing-up across generations.',
+        cz: 'Horních ~10 udrží pro Pendulum dost rozmanitosti, aby napříč generacemi vyladil vyhoupnutí.',
+      },
+      mountaincarcontinuous: {
+        en: 'Keep enough parents (~10) so one lucky flag-reacher does not dominate before the strategy is reliable. Too few and the herd narrows onto a single fluke.',
+        cz: 'Ponechte dost rodičů (~10), aby jeden šťastlivec u vlajky neovládl populaci dřív, než je strategie spolehlivá. Příliš málo a stádo se zúží na jednu náhodu.',
       },
     },
   },
@@ -416,6 +512,14 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
         en: '0.1 balances exploration and stability for Acrobot. Too high and good swingers get scrambled every generation.',
         cz: '0.1 vyvažuje u Acrobotu zkoumání a stabilitu. Příliš vysoká a dobří „houpači“ se každou generaci rozházejí.',
       },
+      pendulum: {
+        en: '0.1 balances exploration and stability for Pendulum. Too high and good swing-ups get scrambled every generation.',
+        cz: '0.1 vyvažuje u Pendula zkoumání a stabilitu. Příliš vysoká a dobrá vyhoupnutí se každou generaci rozházejí.',
+      },
+      mountaincarcontinuous: {
+        en: 'A slightly higher rate can help the population explore enough to find the flag at all; once some networks reach it, 0.1 refines them well.',
+        cz: 'Mírně vyšší míra může populaci pomoci dostatečně zkoumat, aby vlajku vůbec našla; jakmile k ní některé sítě dojedou, 0,1 je dobře doladí.',
+      },
     },
   },
 
@@ -445,6 +549,14 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
       acrobot: {
         en: '0.5 is a safe default for Acrobot; mixing parents spreads the pumping rhythm through the herd.',
         cz: '0.5 je pro Acrobot bezpečná výchozí hodnota; mísení rodičů šíří rytmus „pumpování“ napříč stádem.',
+      },
+      pendulum: {
+        en: '0.5 is a safe default for Pendulum; mixing parents spreads a good swing-up rhythm through the herd.',
+        cz: '0.5 je pro Pendulum bezpečná výchozí hodnota; mísení rodičů šíří dobrý rytmus vyhoupnutí napříč stádem.',
+      },
+      mountaincarcontinuous: {
+        en: 'Mixing parents spreads a rare flag-reaching trick through the population, so 0.5 is a safe default — most useful once at least one network has succeeded.',
+        cz: 'Mísení rodičů šíří vzácný trik, jak dojet k vlajce, napříč populací, takže 0,5 je bezpečná výchozí hodnota — nejužitečnější, jakmile uspěje aspoň jedna síť.',
       },
     },
   },
@@ -476,6 +588,14 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
         en: 'Acrobot usually improves steadily over a few dozen generations; push higher to keep refining the swing-up.',
         cz: 'Acrobot se obvykle plynule zlepšuje během pár desítek generací; vyšší hodnotou ho necháte dál ladit vyhoupnutí.',
       },
+      pendulum: {
+        en: 'Pendulum improves steadily over a few dozen generations; push higher to keep refining the swing-up and the balancing hold.',
+        cz: 'Pendulum se plynule zlepšuje během pár desítek generací; vyšší hodnotou ho necháte dál ladit vyhoupnutí a udržení rovnováhy.',
+      },
+      mountaincarcontinuous: {
+        en: 'It can take many generations before a network first reaches the flag — then progress accelerates. Give it plenty (e.g. 50+) and a larger population to improve the odds.',
+        cz: 'Než nějaká síť poprvé dojede k vlajce, může to trvat řadu generací — pak se pokrok zrychlí. Dejte jí dost (např. 50+) a větší populaci, ať zvýšíte šance.',
+      },
     },
   },
 
@@ -505,6 +625,14 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
         en: 'Acrobot also gives −1 per step until the tip swings above the bar, so scores are negative. The curve climbs from about −500 toward −100 as the agent learns to swing up faster.',
         cz: 'Acrobot také dává −1 za krok, dokud se konec nevyhoupne nad tyč, takže skóre jsou záporná. Křivka stoupá zhruba z −500 k −100, jak se agent učí vyhoupnout rychleji.',
       },
+      pendulum: {
+        en: "Pendulum's reward is a per-step penalty (how far from upright, how fast it spins, how hard you push), so the score is always negative — the curve climbs from about −1600 toward 0, and a good swing-up-and-hold reaches around −150.",
+        cz: 'Odměna u Pendula je penalizace za krok (jak daleko od svislé polohy, jak rychle se točí, jak silně tlačíte), takže skóre je vždy záporné — křivka stoupá zhruba z −1600 k 0 a dobré vyhoupnutí a udržení dosáhne kolem −150.',
+      },
+      mountaincarcontinuous: {
+        en: 'MountainCarContinuous pays +100 for reaching the flag minus a small force cost, so the curve sits near 0 until the agent first reaches the flag, then jumps toward +90. A flat line near 0 means it has not found the flag yet — the exploration problem, not a bug.',
+        cz: 'MountainCarContinuous vyplácí +100 za dosažení vlajky minus malou cenu za sílu, takže křivka sedí poblíž 0, dokud agent poprvé nedojede k vlajce, pak vyskočí k +90. Rovná čára poblíž 0 znamená, že vlajku ještě nenašel — to je ten problém se zkoumáním, ne chyba.',
+      },
     },
   },
 
@@ -530,6 +658,14 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
         en: 'The loss wobbles here too; read progress from the reward curve climbing toward −100, not from the loss.',
         cz: 'Ztráta i tady kolísá; pokrok čtěte z křivky odměny stoupající k −100, ne ze ztráty.',
       },
+      pendulum: {
+        en: 'As always, the loss just wobbles — judge Pendulum progress from the reward curve climbing toward 0, not from this one.',
+        cz: 'Jako vždy ztráta jen kolísá — pokrok u Pendula posuzujte podle křivky odměny stoupající k 0, ne podle ní.',
+      },
+      mountaincarcontinuous: {
+        en: 'The loss just wobbles here too; read progress from the reward curve (has it jumped toward +90?), not from the loss.',
+        cz: 'Ztráta i tady jen kolísá; pokrok čtěte z křivky odměny (vyskočila k +90?), ne ze ztráty.',
+      },
     },
   },
 
@@ -554,6 +690,14 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
       acrobot: {
         en: 'Same as reward, but per generation. For Acrobot fitness starts deeply negative and rises steadily toward −100 as the population learns to pump the arm up.',
         cz: 'Stejné jako odměna, ale za generaci. U Acrobotu začíná fitness hluboko v záporu a plynule stoupá k −100, jak se populace učí rameno vyhoupnout.',
+      },
+      pendulum: {
+        en: 'Same idea as reward, but per generation. For Pendulum fitness starts deeply negative and rises toward −150 as the population learns to swing up and hold.',
+        cz: 'Stejný princip jako odměna, ale za generaci. U Pendula začíná fitness hluboko v záporu a stoupá k −150, jak se populace učí vyhoupnout a udržet.',
+      },
+      mountaincarcontinuous: {
+        en: "Same idea as reward, but per generation. Fitness sits near 0 until some network first reaches the flag, then jumps up — neuroevolution's population search is well suited to making that discovery.",
+        cz: 'Stejný princip jako odměna, ale za generaci. Fitness sedí poblíž 0, dokud nějaká síť poprvé nedojede k vlajce, pak vyskočí — populační hledání neuroevoluce se k takovému objevu dobře hodí.',
       },
     },
   },
