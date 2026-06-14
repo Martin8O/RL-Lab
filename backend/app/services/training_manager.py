@@ -245,7 +245,7 @@ class TrainingManager:
                     control,
                     self._emit_metrics,
                     self._emit_progress,
-                    self._publish_model,
+                    self._publish_predict,
                     self._on_snapshot,
                     resume,
                 )
@@ -295,17 +295,9 @@ class TrainingManager:
         with self._lock:
             self._snapshot = artifact
 
-    def _publish_model(self, model: object) -> None:
-        """Hand the preview streamer a deterministic predict fn over the live model."""
-
-        def predict(obs: object) -> object:
-            action, _ = model.predict(obs, deterministic=True)  # type: ignore[attr-defined]
-            return action
-
-        preview_streamer.set_policy(predict)
-
     def _publish_predict(self, predict: Callable[[object], int]) -> None:
-        """Hand the preview streamer the evolution leader's predict fn directly."""
+        """Hand the preview streamer a decoupled predict fn (numpy snapshot for PPO, evolution
+        leader for neuroevolution) — never the live SB3 model, which would perturb training."""
         preview_streamer.set_policy(predict)
 
     def _emit_metrics(self, metrics: TrainingMetrics) -> None:

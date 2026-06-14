@@ -48,8 +48,9 @@ export default function PlayScoreGate() {
       return
     }
 
-    // Human: only prompt if the score would actually make the board.
-    const board = st.playScores?.human ?? []
+    // Human: only prompt if the score would actually make the board — checked against exactly the
+    // top-N the user sees (slice guards a board persisted under an older, larger TOP_N).
+    const board = (st.playScores?.human ?? []).slice(0, PLAY_SCORE_TOP_N)
     const qualifies = board.length < PLAY_SCORE_TOP_N || score > Math.min(...board.map((e) => e.score))
     if (qualifies) setPending({ score, steps })
   }, [playState, playResult])

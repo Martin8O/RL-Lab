@@ -427,6 +427,7 @@ export default function RewardChart() {
   const evolutionHistory = useAppStore((s) => s.evolutionHistory)
   const lastEvolution   = useAppStore((s) => s.lastEvolution)
   const selectedEnvId   = useAppStore((s) => s.selectedEnvId)
+  const envs            = useAppStore((s) => s.envs)
   const emaAlpha        = useAppStore((s) => s.emaAlpha)
   const chartWindow     = useAppStore((s) => s.chartWindow)
   const activeTab       = useAppStore((s) => s.activeTab)
@@ -462,7 +463,15 @@ export default function RewardChart() {
     if (trainState === 'finished' || trainState === 'stopped') refreshRuns()
   }, [trainState, refreshRuns])
 
-  const selectedOrder = useMemo(() => selected.map((r) => r.meta.id), [selected])
+  // Only compare runs from the *same* env — a CartPole run and a LunarLander run live on
+  // different reward scales, so mixing them on one chart is meaningless. We filter both the
+  // pickable list and the active overlays to the current env (selections from another game stay
+  // remembered and simply don't render until you switch back to it).
+  const envRuns = useMemo(() => runs.filter((r) => r.env_id === selectedEnvId), [runs, selectedEnvId])
+  const envSelected = useMemo(
+    () => selected.filter((r) => r.meta.env_id === selectedEnvId), [selected, selectedEnvId],
+  )
+  const selectedOrder = useMemo(() => envSelected.map((r) => r.meta.id), [envSelected])
 
   const toggleRun = useCallback(async (id: string) => {
     const exists = selected.some((r) => r.meta.id === id)
@@ -470,12 +479,17 @@ export default function RewardChart() {
       setSelected((sel) => sel.filter((r) => r.meta.id !== id))
       return
     }
-    if (selected.length >= OVERLAY_COLORS.length) return  // cap overlays at the palette size
+    // Cap overlays per env at the palette size (selections from other envs don't count).
+    if (envSelected.length >= OVERLAY_COLORS.length) return
     try {
       const detail = await fetchRun(id)
-      setSelected((sel) => (sel.length >= OVERLAY_COLORS.length ? sel : [...sel, detail]))
+      setSelected((sel) =>
+        sel.filter((r) => r.meta.env_id === detail.meta.env_id).length >= OVERLAY_COLORS.length
+          ? sel
+          : [...sel, detail],
+      )
     } catch { /* ignore fetch failure */ }
-  }, [selected])
+  }, [selected, envSelected])
 
   const removeRun = useCallback(async (run: RunMeta) => {
     if (!window.confirm(t('runs.confirm_delete', { label: run.label }))) return
@@ -533,7 +547,7 @@ export default function RewardChart() {
   const overlays: { id: string; label: string; color: string }[] = []
   const overlaySeries: Series[] = []
   const markers: SolvedMarker[] = []
-  selected.forEach((run, i) => {
+  envSelected.forEach((run, i) => {
     const color = OVERLAY_COLORS[i % OVERLAY_COLORS.length]
     const s = runSeries(run, activeTab, color)
     if (s) {
@@ -588,11 +602,15 @@ export default function RewardChart() {
     elapsed = lastProgress?.elapsed ?? lastMetrics?.elapsed
   }
 
-  // Solve progress: Score relative to the env's solved score (CartPole = 500). Same scale
-  // for PPO reward and evolution fitness, so the skill meter + % reads consistently.
-  const solveMax = skillScaleFor(selectedEnvId).max
+  // Skill %: Score across the env's [min_score, solved_score] range, so it reads consistently
+  // with the skill meter (a shaped env like LunarLander starts negative — -54 is ~37%, not 0%).
+  const solveEnv = envs.find((e) => e.id === selectedEnvId)
+  const solveMin = solveEnv?.min_score ?? 0
+  const solveMax = solveEnv?.solved_score ?? skillScaleFor(selectedEnvId).max
   const solvePct =
-    score != null && solveMax > 0 ? Math.max(0, Math.min(100, (score / solveMax) * 100)) : null
+    score != null && solveMax > solveMin
+      ? Math.max(0, Math.min(100, ((score - solveMin) / (solveMax - solveMin)) * 100))
+      : null
 
   return (
     <section style={{
@@ -683,19 +701,19 @@ export default function RewardChart() {
               display: 'flex', alignItems: 'center', gap: 4, padding: '2px 8px',
               borderRadius: 4, border: '1px solid var(--border)', cursor: 'pointer',
               fontSize: 11, fontWeight: 600,
-              background: showCompare || selected.length > 0 ? 'var(--accent-soft)' : 'var(--surface-2)',
-              color: selected.length > 0 ? 'var(--accent-h)' : 'var(--text-muted)',
+              background: showCompare || envSelected.length > 0 ? 'var(--accent-soft)' : 'var(--surface-2)',
+              color: envSelected.length > 0 ? 'var(--accent-h)' : 'var(--text-muted)',
             }}
           >
-            ⊕ {compactControls ? '' : t('runs.compare')}{selected.length > 0 ? ` (${selected.length})` : ''}
+            ⊕ {compactControls ? '' : t('runs.compare')}{envSelected.length > 0 ? ` (${envSelected.length})` : ''}
           </button>
           {showCompare && (
             <ComparePopover
-              runs={runs}
+              runs={envRuns}
               selectedOrder={selectedOrder}
               onToggle={(id) => void toggleRun(id)}
               onDelete={(run) => void removeRun(run)}
-              onClear={() => setSelected([])}
+              onClear={() => setSelected((sel) => sel.filter((r) => r.meta.env_id !== selectedEnvId))}
               onClose={() => setShowCompare(false)}
             />
           )}

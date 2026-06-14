@@ -86,6 +86,8 @@
   },
   "play": {
     "start": "Hrát proti AI",
+    "play": "Hrát",
+    "ai_play": "Hraje AI",
     "stop": "Stop",
     "mode": "Režim",
     "human": "Hrajete vy",
@@ -98,7 +100,7 @@
     "not_playable": "Toto prostředí nelze hrát ručně",
     "your_skill": "Vaše dovednost",
     "ai_skill": "Dovednost AI",
-    "playing_hint": "← / → pro udržení tyče",
+    "playing_hint": "Klávesnice aktivní — viz Jak hrát",
     "instructions_title": "Jak hrát {{env}}",
     "goal": "Cíl",
     "controls": "Ovládání",

@@ -8,7 +8,9 @@ import io
 import threading
 import time
 from collections.abc import Callable
+from typing import Any
 
+import numpy as np
 from stable_baselines3 import PPO
 from stable_baselines3.common.base_class import BaseAlgorithm
 from stable_baselines3.common.callbacks import BaseCallback
@@ -29,6 +31,41 @@ _PROGRESS_INTERVAL = 1.0  # seconds between live progress frames
 MetricsSink = Callable[[TrainingMetrics], None]
 ProgressSink = Callable[[TrainingProgress], None]
 SnapshotSink = Callable[[CheckpointArtifact], None]
+# Hands the decoupled preview a self-contained predict fn (obs → action) over a weight snapshot.
+PredictPublisher = Callable[[Callable[[object], int]], None]
+
+
+def _build_numpy_predict(model: BaseAlgorithm) -> Callable[[object], int]:
+    """A standalone **numpy** forward over a snapshot of the policy's action path.
+
+    The preview must never call ``model.predict`` on the *live* model: doing so concurrently with
+    ``learn()`` measurably perturbs PPO's training trajectory (proven empirically — concurrent SB3
+    model access diverges a same-seed run, while pure compute does not). A numpy forward over
+    copied weights cannot touch the trainer's torch state, so the preview stays a true read-only
+    observer (mirrors how the neuroevolution trainer already publishes its preview policy).
+
+    Built at a rollout boundary on the trainer thread (a quiescent point), so the weight copy
+    never races the optimizer. Handles any ``net_arch`` depth + tanh/relu; discrete actions only
+    (argmax of the action logits == SB3's ``deterministic=True``).
+    """
+    policy: Any = model.policy  # torch dynamic attrs (mlp_extractor/action_net) aren't typed
+
+    def arr(t: Any) -> np.ndarray:
+        return np.asarray(t.detach().cpu().numpy(), dtype=np.float64)
+
+    pi_net = policy.mlp_extractor.policy_net
+    layers = [(arr(m.weight), arr(m.bias)) for m in pi_net if isinstance(m, nn.Linear)]
+    act_w, act_b = arr(policy.action_net.weight), arr(policy.action_net.bias)
+    relu = any(isinstance(m, nn.ReLU) for m in pi_net)
+
+    def predict(obs: object) -> int:
+        x = np.asarray(obs, dtype=np.float64)
+        for w, b in layers:
+            x = x @ w.T + b
+            x = np.maximum(0.0, x) if relu else np.tanh(x)
+        return int(np.argmax(x @ act_w.T + act_b))
+
+    return predict
 
 
 def _snapshot(model: BaseAlgorithm, total_timesteps: int, iteration: int) -> CheckpointArtifact:
@@ -83,11 +120,13 @@ class _MetricsCallback(BaseCallback):
         total_timesteps: int,
         started_at: float,
         on_snapshot: SnapshotSink | None = None,
+        on_policy: PredictPublisher | None = None,
     ) -> None:
         super().__init__()
         self._control = control
         self._on_metrics = on_metrics
         self._on_snapshot = on_snapshot
+        self._on_policy = on_policy
         self._total = total_timesteps
         self._started_at = started_at
         self.iteration_count = 0  # read by the progress ticker (a separate thread)
@@ -122,6 +161,10 @@ class _MetricsCallback(BaseCallback):
         # mid-run (the terminal snapshot below captures the final/stopped model).
         if self._on_snapshot is not None:
             self._on_snapshot(_snapshot(self.model, self._total, self.iteration_count))
+        # Refresh the preview's decoupled (numpy) policy with this rollout's weights, so it shows
+        # the learning progress without the live model.predict that would perturb training.
+        if self._on_policy is not None:
+            self._on_policy(_build_numpy_predict(self.model))
 
 
 def _progress_ticker(
@@ -226,15 +269,17 @@ def train_ppo(
     control: TrainControl,
     on_metrics: MetricsSink,
     on_progress: ProgressSink,
-    on_model_ready: Callable[[PPO], None] | None = None,
+    on_policy: PredictPublisher | None = None,
     on_snapshot: SnapshotSink | None = None,
     resume_blob: bytes | None = None,
 ) -> TrainState:
     """Train PPO to completion (or until stopped). Returns the terminal state.
 
-    Blocks the calling thread; the manager runs this off the event loop. ``on_model_ready``
-    (if given) is called once the model is built so the preview streamer can read its policy.
-    A daemon ticker thread emits ~1 Hz progress frames for the duration of ``learn()``.
+    Blocks the calling thread; the manager runs this off the event loop. ``on_policy`` (if given)
+    is handed a self-contained numpy predict fn over the current weights — initially and at every
+    rollout boundary — so the decoupled preview can render the live policy *without* calling into
+    the live SB3 model (which would perturb training). A daemon ticker thread emits ~1 Hz progress
+    frames for the duration of ``learn()``.
 
     ``resume_blob`` resumes from a saved ``model.zip`` (continuing the timestep counter, so
     ``config.total_timesteps`` is the *absolute* target). ``on_snapshot`` receives a
@@ -247,12 +292,12 @@ def train_ppo(
         if resume_blob is not None
         else _build_model(config, gym_id)
     )
-    if on_model_ready is not None:
-        on_model_ready(model)
+    if on_policy is not None:
+        on_policy(_build_numpy_predict(model))  # initial preview policy (before the first rollout)
 
     started_at = time.monotonic()
     callback = _MetricsCallback(
-        control, on_metrics, config.total_timesteps, started_at, on_snapshot
+        control, on_metrics, config.total_timesteps, started_at, on_snapshot, on_policy
     )
     stop_event = threading.Event()
     ticker = threading.Thread(

@@ -92,15 +92,15 @@ def test_ppo_snapshot_then_resume_continues_timesteps() -> None:
     assert final.blob[:2] == b"PK" and final.timesteps >= 256
 
     # Resume from the snapshot toward a higher absolute target; the model must continue from
-    # the saved step count rather than restart at 0.
-    captured: dict[str, object] = {}
+    # the saved step count rather than restart at 0. The first metrics frame after resuming lands
+    # past the checkpoint's timesteps (≈ final.timesteps + n_steps), not back near zero.
+    metrics: list = []
     train_ppo(
         _tiny_ppo(total=512), "CartPole-v1", TrainControl(),
-        lambda _m: None, lambda _p: None,
-        lambda model: captured.setdefault("start", int(model.num_timesteps)),
+        metrics.append, lambda _p: None, None,
         resume_blob=final.blob,
     )
-    assert captured["start"] == final.timesteps  # loaded model kept its step counter
+    assert metrics and metrics[0].timesteps > final.timesteps
 
 
 # -- evolution snapshot + resume --------------------------------------------

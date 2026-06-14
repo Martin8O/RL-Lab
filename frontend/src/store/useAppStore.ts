@@ -52,6 +52,42 @@ const DEFAULT_EVOLUTION_PARAMS: EvolutionHyperparams = {
   episodes:        3,
 }
 
+// Per-env defaults: when the user picks a different game, the sidebar params + step budget snap
+// to *that* env's ★ recommended values from the registry (LunarLander wants very different
+// settings than CartPole). Falls back to the previous value for any param the env doesn't define.
+function envDefaults(
+  spec: EnvSpec | undefined,
+  prev: { hyperparams: PPOHyperparams; evolutionParams: EvolutionHyperparams; totalTimesteps: number },
+): { hyperparams: PPOHyperparams; evolutionParams: EvolutionHyperparams; totalTimesteps: number } | null {
+  if (!spec) return null
+  const ppo = spec.hyperparams?.ppo ?? {}
+  const evo = spec.hyperparams?.neuroevolution ?? {}
+  const num = (key: keyof PPOHyperparams | keyof EvolutionHyperparams, block: Record<string, { recommended: number | string }>, fb: number) =>
+    block[key] !== undefined ? Number(block[key].recommended) : fb
+  return {
+    hyperparams: {
+      learning_rate:     num('learning_rate', ppo, prev.hyperparams.learning_rate),
+      gamma:             num('gamma', ppo, prev.hyperparams.gamma),
+      clip_range:        num('clip_range', ppo, prev.hyperparams.clip_range),
+      ent_coef:          num('ent_coef', ppo, prev.hyperparams.ent_coef),
+      n_steps:           num('n_steps', ppo, prev.hyperparams.n_steps),
+      batch_size:        num('batch_size', ppo, prev.hyperparams.batch_size),
+      n_hidden_layers:   num('n_hidden_layers', ppo, prev.hyperparams.n_hidden_layers),
+      neurons_per_layer: num('neurons_per_layer', ppo, prev.hyperparams.neurons_per_layer),
+      activation:        (ppo.activation?.recommended as 'tanh' | 'relu') ?? prev.hyperparams.activation,
+    },
+    evolutionParams: {
+      population_size: num('population_size', evo, prev.evolutionParams.population_size),
+      top_k_parents:   num('top_k_parents', evo, prev.evolutionParams.top_k_parents),
+      mutation_rate:   num('mutation_rate', evo, prev.evolutionParams.mutation_rate),
+      crossover_rate:  num('crossover_rate', evo, prev.evolutionParams.crossover_rate),
+      generations:     num('generations', evo, prev.evolutionParams.generations),
+      episodes:        prev.evolutionParams.episodes,  // non-UI knob — preserve
+    },
+    totalTimesteps: spec.default_total_timesteps || prev.totalTimesteps,
+  }
+}
+
 interface AppState {
   // ─ persisted ───────────────────────────────────────────────
   locale:          Locale
@@ -177,7 +213,13 @@ export const useAppStore = create<AppState>()(
       setTheme:          (theme)          => set({ theme }),
       setBackendStatus:  (backendStatus)  => set({ backendStatus }),
       setEnvs:           (envs)           => set({ envs }),
-      setSelectedEnvId:  (selectedEnvId)  => set({ selectedEnvId }),
+      // Switching game also snaps the sidebar params + step budget to the new env's ★ recommended
+      // values (CartPole and LunarLander want very different settings). The env selector is disabled
+      // during a run, so this never fires mid-training.
+      setSelectedEnvId:  (selectedEnvId)  => set((s) => {
+        const defaults = envDefaults(s.envs.find((e) => e.id === selectedEnvId), s)
+        return defaults ? { selectedEnvId, ...defaults } : { selectedEnvId }
+      }),
       // Switching algorithm also jumps to the chart tab that algorithm feeds, so the chart
       // never sits empty after a switch (PPO → Reward, neuroevolution → Fitness).
       setAlgo:           (algo)           => set({ algo, activeTab: algo === 'neuroevolution' ? 'fitness' : 'reward' }),

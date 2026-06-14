@@ -1,7 +1,7 @@
 import type { CSSProperties } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAppStore } from '../store/useAppStore'
-import { currentBand, scaleFromEnvSkill, skillScaleFor } from '../content/skill'
+import { currentBand, scaleFromEnvSkill, scaleFromEnvSpec, skillScaleFor } from '../content/skill'
 
 // Fixed low→high skill gradient (red = beginner, green = superhuman). Theme-agnostic.
 const GRADIENT =
@@ -26,6 +26,7 @@ export default function SkillMeter({ slot, overlay = false }: {
 }) {
   const { t } = useTranslation()
   const envId    = useAppStore((s) => s.selectedEnvId)
+  const envs     = useAppStore((s) => s.envs)
   const envSkill = useAppStore((s) => s.envSkill)
 
   const playState      = useAppStore((s) => s.playState)
@@ -71,15 +72,24 @@ export default function SkillMeter({ slot, overlay = false }: {
     titleKey = 'skill.title'
   }
 
-  // Prefer the backend's per-env thresholds (single source of truth with the play rating);
-  // fall back to the local table until that fetch lands or for an unknown env.
-  const scale = envSkill ? scaleFromEnvSkill(envSkill) : skillScaleFor(envId)
+  // Prefer the backend's per-env thresholds (single source of truth with the play rating), but
+  // only when they're for the *currently selected* env — a stale fetch from a previous env must
+  // never scale this one. Otherwise derive the scale from the selected env's own spec (so e.g.
+  // CartPole's 0–500 can't leak onto LunarLander), and only then the local table.
+  const scale =
+    envSkill && envSkill.env_id === envId
+      ? scaleFromEnvSkill(envSkill)
+      : scaleFromEnvSpec(envs.find((e) => e.id === envId)) ?? skillScaleFor(envId)
 
   const hasScore = score !== null
   const value = score ?? 0
-  const frac = Math.max(0, Math.min(1, value / scale.max))
+  // Fill + tick positions measured across [scale.min, scale.max], so a shaped env that starts
+  // negative (LunarLander, min -100) shows real progress through the red instead of a flat 0%.
+  const span = scale.max - scale.min || 1
+  const posOf = (v: number) => Math.max(0, Math.min(1, (v - scale.min) / span))
+  const frac = posOf(value)
   const band = currentBand(value, scale)
-  const ticks = scale.bands.slice(1).map((b) => b.min / scale.max) // band boundaries
+  const ticks = scale.bands.slice(1).map((b) => posOf(b.min)) // band boundaries
 
   const recordMarks = [
     { key: 'human' as const, value: markerHuman },
@@ -88,7 +98,7 @@ export default function SkillMeter({ slot, overlay = false }: {
     .filter((m): m is { key: 'human' | 'ai'; value: number } => typeof m.value === 'number' && m.value > 0)
     .map((m) => ({
       ...m,
-      frac: Math.max(0, Math.min(1, m.value / scale.max)),
+      frac: posOf(m.value),
       color: MARKER_COLORS[m.key],
       label: t(m.key === 'human' ? 'playscore.best_human' : 'playscore.best_ai', { score: Math.round(m.value) }),
     }))
@@ -122,8 +132,8 @@ export default function SkillMeter({ slot, overlay = false }: {
           position: 'absolute', inset: 0, borderRadius: 7,
           background: GRADIENT, opacity: hasScore ? 1 : 0.8,
         }} />
-        {ticks.map((tk) => (
-          <div key={tk} style={{
+        {ticks.map((tk, i) => (
+          <div key={i} style={{
             position: 'absolute', left: `${tk * 100}%`, top: 0, bottom: 0,
             width: 1, background: 'rgba(255,255,255,0.5)',
           }} />

@@ -59,7 +59,12 @@ class PlayScoreStore:
         try:
             raw = json.loads(self.path.read_text(encoding="utf-8"))
             for env_id, entry in raw.items():
-                cache[env_id] = PlayScores.model_validate(entry)
+                scores = PlayScores.model_validate(entry)
+                # Trim to the current TOP_N on load, so boards saved under an older (larger) TOP_N
+                # immediately present + qualify against the same cutoff the user sees.
+                scores.human = scores.human[:TOP_N]
+                scores.ai = scores.ai[:TOP_N]
+                cache[env_id] = scores
         except FileNotFoundError:
             pass
         except (json.JSONDecodeError, ValueError):

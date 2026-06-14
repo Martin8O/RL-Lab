@@ -39,6 +39,34 @@ export const PLAY_GUIDES: Record<string, PlayGuide> = {
         + 'natrénovaný agent.',
     },
   },
+
+  lunarlander: {
+    goal: {
+      en: 'Land the module gently on the pad between the two flags, upright and slow, with both '
+        + 'legs down. A soft, on-target landing scores around +200 (the "solved" mark); crashing '
+        + 'or flying off the screen ends the episode with a big penalty. Wasting fuel costs a little '
+        + 'each frame, so thrust only when you need to.',
+      cz: 'Přistaňte s modulem jemně na plošinu mezi dvěma vlajkami — narovnaný, pomalu a s oběma '
+        + 'nohama dole. Měkké přistání na cíli dá kolem +200 (hranice „vyřešeno“); havárie nebo '
+        + 'vylétnutí z obrazovky ukončí epizodu velkou penalizací. Plýtvání palivem stojí každý '
+        + 'snímek trochu, takže přidávejte tah jen když je potřeba.',
+    },
+    controls: [
+      { keys: '↑ / W', action: { en: 'Fire the main engine (thrust up)', cz: 'Zážeh hlavního motoru (tah vzhůru)' } },
+      { keys: '← / A', action: { en: 'Fire the left thruster (nudge left)', cz: 'Zážeh levé trysky (posun doleva)' } },
+      { keys: '→ / D', action: { en: 'Fire the right thruster (nudge right)', cz: 'Zážeh pravé trysky (posun doprava)' } },
+      { keys: '(release)', action: { en: 'No thrust — coast and fall', cz: 'Bez tahu — volný pád' } },
+    ],
+    tips: {
+      en: 'Releasing every key cuts all engines, so let gravity do the work and tap the thrusters '
+        + 'in short bursts. Kill your sideways drift early, then feather the main engine to slow your '
+        + 'descent just before touchdown. Switch to "Watch AI" to see how a trained agent lands it.',
+      cz: 'Puštění všech kláves vypne motory, takže nechte pracovat gravitaci a trysky používejte '
+        + 'v krátkých dávkách. Boční pohyb zastavte včas a těsně před dosednutím zpomalujte sestup '
+        + 'jemným přidáváním hlavního motoru. Přepněte na „Sledovat AI“ a uvidíte, jak přistává '
+        + 'natrénovaný agent.',
+    },
+  },
 }
 
 export const DEFAULT_PLAY_GUIDE: PlayGuide = PLAY_GUIDES.cartpole

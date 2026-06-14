@@ -28,7 +28,6 @@ export default function PlayControls() {
   const backendStatus  = useAppStore((s) => s.backendStatus)
   const trainState     = useAppStore((s) => s.trainState)
   const playState      = useAppStore((s) => s.playState)
-  const playMode       = useAppStore((s) => s.playMode)
   const playSpeed      = useAppStore((s) => s.playSpeed)
   const playCheckpointId = useAppStore((s) => s.playCheckpointId)
   const setPlayMode      = useAppStore((s) => s.setPlayMode)
@@ -54,30 +53,34 @@ export default function PlayControls() {
     void fetchCheckpoints().then(setCheckpoints).catch(() => {})
   }, [backendStatus, playState])
 
-  // Keep the AI-mode selection valid: default to the newest matching checkpoint, and drop a
-  // stale pick if the env changed out from under it.
+  // Keep the AI checkpoint selection valid: default to the newest matching checkpoint, and drop a
+  // stale pick if the env changed out from under it (the "AI plays" button needs a valid model).
   useEffect(() => {
-    if (playMode !== 'ai') return
     const stillValid = playCheckpointId && envCheckpoints.some((c) => c.id === playCheckpointId)
     if (!stillValid) setPlayCheckpointId(envCheckpoints[0]?.id ?? null)
-  }, [playMode, selectedEnvId, checkpoints]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [selectedEnvId, checkpoints]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const aiReady   = playMode !== 'ai' || (!!playCheckpointId && envCheckpoints.length > 0)
-  const canPlay   = backendStatus === 'online' && humanPlayable && !trainLive && aiReady
+  const ready     = backendStatus === 'online' && !trainLive
+  const canHuman  = ready && humanPlayable
+  const aiReady   = !!playCheckpointId && envCheckpoints.length > 0
+  const canAi     = ready && aiReady
 
-  async function handlePlay() {
+  // Two explicit actions instead of a Play button + a who-plays dropdown: you Play, or the AI
+  // plays by itself. The store's playMode (skill-meter label + keyboard wiring) is set per action.
+  async function handlePlay(mode: 'human' | 'ai') {
     setError(null)
+    setPlayMode(mode)
     // Remember which model the AI plays so its leaderboard identity is known on finish
     // (the checkpoint label already encodes algo + size, so use it verbatim).
-    const ckpt = playMode === 'ai'
+    const ckpt = mode === 'ai'
       ? envCheckpoints.find((c) => c.id === playCheckpointId) ?? null
       : null
     setPlayCheckpointLabel(ckpt ? ckpt.label : null)
     try {
       const status = await startPlay({
         env_id: selectedEnvId ?? 'cartpole',
-        mode: playMode,
-        checkpoint_id: playMode === 'ai' ? playCheckpointId : null,
+        mode,
+        checkpoint_id: mode === 'ai' ? playCheckpointId : null,
         seed,
         speed: playSpeed,
       })
@@ -99,61 +102,78 @@ export default function PlayControls() {
       background: 'var(--surface-1)', padding: '0 var(--space-3)', minHeight: 52,
       display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap',
     }}>
-      {/* Play / Stop */}
-      <button
-        onClick={playing ? handleStop : handlePlay}
-        disabled={!playing && !canPlay}
-        title={!humanPlayable ? t('play.not_playable') : trainLive ? t('play.busy_training') : undefined}
-        style={{
-          display: 'inline-flex', alignItems: 'center', gap: 6,
-          height: 'var(--control-sm)', padding: '0 12px', borderRadius: 'var(--radius-md)',
-          cursor: (!playing && !canPlay) ? 'not-allowed' : 'pointer',
-          fontSize: 'var(--fs-label)', fontWeight: 'var(--fw-semibold)',
-          background: playing ? 'var(--danger-surface)' : 'var(--accent)',
-          color: playing ? 'var(--danger)' : 'var(--accent-contrast)',
-          border: '1px solid transparent', boxShadow: playing ? 'none' : 'var(--shadow-xs)',
-          opacity: (!playing && !canPlay) ? 0.5 : 1, transition: 'var(--t-colors)',
-        }}
-      >
-        <span aria-hidden>{playing ? '■' : '▶'}</span>
-        {playing ? t('play.stop') : t('play.start')}
-      </button>
-
-      {/* Who plays */}
-      <label style={labelStyle}>
-        {t('play.mode')}
-        <select
-          value={playMode}
-          disabled={playing}
-          onChange={(e) => setPlayMode(e.target.value as 'human' | 'ai')}
-          style={selectStyle}
+      {playing ? (
+        /* Stop the active session */
+        <button
+          onClick={handleStop}
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 6,
+            height: 'var(--control-sm)', padding: '0 12px', borderRadius: 'var(--radius-md)',
+            cursor: 'pointer', fontSize: 'var(--fs-label)', fontWeight: 'var(--fw-semibold)',
+            background: 'var(--danger-surface)', color: 'var(--danger)',
+            border: '1px solid transparent', transition: 'var(--t-colors)',
+          }}
         >
-          <option value="human">{t('play.human')}</option>
-          <option value="ai">{t('play.ai')}</option>
-        </select>
-      </label>
+          <span aria-hidden>■</span> {t('play.stop')}
+        </button>
+      ) : (
+        <>
+          {/* You play */}
+          <button
+            onClick={() => handlePlay('human')}
+            disabled={!canHuman}
+            title={!humanPlayable ? t('play.not_playable') : trainLive ? t('play.busy_training') : undefined}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 6,
+              height: 'var(--control-sm)', padding: '0 12px', borderRadius: 'var(--radius-md)',
+              cursor: canHuman ? 'pointer' : 'not-allowed',
+              fontSize: 'var(--fs-label)', fontWeight: 'var(--fw-semibold)',
+              background: 'var(--accent)', color: 'var(--accent-contrast)',
+              border: '1px solid transparent', boxShadow: 'var(--shadow-xs)',
+              opacity: canHuman ? 1 : 0.5, transition: 'var(--t-colors)',
+            }}
+          >
+            <span aria-hidden>▶</span> {t('play.play')}
+          </button>
 
-      {/* Checkpoint picker (AI watch only) */}
-      {playMode === 'ai' && (
-        envCheckpoints.length > 0 ? (
-          <label style={labelStyle}>
-            {t('play.checkpoint')}
-            <select
-              value={playCheckpointId ?? ''}
-              disabled={playing}
-              onChange={(e) => setPlayCheckpointId(e.target.value)}
-              style={{ ...selectStyle, maxWidth: 160 }}
-            >
-              {envCheckpoints.map((c) => (
-                <option key={c.id} value={c.id} title={c.label}>
-                  {optionLabel(c.label)}
-                </option>
-              ))}
-            </select>
-          </label>
-        ) : (
-          <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{t('play.no_checkpoints')}</span>
-        )
+          {/* AI plays by itself */}
+          <button
+            onClick={() => handlePlay('ai')}
+            disabled={!canAi}
+            title={trainLive ? t('play.busy_training') : !aiReady ? t('play.no_checkpoints') : undefined}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 6,
+              height: 'var(--control-sm)', padding: '0 12px', borderRadius: 'var(--radius-md)',
+              cursor: canAi ? 'pointer' : 'not-allowed',
+              fontSize: 'var(--fs-label)', fontWeight: 'var(--fw-semibold)',
+              background: 'var(--surface-2)', color: 'var(--text-strong)',
+              border: '1px solid var(--border-default)',
+              opacity: canAi ? 1 : 0.5, transition: 'var(--t-colors)',
+            }}
+          >
+            <span aria-hidden>🤖</span> {t('play.ai_play')}
+          </button>
+
+          {/* Model picker for the AI button (shown when checkpoints exist for this env) */}
+          {envCheckpoints.length > 0 ? (
+            <label style={labelStyle}>
+              {t('play.checkpoint')}
+              <select
+                value={playCheckpointId ?? ''}
+                onChange={(e) => setPlayCheckpointId(e.target.value)}
+                style={{ ...selectStyle, maxWidth: 160 }}
+              >
+                {envCheckpoints.map((c) => (
+                  <option key={c.id} value={c.id} title={c.label}>
+                    {optionLabel(c.label)}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : (
+            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{t('play.no_checkpoints')}</span>
+          )}
+        </>
       )}
 
       {/* Pacing — play allows slow-mo so a beginner can react */}

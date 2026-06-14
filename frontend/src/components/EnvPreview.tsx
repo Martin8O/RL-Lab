@@ -3,11 +3,15 @@ import { useTranslation } from 'react-i18next'
 import { useAppStore } from '../store/useAppStore'
 import { sendPlayAction, setFrameHandler, setPlayFrameHandler, setPreview } from '../api/client'
 import type { PlayFrame, PreviewFrame } from '../api/types'
+import { keymapFor } from '../content/playKeymaps'
 import PlayControls from './PlayControls'
 import SkillMeter from './SkillMeter'
 
 const MIN_SPEED = 1
 const MAX_SPEED = 20
+// When 2+ engines are held at once, the discrete env can still only fire ONE per step, so we
+// rapidly alternate them (≈ each at half thrust). ~30 ms keeps pace with the sim step rate.
+const MULTI_KEY_ALTERNATE_MS = 30
 
 // Envs the frontend draws itself from raw physics state (keep in sync with the backend's
 // app/services/client_render.py). For these, the server streams state instead of an image.
@@ -109,19 +113,71 @@ export default function EnvPreview() {
     }
   }, [live])
 
-  // Keyboard control for human play: ← / A = left (0), → / D = right (1). Latency-tolerant —
-  // the backend holds the last action, so a single keydown suffices (auto-repeat is harmless).
+  // Keyboard control for human play, driven by the per-env keymap (content/playKeymaps.ts).
+  // Latency-tolerant — the backend holds the last action between WS frames. We track every held
+  // bound key; with one engine held we send it, with two-or-more we alternate them (LunarLander's
+  // discrete space fires one engine per step, so this approximates pressing both at once). When
+  // all keys are released we send the env's idle action (LunarLander 0 = no thrust) or, for an env
+  // with no idle (CartPole), keep the last action.
   useEffect(() => {
     if (!(playState === 'playing' && playMode === 'human')) return
-    const onKey = (e: KeyboardEvent) => {
-      const tag = (e.target as HTMLElement | null)?.tagName
-      if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return
-      if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') { sendPlayAction(0); e.preventDefault() }
-      else if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') { sendPlayAction(1); e.preventDefault() }
+    const keymap = keymapFor(selectedEnvId)
+    const lookup = new Map<string, number>()
+    for (const b of keymap.bindings) for (const k of b.keys) lookup.set(k, b.action)
+    const held: string[] = []  // ordered; last entry = most recently pressed
+    let timer: number | null = null
+    const stopTimer = () => { if (timer !== null) { clearInterval(timer); timer = null } }
+
+    // Distinct actions currently demanded by the held keys, in press order.
+    const heldActions = (): number[] => {
+      const seen = new Set<number>(); const out: number[] = []
+      for (const k of held) { const a = lookup.get(k)!; if (!seen.has(a)) { seen.add(a); out.push(a) } }
+      return out
     }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [playState, playMode])
+    // Push current intent to the backend, (re)starting the alternation timer only while 2+ engines
+    // are held; the timer reads heldActions() live so it adapts as keys come and go.
+    const apply = () => {
+      const actions = heldActions()
+      if (actions.length >= 2) {
+        if (timer === null) {
+          let i = 0
+          timer = window.setInterval(() => {
+            const a = heldActions()
+            if (a.length < 2) { stopTimer(); return }
+            sendPlayAction(a[i % a.length]); i++
+          }, MULTI_KEY_ALTERNATE_MS)
+        }
+        return
+      }
+      stopTimer()
+      if (actions.length === 1) sendPlayAction(actions[0])
+      else if (keymap.idleAction !== null) sendPlayAction(keymap.idleAction)
+    }
+
+    const isFormField = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement | null)?.tagName
+      return tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA'
+    }
+    const onDown = (e: KeyboardEvent) => {
+      if (isFormField(e) || !lookup.has(e.key)) return
+      e.preventDefault()
+      if (!held.includes(e.key)) held.push(e.key)
+      apply()
+    }
+    const onUp = (e: KeyboardEvent) => {
+      if (!lookup.has(e.key)) return
+      const i = held.indexOf(e.key)
+      if (i >= 0) held.splice(i, 1)
+      apply()
+    }
+    window.addEventListener('keydown', onDown)
+    window.addEventListener('keyup', onUp)
+    return () => {
+      stopTimer()
+      window.removeEventListener('keydown', onDown)
+      window.removeEventListener('keyup', onUp)
+    }
+  }, [playState, playMode, selectedEnvId])
 
   function toggleVisual() {
     const next = !visual

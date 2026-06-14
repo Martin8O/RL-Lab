@@ -253,7 +253,18 @@ function runBtn(kind: BtnKind, lg = false): CSSProperties {
   }
 }
 
-const STEPS_OPTIONS = [10_000, 25_000, 50_000, 100_000, 200_000]
+// The step-budget dropdown is built per-env from the registry's default_total_timesteps: a
+// ladder of ×0.2 … ×4 around the recommended value, with ★ on the recommendation. So CartPole
+// (50k → 10k…200k) and LunarLander (500k → 100k…2M) each get an appropriate range.
+const STEP_FACTORS = [0.2, 0.5, 1, 2, 4]
+
+function stepsLadder(defaultSteps: number): number[] {
+  return STEP_FACTORS.map((f) => Math.round((defaultSteps * f) / 1000) * 1000)
+}
+
+function formatSteps(n: number): string {
+  return n >= 1_000_000 ? `${n / 1_000_000}M` : `${Math.round(n / 1000)}k`
+}
 
 // ── Sidebar ──────────────────────────────────────────────────────────────────
 
@@ -283,6 +294,11 @@ export default function Sidebar() {
   const ppoDefs = selectedEnv?.hyperparams?.['ppo'] ?? {}
   const evoDefs = selectedEnv?.hyperparams?.['neuroevolution'] ?? {}
   const isEvo = algo === 'neuroevolution'
+
+  // Per-env step ladder + the ★ recommended budget; always include the current value so the
+  // <select> can render it even after a reload with a value off the ladder.
+  const defaultSteps = selectedEnv?.default_total_timesteps ?? 50_000
+  const stepsOptions = Array.from(new Set([...stepsLadder(defaultSteps), totalTimesteps])).sort((a, b) => a - b)
 
   return (
     <aside style={{
@@ -512,9 +528,9 @@ export default function Sidebar() {
                 fontSize: 'var(--fs-label)', cursor: isActive ? 'default' : 'pointer',
               }}
             >
-              {STEPS_OPTIONS.map((n) => (
+              {stepsOptions.map((n) => (
                 <option key={n} value={n}>
-                  {n === 50_000 ? `${n / 1000}k ★` : `${n / 1000}k`}
+                  {n === defaultSteps ? `${formatSteps(n)} ★` : formatSteps(n)}
                 </option>
               ))}
             </select>

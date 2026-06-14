@@ -86,6 +86,8 @@
   },
   "play": {
     "start": "Play vs AI",
+    "play": "Play",
+    "ai_play": "AI plays",
     "stop": "Stop",
     "mode": "Mode",
     "human": "You play",
@@ -98,7 +100,7 @@
     "not_playable": "This environment isn't human-playable",
     "your_skill": "Your skill",
     "ai_skill": "AI skill",
-    "playing_hint": "← / → to balance the pole",
+    "playing_hint": "Keyboard active — see How to play",
     "instructions_title": "How to play {{env}}",
     "goal": "Goal",
     "controls": "Controls",

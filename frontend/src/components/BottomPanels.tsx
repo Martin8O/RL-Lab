@@ -55,8 +55,11 @@ function Leaderboard() {
   const algo          = useAppStore((s) => s.algo)
   const lastEvolution = useAppStore((s) => s.lastEvolution)
   const selectedEnvId = useAppStore((s) => s.selectedEnvId)
+  const envs          = useAppStore((s) => s.envs)
 
-  const solveMax = skillScaleFor(selectedEnvId).max
+  // The env's real solved score (CartPole 500, LunarLander 200) — never skillScaleFor's CartPole
+  // fallback, which would mark LunarLander "solved" only at 500.
+  const solveMax = envs.find((e) => e.id === selectedEnvId)?.solved_score ?? skillScaleFor(selectedEnvId).max
   const children = lastEvolution?.children ?? []
 
   let body: React.ReactNode
@@ -171,14 +174,14 @@ function EvolutionStats() {
   const lastEvolution = useAppStore((s) => s.lastEvolution)
   const evolutionHistory = useAppStore((s) => s.evolutionHistory)
   const selectedEnvId = useAppStore((s) => s.selectedEnvId)
+  const envs          = useAppStore((s) => s.envs)
   const population     = useAppStore((s) => s.evolutionParams.population_size)
 
   const isEvo = algo === 'neuroevolution'
 
   // Run-level "steps-to-solve" equivalent: the first generation whose best genome reached
-  // the solved score. Shown here (a run-level panel) rather than as a per-child leaderboard
-  // column, where it has no per-genome meaning.
-  const solveMax = skillScaleFor(selectedEnvId).max
+  // the env's real solved score (200 for LunarLander, not skillScaleFor's CartPole 500).
+  const solveMax = envs.find((e) => e.id === selectedEnvId)?.solved_score ?? skillScaleFor(selectedEnvId).max
   let solvedGen: number | null = null
   for (const e of evolutionHistory) {
     if (e.best_fitness >= solveMax) { solvedGen = e.generation; break }

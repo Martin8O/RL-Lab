@@ -12,7 +12,8 @@
 # desktop, install from these pins, then swap Torch to the CUDA (Blackwell sm_120)
 # build per docs/MIGRATION.md:
 #   pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128
-# Box2D / Atari extras are intentionally NOT installed yet (deferred to GPU phase).
+# Box2D (LunarLander, G3a) is CPU-friendly and installed from a prebuilt wheel — no
+# compiler needed on Windows/py3.11. Atari/MuJoCo extras stay deferred to the GPU phase.
 
 # --- Web stack (A3) ---
 annotated-types==0.7.0
@@ -44,6 +45,7 @@ websockets==16.0
 # --- ML stack (A1) ---
 absl-py==2.4.0
 ale-py==0.12.0
+box2d==2.3.10
 cloudpickle==3.1.2
 colorama==0.4.6
 contourpy==1.3.3
@@ -77,6 +79,7 @@ python-dateutil==2.9.0.post0
 rich==15.0.0
 six==1.17.0
 stable_baselines3==2.8.0
+swig==4.4.1
 sympy==1.14.0
 tensorboard==2.20.0
 tensorboard-data-server==0.7.2

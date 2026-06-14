@@ -27,24 +27,31 @@ _BAND_FRACTIONS: list[tuple[SkillBandId, float]] = [
 
 
 def env_skill(env_id: str) -> EnvSkill | None:
-    """The concrete band thresholds for ``env_id``, or ``None`` if the env is unknown."""
+    """The concrete band thresholds for ``env_id``, or ``None`` if the env is unknown.
+
+    Bands span the env's ``[min_score, solved_score]`` range, so a shaped env that starts in
+    the red (LunarLander, ``min_score=-100``) gets bands that climb through the negatives
+    instead of all bunching at 0.
+    """
     spec = get_env(env_id)
     if spec is None:
         return None
     max_score = spec.solved_score
+    min_score = spec.min_score
+    span = max_score - min_score
     bands = [
-        SkillBand(id=band_id, min_score=round(frac * max_score, 4))
+        SkillBand(id=band_id, min_score=round(min_score + frac * span, 4))
         for band_id, frac in _BAND_FRACTIONS
     ]
-    return EnvSkill(env_id=env_id, max_score=max_score, bands=bands)
+    return EnvSkill(env_id=env_id, max_score=max_score, min_score=min_score, bands=bands)
 
 
 def rate(env_id: str, score: float) -> SkillRating | None:
     """Rate a finished session's ``score`` against ``env_id``'s bands.
 
     Returns the highest band whose ``min_score`` the score reaches (the lowest band starts at
-    0, so a score is always rated), plus a clamped fill ratio for the meter. ``None`` only if
-    the env is unknown.
+    the env's ``min_score``, so a score is always rated), plus a clamped fill ratio for the
+    meter measured across ``[min_score, solved_score]``. ``None`` only if the env is unknown.
     """
     skill = env_skill(env_id)
     if skill is None:
@@ -53,6 +60,7 @@ def rate(env_id: str, score: float) -> SkillRating | None:
     for candidate in skill.bands:
         if score >= candidate.min_score:
             band = candidate.id
-    ratio = score / skill.max_score if skill.max_score > 0 else 0.0
+    span = skill.max_score - skill.min_score
+    ratio = (score - skill.min_score) / span if span > 0 else 0.0
     ratio = max(0.0, min(1.0, ratio))
     return SkillRating(band=band, score=score, max_score=skill.max_score, ratio=ratio)

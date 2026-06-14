@@ -30,6 +30,11 @@ export interface EnvSpec {
   supported_algos: string[]
   /** algo_id → param_id → definition */
   hyperparams: Record<string, Record<string, HyperparamDef>>
+  solved_score: number
+  /** The score that reads as 0% on the skill meter (0 for CartPole, negative for shaped envs). */
+  min_score: number
+  /** Recommended PPO training budget (the ★ default); the sidebar builds its step ladder from it. */
+  default_total_timesteps: number
   human_playable: boolean
   competitive: boolean
   difficulty: Difficulty
@@ -283,6 +288,7 @@ export interface SkillBand {
 export interface EnvSkill {
   env_id: string
   max_score: number
+  min_score: number
   bands: SkillBand[]
 }
 
@@ -391,8 +397,8 @@ export interface PlayScoreResult {
   rank: number | null
 }
 
-/** How many rows each board keeps (mirror of backend TOP_N) — used to pre-decide a name prompt. */
-export const PLAY_SCORE_TOP_N = 7
+/** How many rows each board keeps + shows (mirror of backend TOP_N) — used to pre-decide a name prompt. */
+export const PLAY_SCORE_TOP_N = 5
 
 /** Any frame the WS channel can push. */
 export type TrainWsFrame =

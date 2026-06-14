@@ -1,11 +1,12 @@
 import { useTranslation } from 'react-i18next'
 import type { CSSProperties } from 'react'
 import { useAppStore } from '../store/useAppStore'
+import { PLAY_SCORE_TOP_N } from '../api/types'
 import type { PlayScoreEntry } from '../api/types'
 
 // The persistent high-score slot (E2): one shared "High Scores" header over two boards — a
 // named Human hall of fame and an AI one (keyed by model). Same footprint as the bottom row,
-// sized so the top-7 fits without scrolling.
+// sized so the top-N fits without scrolling.
 export default function PlayLeaderboards() {
   const { t } = useTranslation()
   const playScores = useAppStore((s) => s.playScores)
@@ -61,8 +62,8 @@ function Board({ title, entries, divider = false }: {
         </div>
       ) : (
         <div style={{ flex: 1, overflowY: 'auto', padding: '0 4px 4px' }}>
-          {/* Show only the top 5 so the board never needs to scroll. */}
-          {entries.slice(0, 5).map((e, i) => <Row key={`${e.name}-${e.achieved_at}`} entry={e} rank={i + 1} />)}
+          {/* Display count == backend TOP_N, so "made the board" matches exactly what's shown. */}
+          {entries.slice(0, PLAY_SCORE_TOP_N).map((e, i) => <Row key={`${e.name}-${e.achieved_at}`} entry={e} rank={i + 1} />)}
         </div>
       )}
     </div>

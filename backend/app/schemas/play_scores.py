@@ -14,8 +14,10 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-# How many entries each board keeps (fits without scrolling in the bottom panel).
-TOP_N = 7
+# How many entries each board keeps *and* shows (the frontend renders exactly this many). Kept
+# equal to the displayed count so "did I make the board?" matches what the user sees — a score
+# only qualifies if a slot is free or it beats the lowest visible entry.
+TOP_N = 5
 
 PlayCategory = Literal["human", "ai"]
 

@@ -36,14 +36,17 @@ class EnvSkill(BaseModel):
 
     env_id: str
     max_score: float  # the env's solved_score (100% of the goal)
-    bands: list[SkillBand]  # ascending by min_score; lowest band starts at 0
+    min_score: float  # the score that reads as 0% (0 for CartPole, negative for LunarLander)
+    bands: list[SkillBand]  # ascending by min_score; lowest band starts at min_score
 
 
 class SkillRating(BaseModel):
     """How a finished session scored — the rated band plus the raw figures behind it.
 
-    ``ratio`` is ``score / max_score`` clamped to [0, 1], a ready-made fill fraction for the
-    E2 skill meter (it does not have to recompute the band boundaries to draw the bar).
+    ``ratio`` is ``(score - min_score) / (max_score - min_score)`` clamped to [0, 1], a
+    ready-made fill fraction for the E2 skill meter (it does not have to recompute the band
+    boundaries to draw the bar). For an env with ``min_score == 0`` this is just the old
+    ``score / max_score``.
     """
 
     band: SkillBandId
