@@ -28,6 +28,11 @@ class PlayConfig(BaseModel):
     ``checkpoint_id`` is required for ``mode="ai"`` (the model that plays) and ignored for
     ``mode="human"``. ``seed`` makes the episode reproducible; ``None`` lets the env pick.
     ``speed`` (1×–20×) paces playback exactly like the training preview.
+
+    ``idle_action`` is the discrete action the session holds when the human gives no input — the
+    env's "do nothing" (MountainCar/Acrobot 1 = no force/torque, LunarLander 0 = no thrust). The
+    keymap (frontend/src/content/playKeymaps.ts) is its source of truth; ``None`` means the env
+    has no idle (CartPole always moves) and the session falls back to action 0.
     """
 
     env_id: str = "cartpole"
@@ -35,6 +40,14 @@ class PlayConfig(BaseModel):
     checkpoint_id: str | None = None
     seed: int | None = None
     speed: float = 1.0
+    idle_action: int | None = None
+
+
+class PlaySpeedRequest(BaseModel):
+    """Body for ``POST /api/play/speed`` — change a live session's playback pacing (the speed
+    selector while a session is running). Clamped to the play range server-side."""
+
+    speed: float
 
 
 class PlayResult(BaseModel):

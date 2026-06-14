@@ -127,7 +127,10 @@ class PlaySession:
             self._seed = config.seed
             self._speed = _clamp_speed(config.speed)
             self._predict = predict
-            self._latest_action = 0
+            # Hold the env's idle action (no-op) until the human presses a key — otherwise the
+            # default 0 means "push left" on MountainCar/Acrobot, shoving the agent before any
+            # input. CartPole has no idle (idle_action None) so 0 is as good as any there.
+            self._latest_action = config.idle_action if config.idle_action is not None else 0
             self._n_actions = None
             self._step = 0
             self._score = 0.0
@@ -172,6 +175,17 @@ class PlaySession:
             if self._state != "playing":
                 return
             self._latest_action = int(action)
+
+    def set_speed(self, speed: float) -> PlayStatus:
+        """Change playback pacing mid-session (the speed selector while a session runs).
+
+        The worker loop reads ``_current_speed()`` every step, so the new pace takes effect on
+        the next frame — for both human and AI sessions. Harmless when idle (no loop is reading
+        it). Clamped to the play range.
+        """
+        with self._lock:
+            self._speed = _clamp_speed(speed)
+            return self._status_locked()
 
     def stop(self) -> PlayStatus:
         """Abort the active session; the loop observes this and tears down its env."""

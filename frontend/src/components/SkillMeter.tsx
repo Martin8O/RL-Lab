@@ -83,8 +83,19 @@ export default function SkillMeter({ slot, overlay = false }: {
 
   const hasScore = score !== null
   const value = score ?? 0
+  // A valid skill READING needs a meaningful score. For an env whose reward climbs from zero
+  // (CartPole, scale.min >= 0) the running/partial score is a valid lower bound, so it reads live.
+  // For shaped/penalty envs (scale.min < 0 — MountainCar, Acrobot, LunarLander) the running
+  // cumulative score starts ABOVE the "solved" mark and only falls as steps/fuel are spent, so it
+  // is NOT a reading until the episode ends — showing it would make the meter start full and drain
+  // leftward (or, on an early stop, freeze on a bogus high band). So for those envs only a
+  // *finished* episode produces a band; while playing we show "measuring…", and an aborted session
+  // shows nothing. Training (not playVisible) reads ep_rew_mean, already a final-episode metric.
+  const partialNotAReading = playVisible && scale.min < 0 && playState !== 'finished'
+  const measuring = partialNotAReading && playState === 'playing'
+  const showReading = hasScore && !partialNotAReading
   // Fill + tick positions measured across [scale.min, scale.max], so a shaped env that starts
-  // negative (LunarLander, min -100) shows real progress through the red instead of a flat 0%.
+  // negative (LunarLander, min -200) shows real progress through the red instead of a flat 0%.
   const span = scale.max - scale.min || 1
   const posOf = (v: number) => Math.max(0, Math.min(1, (v - scale.min) / span))
   const frac = posOf(value)
@@ -130,7 +141,7 @@ export default function SkillMeter({ slot, overlay = false }: {
       <div style={{ position: 'relative', flex: 1, height: 14 }}>
         <div style={{
           position: 'absolute', inset: 0, borderRadius: 7,
-          background: GRADIENT, opacity: hasScore ? 1 : 0.8,
+          background: GRADIENT, opacity: showReading ? 1 : 0.8,
         }} />
         {ticks.map((tk, i) => (
           <div key={i} style={{
@@ -151,7 +162,7 @@ export default function SkillMeter({ slot, overlay = false }: {
             </span>
           </div>
         ))}
-        {hasScore && (
+        {showReading && (
           <div style={{
             position: 'absolute', left: `${frac * 100}%`, top: -3, bottom: -3,
             width: 2, marginLeft: -1, background: 'var(--text-h)',
@@ -168,10 +179,14 @@ export default function SkillMeter({ slot, overlay = false }: {
 
       <span style={{
         fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap',
-        color: hasScore ? 'var(--text-h)' : 'var(--text-muted)',
+        color: showReading ? 'var(--text-h)' : 'var(--text-muted)',
         minWidth: 120, textAlign: 'right',
       }}>
-        {hasScore ? `${t(`skill.${band.key}`)} · ${Math.round(value)}` : t('skill.no_data')}
+        {measuring
+          ? t('skill.measuring')
+          : showReading
+            ? `${t(`skill.${band.key}`)} · ${Math.round(value)}`
+            : t('skill.no_data')}
       </span>
     </div>
   )

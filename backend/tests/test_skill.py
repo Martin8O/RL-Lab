@@ -30,6 +30,20 @@ def test_env_skill_unknown_env_is_none() -> None:
     assert rate("does-not-exist", 100.0) is None
 
 
+def test_negative_reward_env_bands_span_the_red() -> None:
+    """G1a: MountainCar's bands climb through the negatives, from min_score up to solved_score."""
+    skill = env_skill("mountaincar")
+    assert skill is not None
+    assert skill.min_score == -200.0 and skill.max_score == -110.0
+    assert skill.bands[0].min_score == -200.0  # 'child' starts at the floor, not 0
+    assert skill.bands[-1].id == "superhuman"
+    # a "solved" score (-110) fills the meter; a flat -200 run rates child at 0%
+    solved = rate("mountaincar", -110.0)
+    floor = rate("mountaincar", -200.0)
+    assert solved is not None and solved.band == "superhuman" and solved.ratio == 1.0
+    assert floor is not None and floor.band == "child" and floor.ratio == 0.0
+
+
 # -- the evaluator ----------------------------------------------------------
 
 

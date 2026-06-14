@@ -44,6 +44,24 @@ export const PLAY_KEYMAPS: Record<string, PlayKeymap> = {
     ],
     idleAction: 0,
   },
+  // MountainCar: 0 = accelerate left, 1 = don't accelerate, 2 = accelerate right.
+  // Releasing all keys cuts the engine (idle = 1, "don't accelerate").
+  mountaincar: {
+    bindings: [
+      { keys: ['ArrowLeft', 'a', 'A'], action: 0 },
+      { keys: ['ArrowRight', 'd', 'D'], action: 2 },
+    ],
+    idleAction: 1,
+  },
+  // Acrobot: 0 = torque toward "−", 1 = no torque, 2 = torque toward "+". Releasing all
+  // keys applies no torque (idle = 1) so the arm coasts.
+  acrobot: {
+    bindings: [
+      { keys: ['ArrowLeft', 'a', 'A'], action: 0 },
+      { keys: ['ArrowRight', 'd', 'D'], action: 2 },
+    ],
+    idleAction: 1,
+  },
 }
 
 export const DEFAULT_KEYMAP: PlayKeymap = PLAY_KEYMAPS.cartpole

@@ -44,6 +44,14 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
         en: 'Both can be selected, but PPO is the practical choice here. LunarLander is much harder than CartPole, and PPO with enough steps (a few hundred thousand) reliably learns to land. The simple neuroevolution here uses a tiny network, so it improves but rarely reaches a clean landing within a few dozen generations.',
         cz: 'Vybrat lze obě, ale PPO je tu praktická volba. LunarLander je mnohem těžší než CartPole a PPO se s dostatkem kroků (řádově statisíce) spolehlivě naučí přistávat. Zdejší jednoduchá neuroevoluce používá drobnou síť, takže se sice zlepšuje, ale za pár desítek generací málokdy dosáhne čistého přistání.',
       },
+      mountaincar: {
+        en: 'A famous exploration trap. PPO with the default settings often stalls near −200: a random agent almost never reaches the flag, so there is no reward signal to learn from (raising the Entropy bonus helps it explore). Neuroevolution can do better here — among a whole population, some network stumbles onto the rocking motion that reaches the flag, and that success spreads. A great task for comparing the two.',
+        cz: 'Pověstná past na zkoumání. PPO s výchozím nastavením často uvázne kolem −200: náhodný agent skoro nikdy nedojede k vlajce, takže není z čeho se učit (pomáhá zvýšit bonus za entropii). Neuroevoluce tu může být lepší — v celé populaci některá síť náhodou objeví houpavý pohyb k vlajce a úspěch se rozšíří. Skvělá úloha pro porovnání obou.',
+      },
+      acrobot: {
+        en: 'Both handle Acrobot well. PPO reliably learns the pumping motion within a few hundred thousand steps and reaches the target (around −100). Neuroevolution also climbs steadily, since even a tiny network can discover the rhythmic swing. A good task to watch both succeed.',
+        cz: 'Acrobot zvládnou obě. PPO se za pár set tisíc kroků spolehlivě naučí „pumpovat“ a dosáhne cíle (kolem −100). Neuroevoluce se tu také plynule zlepšuje, protože i drobná síť objeví rytmické houpání. Pěkná úloha, kde uspějí obě.',
+      },
     },
   },
 
@@ -65,6 +73,14 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
       lunarlander: {
         en: 'The default 3e-4 is a solid starting point for LunarLander too. It is a harder task, so progress is slower — give it more steps rather than a much higher learning rate, which tends to destabilise landing.',
         cz: 'Výchozí 3e-4 je dobrý výchozí bod i pro LunarLander. Je to těžší úloha, takže pokrok je pomalejší — dejte mu raději více kroků než výrazně vyšší rychlost učení, která přistávání spíše rozhází.',
+      },
+      mountaincar: {
+        en: 'The default 3e-4 is fine. The real bottleneck on MountainCar is exploration, not step size — if PPO is stuck at −200, raise the Entropy bonus before touching the learning rate.',
+        cz: 'Výchozí 3e-4 je v pořádku. Skutečnou překážkou u MountainCar je zkoumání, ne velikost kroku — pokud PPO uvázne na −200, zvyšte raději bonus za entropii než rychlost učení.',
+      },
+      acrobot: {
+        en: '3e-4 works well for Acrobot. It is a stable task to learn, so there is little reason to change it — give it more steps rather than a higher rate.',
+        cz: '3e-4 funguje pro Acrobot dobře. Je to stabilní úloha, takže není důvod ji měnit — dejte mu raději víc kroků než vyšší rychlost.',
       },
     },
   },
@@ -88,6 +104,14 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
         en: 'A landing is a long sequence of small thrusts, so the agent must value future reward highly — keep γ at 0.99. Too low and it fires the engines greedily instead of planning a gentle touchdown.',
         cz: 'Přistání je dlouhá řada malých zážehů, takže agent musí vysoko cenit budoucí odměnu — nechte γ na 0.99. Při nízkém γ pálí trysky hltavě místo plánování jemného dosednutí.',
       },
+      mountaincar: {
+        en: 'Reaching the flag is a long build-up, so keep γ high (0.99): the agent must value a distant success over the −1 it pays every step. Too low and it never "sees" that rocking back now pays off later.',
+        cz: 'Dojezd k vlajce je dlouhé rozhoupávání, takže nechte γ vysoké (0.99): agent musí cenit vzdálený úspěch víc než −1, které platí každý krok. Při nízkém γ nikdy „neuvidí“, že couvnutí teď se vyplatí později.',
+      },
+      acrobot: {
+        en: 'A swing-up is a long sequence too, so 0.99 is right. The agent must plan several swings ahead rather than chase the next step.',
+        cz: 'Vyhoupnutí je také dlouhá řada kroků, takže 0.99 je správně. Agent musí plánovat několik kmitů dopředu, ne honit jen další krok.',
+      },
     },
   },
 
@@ -109,6 +133,14 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
       lunarlander: {
         en: '0.2 works well for LunarLander as well; there is rarely a reason to change it. Leave it and tune steps and learning rate first.',
         cz: '0.2 funguje dobře i pro LunarLander; jen zřídka je důvod ji měnit. Nechte ji a laďte nejdřív počet kroků a rychlost učení.',
+      },
+      mountaincar: {
+        en: '0.2 is fine — clipping is not what holds MountainCar back. Leave it and adjust exploration (Entropy) and steps instead.',
+        cz: '0.2 je v pořádku — ořezávání není to, co MountainCar brzdí. Nechte ji a laďte raději zkoumání (entropii) a počet kroků.',
+      },
+      acrobot: {
+        en: '0.2 works well; there is rarely a reason to change it on Acrobot.',
+        cz: '0.2 funguje dobře; u Acrobotu jen zřídka je důvod ji měnit.',
       },
     },
   },
@@ -132,6 +164,14 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
         en: 'LunarLander benefits from a little exploration early on, so a small value (e.g. 0.01) can help the agent discover the side thrusters before settling. 0.0 still works but may learn more slowly.',
         cz: 'LunarLanderu zpočátku pomáhá trocha zkoumání, takže drobná hodnota (např. 0.01) může agentovi pomoci objevit boční trysky dřív, než se ustálí. 0.0 také funguje, ale učení může být pomalejší.',
       },
+      mountaincar: {
+        en: 'This is the key dial for MountainCar. The reward is sparse, so a little extra exploration is often what lets PPO discover the flag at all — try raising it (e.g. 0.01–0.05) if the score is stuck at −200.',
+        cz: 'U MountainCar je tohle klíčový knoflík. Odměna je řídká, takže trocha zkoumání navíc je často to, co PPO vůbec umožní objevit vlajku — zkuste ji zvýšit (např. 0.01–0.05), pokud skóre vězí na −200.',
+      },
+      acrobot: {
+        en: 'A small value can speed up the early search for the pumping motion, but Acrobot is learnable at 0 as well. Nudge it to ~0.01 if progress stalls.',
+        cz: 'Malá hodnota může urychlit počáteční hledání „pumpování“, ale Acrobot je řešitelný i při 0. Posuňte ji k ~0.01, pokud pokrok vázne.',
+      },
     },
   },
 
@@ -153,6 +193,14 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
       lunarlander: {
         en: 'The 8-number observation is still small, so 2 layers is a fine default. LunarLander is harder than CartPole, but depth helps less than simply training for more steps.',
         cz: 'Pozorování o osmi číslech je stále malé, takže 2 vrstvy jsou dobrá výchozí volba. LunarLander je těžší než CartPole, ale hloubka pomáhá méně než prostě delší trénink.',
+      },
+      mountaincar: {
+        en: 'The 2-number observation is tiny, so 2 layers is ample. Extra depth will not fix MountainCar — exploration (Entropy) will.',
+        cz: 'Pozorování o dvou číslech je drobné, takže 2 vrstvy bohatě stačí. Hloubka navíc MountainCar nevyřeší — vyřeší ho zkoumání (entropie).',
+      },
+      acrobot: {
+        en: 'The 6-number observation is still small; 2 layers is plenty for Acrobot.',
+        cz: 'Pozorování o šesti číslech je stále malé; pro Acrobot 2 vrstvy bohatě stačí.',
       },
     },
   },
@@ -176,6 +224,14 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
         en: '64 neurons handle LunarLander well. You can try 128 for a little more capacity on this harder task, but more steps usually helps more than a wider net.',
         cz: '64 neuronů zvládne LunarLander dobře. U této těžší úlohy můžete zkusit 128 pro trochu větší kapacitu, ale víc kroků obvykle pomůže víc než širší síť.',
       },
+      mountaincar: {
+        en: "64 neurons easily cover MountainCar's tiny state. Going wider just costs CPU without helping.",
+        cz: '64 neuronů drobný stav MountainCar hravě pokryje. Širší síť jen spotřebuje CPU, aniž by pomohla.',
+      },
+      acrobot: {
+        en: '64 neurons handle Acrobot well; there is no need to widen the net here.',
+        cz: '64 neuronů Acrobot zvládne dobře; síť tu není potřeba rozšiřovat.',
+      },
     },
   },
 
@@ -197,6 +253,14 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
       lunarlander: {
         en: 'tanh is a safe default here too. relu also works on LunarLander and is worth a try with a wider network, but the difference is small.',
         cz: 'tanh je i tady bezpečná výchozí volba. relu na LunarLanderu také funguje a u širší sítě stojí za zkoušku, ale rozdíl je malý.',
+      },
+      mountaincar: {
+        en: 'tanh is a safe default. The activation is not the lever on MountainCar — exploration is.',
+        cz: 'tanh je bezpečná výchozí volba. Aktivační funkce není u MountainCar ta páka — tou je zkoumání.',
+      },
+      acrobot: {
+        en: 'tanh is the proven choice; relu works too but makes little difference on such a small net.',
+        cz: 'tanh je osvědčená volba; relu také funguje, ale na tak malé síti je rozdíl malý.',
       },
     },
   },
@@ -220,6 +284,14 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
         en: 'LunarLander varies more between seeds than CartPole — the terrain and start differ — so the same settings can land on one seed and crash on another. Fix it for fair comparisons; change it to gauge how robust a setup really is.',
         cz: 'LunarLander se mezi semeny liší víc než CartPole — terén i start jsou jiné — takže stejná nastavení mohou na jednom semenu přistát a na jiném havarovat. Pro férové porovnání ho zafixujte; změnou zjistíte, jak robustní nastavení doopravdy je.',
       },
+      mountaincar: {
+        en: 'Luck matters a lot here — on some seeds a run stumbles onto the flag early and takes off, on others it never does. Fix it for fair comparisons; change it to feel how much exploration depends on chance.',
+        cz: 'Náhoda tu hraje velkou roli — na některých semenech běh brzy narazí na vlajku a rozjede se, na jiných nikdy. Pro férové porovnání ho zafixujte; změnou ucítíte, jak moc zkoumání závisí na štěstí.',
+      },
+      acrobot: {
+        en: 'Acrobot is fairly robust across seeds, but fixing it still keeps runs reproducible and comparisons fair.',
+        cz: 'Acrobot je vůči semenům poměrně robustní, ale zafixování přesto udrží běhy reprodukovatelné a porovnání férové.',
+      },
     },
   },
 
@@ -241,6 +313,14 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
       lunarlander: {
         en: 'LunarLander needs far more practice than CartPole — pick the largest option (200k) for a visible landing policy, and on a faster machine even more (~0.5–1M) is ideal. The 50k ★ is tuned for CartPole; for LunarLander treat it as a bare minimum.',
         cz: 'LunarLander potřebuje mnohem víc cviku než CartPole — zvolte největší možnost (200k) pro viditelnou strategii přistávání a na výkonnějším stroji je ideální i víc (~0,5–1M). Hvězdička u 50k je laděná pro CartPole; pro LunarLander ji berte jako naprosté minimum.',
+      },
+      mountaincar: {
+        en: 'More steps alone may not solve MountainCar — with too little exploration the score sits at −200 no matter the budget. Pair a healthy step count with a higher Entropy bonus, or try Neuroevolution.',
+        cz: 'Samotné kroky navíc MountainCar nemusí vyřešit — při příliš malém zkoumání skóre vězí na −200 bez ohledu na rozpočet. Spojte rozumný počet kroků s vyšším bonusem za entropii, nebo zkuste Neuroevoluci.',
+      },
+      acrobot: {
+        en: 'Acrobot usually solves within a few hundred thousand steps, so the 200k ★ is a good budget. Give it more if it has not reached the target yet.',
+        cz: 'Acrobot se obvykle vyřeší za pár set tisíc kroků, takže 200k (★) je dobrý rozpočet. Dejte mu víc, pokud ještě nedosáhl cíle.',
       },
     },
   },
@@ -268,6 +348,14 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
         en: 'A bigger population explores more landing strategies per generation, so on this harder task leaning toward the upper end (e.g. 100) can help — at a proportional cost in time per generation.',
         cz: 'Větší populace zkouší za generaci víc strategií přistávání, takže u této těžší úlohy může pomoci posun k horní hranici (např. 100) — za úměrnou cenu v čase na generaci.',
       },
+      mountaincar: {
+        en: 'A bigger population is a real advantage here: with more networks tried per generation, one is far more likely to stumble onto the flag and seed the whole herd. Lean toward the upper end (e.g. 100).',
+        cz: 'Větší populace je tu skutečná výhoda: s víc sítěmi za generaci je mnohem pravděpodobnější, že některá narazí na vlajku a „nasází“ celé stádo. Posuňte se k horní hranici (např. 100).',
+      },
+      acrobot: {
+        en: '50 networks find the swing-up within a reasonable number of generations; a larger population helps a little, at a proportional cost in time.',
+        cz: '50 sítí najde vyhoupnutí za rozumný počet generací; větší populace pomůže o něco víc, za úměrnou cenu v čase.',
+      },
     },
   },
 
@@ -289,6 +377,14 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
       lunarlander: {
         en: 'Keeping the top ~10 keeps enough diversity for LunarLander. Too few parents and the herd locks onto one mediocre descent before it learns to land softly.',
         cz: 'Ponechání horních ~10 udrží pro LunarLander dost rozmanitosti. Při příliš málo rodičích se stádo upne na jeden průměrný sestup dřív, než se naučí měkce přistát.',
+      },
+      mountaincar: {
+        en: 'Keep enough parents (~10) so one lucky flag-reacher does not dominate before the strategy is reliable. Too few and the herd narrows onto a single fluke.',
+        cz: 'Ponechte dost rodičů (~10), aby jeden šťastlivec u vlajky neovládl populaci dřív, než je strategie spolehlivá. Příliš málo a stádo se zúží na jednu náhodu.',
+      },
+      acrobot: {
+        en: 'The top ~10 keeps enough diversity for Acrobot to refine the pumping motion across generations.',
+        cz: 'Horních ~10 udrží pro Acrobot dost rozmanitosti, aby napříč generacemi vyladil „pumpování“.',
       },
     },
   },
@@ -312,6 +408,14 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
         en: 'On this harder task a moderate 0.1 still balances exploration and stability. Too high and good descents get scrambled every generation; too low and the herd struggles to discover a working landing at all.',
         cz: 'U této těžší úlohy stále vyvažuje umírněných 0.1 zkoumání a stabilitu. Příliš vysoká a dobré sestupy se každou generaci rozházejí; příliš nízká a stádo vůbec těžko objeví funkční přistání.',
       },
+      mountaincar: {
+        en: 'A slightly higher rate can help the population explore enough to find the flag at all; once some networks reach it, 0.1 refines them well.',
+        cz: 'Mírně vyšší míra může populaci pomoci dostatečně zkoumat, aby vlajku vůbec našla; jakmile k ní některé sítě dojedou, 0.1 je dobře doladí.',
+      },
+      acrobot: {
+        en: '0.1 balances exploration and stability for Acrobot. Too high and good swingers get scrambled every generation.',
+        cz: '0.1 vyvažuje u Acrobotu zkoumání a stabilitu. Příliš vysoká a dobří „houpači“ se každou generaci rozházejí.',
+      },
     },
   },
 
@@ -333,6 +437,14 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
       lunarlander: {
         en: 'Mixing parents spreads useful descent tricks through the population; 0.5 is a safe default for LunarLander. Feel free to experiment — it rarely breaks a run.',
         cz: 'Mísení rodičů šíří užitečné triky sestupu napříč populací; 0.5 je pro LunarLander bezpečná výchozí hodnota. Klidně experimentujte — běh to málokdy pokazí.',
+      },
+      mountaincar: {
+        en: 'Mixing parents spreads a rare flag-reaching trick through the population, so 0.5 is a safe default — most useful once at least one network has succeeded.',
+        cz: 'Mísení rodičů šíří vzácný trik, jak dojet k vlajce, napříč populací, takže 0.5 je bezpečná výchozí hodnota — nejužitečnější, jakmile uspěje aspoň jedna síť.',
+      },
+      acrobot: {
+        en: '0.5 is a safe default for Acrobot; mixing parents spreads the pumping rhythm through the herd.',
+        cz: '0.5 je pro Acrobot bezpečná výchozí hodnota; mísení rodičů šíří rytmus „pumpování“ napříč stádem.',
       },
     },
   },
@@ -356,6 +468,14 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
         en: 'LunarLander is hard for the tiny evolution network, so it needs many more generations than CartPole — and may still not fully solve it. Push this high (100+) to watch it keep improving; PPO is the faster route to an actual landing.',
         cz: 'LunarLander je pro drobnou evoluční síť těžký, takže potřebuje mnohem víc generací než CartPole — a stejně ho nemusí plně vyřešit. Posuňte hodnotu vysoko (100+), pokud chcete sledovat další zlepšování; PPO je rychlejší cesta ke skutečnému přistání.',
       },
+      mountaincar: {
+        en: 'It can take many generations before a network first reaches the flag — then progress accelerates. Give it plenty (e.g. 50+) and a larger population to improve the odds.',
+        cz: 'Než nějaká síť poprvé dojede k vlajce, může to trvat řadu generací — pak se pokrok zrychlí. Dejte jí dost (např. 50+) a větší populaci, ať zvýšíte šance.',
+      },
+      acrobot: {
+        en: 'Acrobot usually improves steadily over a few dozen generations; push higher to keep refining the swing-up.',
+        cz: 'Acrobot se obvykle plynule zlepšuje během pár desítek generací; vyšší hodnotou ho necháte dál ladit vyhoupnutí.',
+      },
     },
   },
 
@@ -377,6 +497,14 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
         en: 'LunarLander rewards a gentle, on-target landing: roughly +100 for landing, +10 per leg touching, small fuel penalties for firing engines, and −100 for a crash. Scores start negative and a run is "solved" at an average of 200, so the curve should climb from below zero toward 200+.',
         cz: 'LunarLander odměňuje jemné přistání na cíli: zhruba +100 za přistání, +10 za každou nohu na zemi, malé penalizace za palivo při zážehu trysek a −100 za havárii. Skóre začíná v záporu a běh je „vyřešen“ při průměru 200, takže křivka by měla stoupat z podnuly k 200+.',
       },
+      mountaincar: {
+        en: 'MountainCar gives −1 every step until the flag, so the best score is a small negative (around −85 to −110) and the curve climbs from −200 upward. A flat line at −200 means the agent has not reached the flag yet — that is the exploration problem, not a bug.',
+        cz: 'MountainCar dává −1 každý krok až k vlajce, takže nejlepší skóre je malé záporné (kolem −85 až −110) a křivka stoupá od −200 nahoru. Rovná čára na −200 znamená, že agent ještě nedojel k vlajce — to je ten problém se zkoumáním, ne chyba.',
+      },
+      acrobot: {
+        en: 'Acrobot also gives −1 per step until the tip swings above the bar, so scores are negative. The curve climbs from about −500 toward −100 as the agent learns to swing up faster.',
+        cz: 'Acrobot také dává −1 za krok, dokud se konec nevyhoupne nad tyč, takže skóre jsou záporná. Křivka stoupá zhruba z −500 k −100, jak se agent učí vyhoupnout rychleji.',
+      },
     },
   },
 
@@ -394,6 +522,14 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
         en: 'As with CartPole, the loss just wobbles — judge LunarLander progress from the reward curve, not this one.',
         cz: 'Stejně jako u CartPole ztráta jen kolísá — pokrok u LunarLanderu posuzujte podle křivky odměny, ne podle ní.',
       },
+      mountaincar: {
+        en: 'As always, the loss just wobbles — judge MountainCar progress from the reward curve (is it lifting off −200?), not from this one.',
+        cz: 'Jako vždy ztráta jen kolísá — pokrok u MountainCar posuzujte podle křivky odměny (odlepuje se od −200?), ne podle ní.',
+      },
+      acrobot: {
+        en: 'The loss wobbles here too; read progress from the reward curve climbing toward −100, not from the loss.',
+        cz: 'Ztráta i tady kolísá; pokrok čtěte z křivky odměny stoupající k −100, ne ze ztráty.',
+      },
     },
   },
 
@@ -410,6 +546,14 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
       lunarlander: {
         en: 'Same idea as reward, but per generation. For LunarLander fitness starts negative (crashes) and rises slowly; with the small evolution network it often plateaus below the 200 "solved" line — switch to PPO to reach a clean landing.',
         cz: 'Stejný princip jako odměna, ale za generaci. U LunarLanderu začíná fitness v záporu (havárie) a stoupá pomalu; s malou evoluční sítí často uvázne pod hranicí 200 („vyřešeno“) — pro čisté přistání přepněte na PPO.',
+      },
+      mountaincar: {
+        en: "Same idea as reward, but per generation. Fitness often sits at −200 until some network first reaches the flag, then jumps up — neuroevolution's population search is well suited to making that discovery.",
+        cz: 'Stejný princip jako odměna, ale za generaci. Fitness často vězí na −200, dokud nějaká síť poprvé nedojede k vlajce, pak vyskočí — populační hledání neuroevoluce se k takovému objevu dobře hodí.',
+      },
+      acrobot: {
+        en: 'Same as reward, but per generation. For Acrobot fitness starts deeply negative and rises steadily toward −100 as the population learns to pump the arm up.',
+        cz: 'Stejné jako odměna, ale za generaci. U Acrobotu začíná fitness hluboko v záporu a plynule stoupá k −100, jak se populace učí rameno vyhoupnout.',
       },
     },
   },

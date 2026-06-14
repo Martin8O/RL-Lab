@@ -9,7 +9,7 @@ import asyncio
 
 from fastapi import APIRouter, HTTPException
 
-from app.schemas.play import PlayConfig, PlayStatus
+from app.schemas.play import PlayConfig, PlaySpeedRequest, PlayStatus
 from app.services.play_session import (
     AlreadyPlayingError,
     InvalidPlayConfigError,
@@ -37,6 +37,12 @@ async def start_play(config: PlayConfig | None = None) -> PlayStatus:
 @router.post("/stop", response_model=PlayStatus)
 async def stop_play() -> PlayStatus:
     return play_session.stop()
+
+
+@router.post("/speed", response_model=PlayStatus)
+async def set_play_speed(body: PlaySpeedRequest) -> PlayStatus:
+    """Update a live session's playback pace (the speed selector during play)."""
+    return play_session.set_speed(body.speed)
 
 
 @router.get("/status", response_model=PlayStatus)

@@ -2,8 +2,9 @@ import { useEffect, useState } from 'react'
 import type { CSSProperties } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAppStore } from '../store/useAppStore'
-import { fetchCheckpoints, startPlay, stopPlay } from '../api/client'
+import { fetchCheckpoints, startPlay, stopPlay, updatePlaySpeed } from '../api/client'
 import type { CheckpointMeta } from '../api/types'
+import { keymapFor } from '../content/playKeymaps'
 import PlayInstructions from './PlayInstructions'
 
 const PLAY_SPEEDS = [0.1, 0.15, 0.25, 0.5, 1, 2, 4]
@@ -83,6 +84,9 @@ export default function PlayControls() {
         checkpoint_id: mode === 'ai' ? playCheckpointId : null,
         seed,
         speed: playSpeed,
+        // Hold the env's "do nothing" until a key is pressed (so MountainCar/Acrobot don't get
+        // shoved by the default action 0). null for CartPole, which has no idle.
+        idle_action: keymapFor(selectedEnvId).idleAction,
       })
       applyPlayStatus(status)
     } catch (e) {
@@ -181,7 +185,12 @@ export default function PlayControls() {
         {t('play.speed')}
         <select
           value={playSpeed}
-          onChange={(e) => setPlaySpeed(parseFloat(e.target.value))}
+          onChange={(e) => {
+            const v = parseFloat(e.target.value)
+            setPlaySpeed(v)
+            // Apply to the running session immediately (not just the next start).
+            if (playing) void updatePlaySpeed(v).catch(() => {})
+          }}
           style={selectStyle}
         >
           {PLAY_SPEEDS.map((s) => (

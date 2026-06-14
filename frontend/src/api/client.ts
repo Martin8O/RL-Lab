@@ -372,6 +372,17 @@ export async function stopPlay(): Promise<PlayStatus> {
   return res.json() as Promise<PlayStatus>
 }
 
+/** Change a running session's playback pace (the speed selector mid-play applies live). */
+export async function updatePlaySpeed(speed: number): Promise<PlayStatus> {
+  const res = await fetch(`${API_BASE}/api/play/speed`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ speed }),
+  })
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  return res.json() as Promise<PlayStatus>
+}
+
 /** Authoritative play-session snapshot — fetched on WS (re)connect to reconcile the play UI. */
 export async function fetchPlayStatus(): Promise<PlayStatus> {
   const res = await fetch(`${API_BASE}/api/play/status`)

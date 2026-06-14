@@ -312,6 +312,9 @@ export interface PlayConfig {
   checkpoint_id?: string | null
   seed?: number | null
   speed: number
+  /** Discrete action held when the human gives no input (the env's "do nothing"); null = no idle
+   *  (CartPole always moves). Source of truth: content/playKeymaps.ts. */
+  idle_action?: number | null
 }
 
 /** WS frame: {type:"play_result", ...} — the final score + skill rating of a finished episode. */

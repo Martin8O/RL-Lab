@@ -132,6 +132,42 @@ def test_submit_action_ignored_when_not_playing() -> None:
     assert sess._latest_action == 0
 
 
+def test_idle_action_initialises_held_action() -> None:
+    # CartPole has no idle (idle_action None) → the held action defaults to 0, as before.
+    sess = PlaySession(manager)
+    sess.start(PlayConfig(env_id="cartpole", mode="human", seed=0, speed=20.0))
+    try:
+        assert sess._latest_action == 0
+    finally:
+        sess.stop()
+        sess.join(timeout=30)
+
+    # MountainCar's idle is 1 (no acceleration). The session must hold that until a key is
+    # pressed — not the default 0, which means "push left" and shoves the car before any input.
+    sess2 = PlaySession(manager)
+    sess2.start(
+        PlayConfig(env_id="mountaincar", mode="human", seed=0, speed=20.0, idle_action=1)
+    )
+    try:
+        assert sess2._latest_action == 1
+    finally:
+        sess2.stop()
+        sess2.join(timeout=30)
+
+
+def test_set_speed_updates_and_clamps() -> None:
+    sess = PlaySession(manager)
+    sess.start(PlayConfig(env_id="cartpole", mode="human", seed=0, speed=1.0))
+    try:
+        assert sess.set_speed(8.0).speed == 8.0
+        assert sess._current_speed() == 8.0
+        assert sess.set_speed(999.0).speed == 20.0  # clamped to the play max
+        assert sess.set_speed(0.0).speed == 0.1  # clamped to the play min
+    finally:
+        sess.stop()
+        sess.join(timeout=30)
+
+
 # -- REST + WS --------------------------------------------------------------
 
 
@@ -171,6 +207,20 @@ def test_rest_human_start_stop() -> None:
         assert stopped.status_code == 200
         play_session.join(timeout=30)
         assert c.get("/api/play/status").json()["state"] in {"stopped", "finished"}
+
+
+def test_play_speed_endpoint_updates_live_session() -> None:
+    with TestClient(app) as c:
+        c.post(
+            "/api/play/start",
+            json={"env_id": "cartpole", "mode": "human", "seed": 0, "speed": 1.0},
+        )
+        try:
+            r = c.post("/api/play/speed", json={"speed": 4.0})
+            assert r.status_code == 200 and r.json()["speed"] == 4.0
+        finally:
+            c.post("/api/play/stop")
+            play_session.join(timeout=30)
 
 
 def test_ws_action_routes_and_text_still_echoes() -> None:
