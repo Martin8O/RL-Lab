@@ -103,6 +103,14 @@ export default function PlayControls() {
     } catch { /* status will reconcile via WS */ }
   }
 
+  // "How to play" sits right beside the primary action (Play / Stop), nudged slightly up so it
+  // reads as a help badge attached to that button rather than a peer control.
+  const howToPlay = (
+    <span style={{ display: 'inline-flex', transform: 'translateY(-8px)' }}>
+      <PlayInstructions />
+    </span>
+  )
+
   return (
     <div style={{
       flexShrink: 0, borderTop: '1px solid var(--border-default)',
@@ -111,18 +119,21 @@ export default function PlayControls() {
     }}>
       {playing ? (
         /* Stop the active session */
-        <button
-          onClick={handleStop}
-          style={{
-            display: 'inline-flex', alignItems: 'center', gap: 6,
-            height: 'var(--control-sm)', padding: '0 12px', borderRadius: 'var(--radius-md)',
-            cursor: 'pointer', fontSize: 'var(--fs-label)', fontWeight: 'var(--fw-semibold)',
-            background: 'var(--danger-surface)', color: 'var(--danger)',
-            border: '1px solid transparent', transition: 'var(--t-colors)',
-          }}
-        >
-          <span aria-hidden>■</span> {t('play.stop')}
-        </button>
+        <>
+          <button
+            onClick={handleStop}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 6,
+              height: 'var(--control-sm)', padding: '0 12px', borderRadius: 'var(--radius-md)',
+              cursor: 'pointer', fontSize: 'var(--fs-label)', fontWeight: 'var(--fw-semibold)',
+              background: 'var(--danger-surface)', color: 'var(--danger)',
+              border: '1px solid transparent', transition: 'var(--t-colors)',
+            }}
+          >
+            <span aria-hidden>■</span> {t('play.stop')}
+          </button>
+          {howToPlay}
+        </>
       ) : (
         <>
           {/* You play */}
@@ -142,6 +153,8 @@ export default function PlayControls() {
           >
             <span aria-hidden>▶</span> {t('play.play')}
           </button>
+
+          {howToPlay}
 
           {/* AI plays by itself */}
           <button
@@ -202,12 +215,13 @@ export default function PlayControls() {
         </select>
       </label>
 
-      <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
-        {error && (
-          <span style={{ fontSize: 11, color: 'var(--danger, #e2453c)', maxWidth: 200 }}>{error}</span>
-        )}
-        <PlayInstructions />
-      </div>
+      {error && (
+        <span style={{
+          marginLeft: 'auto', fontSize: 11, color: 'var(--danger, #e2453c)', maxWidth: 200,
+        }}>
+          {error}
+        </span>
+      )}
     </div>
   )
 }

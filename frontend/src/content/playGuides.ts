@@ -44,6 +44,32 @@ const MINIGRID_TIPS: Bilingual = {
     + '„Sledovat AI“ a uvidíte, jak natrénovaná strategie zkoumá efektivně.',
 }
 
+// BipedalWalker (+ Hardcore) (G3b) — shared controls + tips (only the per-env goal differs). The
+// action is continuous Box(4): four leg-joint torques, two per leg. Arrows drive leg 1, WASD leg 2;
+// each pair pushes one joint each way, and holding several keys moves several joints at once.
+const BIPEDAL_CONTROLS: PlayControl[] = [
+  { keys: '← / →', action: { en: 'Leg 1 hip — torque each way', cz: 'Noha 1, kyčel — moment každým směrem' } },
+  { keys: '↑ / ↓', action: { en: 'Leg 1 knee — torque each way', cz: 'Noha 1, koleno — moment každým směrem' } },
+  { keys: 'A / D', action: { en: 'Leg 2 hip — torque each way', cz: 'Noha 2, kyčel — moment každým směrem' } },
+  { keys: 'W / S', action: { en: 'Leg 2 knee — torque each way', cz: 'Noha 2, koleno — moment každým směrem' } },
+  { keys: '(release)', action: { en: 'No torque — the legs go limp', cz: 'Bez momentu — nohy ochabnou' } },
+]
+
+const BIPEDAL_TIPS: Bilingual = {
+  en: 'You steer all four leg joints at once, so this is genuinely hard by hand — which is exactly why '
+    + 'an AI is trained for it. Try to find a marching rhythm: push one leg\'s hip forward while bending '
+    + 'the other leg\'s knee, then swap, and keep making small corrections so the body stays upright (tip '
+    + 'too far and you fall). Hold several keys together to move more than one joint at the same time, and '
+    + 'lower the play speed (down to 0.1×) to give yourself time to react. Switch to "Watch AI" once a '
+    + 'model has been trained for this on a GPU.',
+  cz: 'Řídíte všechny čtyři klouby nohou najednou, takže je to rukama vážně těžké — přesně proto se na to '
+    + 'cvičí AI. Zkuste najít pochodový rytmus: přitlačte kyčel jedné nohy vpřed a zároveň pokrčte koleno '
+    + 'druhé nohy, pak je prohoďte a stále dělejte malé korekce, ať tělo zůstane vzpřímené (když se nakloní '
+    + 'moc, upadnete). Podržením více kláves najednou pohnete více klouby současně a snížením rychlosti '
+    + 'hraní (až na 0,1×) získáte čas reagovat. Až bude na to natrénovaný model na GPU, přepněte na '
+    + '„Sledovat AI“.',
+}
+
 export const PLAY_GUIDES: Record<string, PlayGuide> = {
   cartpole: {
     goal: {
@@ -208,6 +234,35 @@ export const PLAY_GUIDES: Record<string, PlayGuide> = {
         + 'na doraz. Přepněte na „Sledovat AI“ — nebo zkuste Neuroevoluci, jejíž populační hledání vlajku '
         + 'nachází dobře.',
     },
+  },
+
+  bipedalwalker: {
+    goal: {
+      en: 'Walk the two-legged robot as far to the right as you can without falling over. You drive '
+        + 'all four leg joints directly — a hip and a knee on each leg. Moving forward earns points, '
+        + 'the motors cost a little, and a fall ends the run with a −100 penalty; a smooth walk to the '
+        + 'far end scores about +300 (the "solved" mark). The episode ends on a fall or after 1600 steps.',
+      cz: 'Doveďte dvounohého robota co nejdál doprava, aniž by upadl. Ovládáte přímo všechny čtyři '
+        + 'klouby nohou — kyčel a koleno na každé noze. Pohyb vpřed dává body, motory něco stojí a pád '
+        + 'ukončí běh penalizací −100; plynulá chůze až na konec dá kolem +300 (hranice „vyřešeno“). '
+        + 'Epizoda končí pádem nebo po 1600 krocích.',
+    },
+    controls: BIPEDAL_CONTROLS,
+    tips: BIPEDAL_TIPS,
+  },
+
+  bipedalwalkerhardcore: {
+    goal: {
+      en: 'The same walk to the right, but now over an obstacle course of ladders, stumps and pits — '
+        + 'you have to climb, step around and leap across them. Same controls and scoring (points for '
+        + 'progress, −100 for a fall, about +300 for finishing), just far harder. The episode ends on a '
+        + 'fall or after 1600 steps.',
+      cz: 'Stejná chůze doprava, ale teď přes překážkovou dráhu plnou žebříků, pařezů a jam — musíte je '
+        + 'přelézt, obejít a přeskočit. Stejné ovládání i bodování (body za postup, −100 za pád, kolem '
+        + '+300 za dojití), jen mnohem těžší. Epizoda končí pádem nebo po 1600 krocích.',
+    },
+    controls: BIPEDAL_CONTROLS,
+    tips: BIPEDAL_TIPS,
   },
 
   // ── Toy Text grid-worlds (turn-based: one move per key press) ───────────────────────────────

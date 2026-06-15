@@ -94,9 +94,12 @@ PPO-only); the store snaps to a valid algo when you switch games.
 - **`content/parameters.ts`** — add a `perEnv["yourenv"]` note to **every** parameter block (and the chart
   concepts), CZ+EN, honest about the env's quirks. Keep the shared `general`/`recommended` game-neutral.
 - **`content/playGuides.ts`** — goal / controls / tips for the "How to play" popup.
-- **`content/playKeymaps.ts`** — key → action. For discrete, `action` is the action id; for a box env it's
-  the analog command (e.g. Pendulum ±2 = full torque). `idleAction` is the env's true no-op (so the agent
-  isn't shoved before any input) — `null` if the env always moves (CartPole).
+- **`content/playKeymaps.ts`** — key → action (`action: number | number[]`). For discrete, `action` is the
+  action id; for a **single-torque** box env it's a scalar analog command the backend fills across the whole
+  action (e.g. Pendulum ±2 = full torque); for a **multi-joint** box env (BipedalWalker `Box(4)`) each key
+  carries a per-joint **vector** (e.g. `←` = `[-1,0,0,0]`) and `EnvPreview` sums the held keys into one action
+  (the backend reshapes + clips it). `idleAction` is the env's true no-op (so the agent isn't shoved before any
+  input) — `null` if the env always moves (CartPole); a scalar `0` for a box env (the backend fills a zero vector).
 - **`content/envCategories.ts`** — add the `family` label if it's a new category.
 
 i18n parity (`en.json`/`cz.json`) is enforced by `.\tasks.ps1 i18n`; the per-env prose above lives in the

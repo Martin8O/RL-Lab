@@ -60,6 +60,14 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
         en: 'A continuous exploration trap. PPO often stalls near 0: it rarely stumbles onto the flag, and the small force penalty discourages trying. Neuroevolution tends to do better — among a whole population some network reaches the flag and that success spreads. A great task for comparing the two.',
         cz: 'Spojitá past na zkoumání. PPO často uvázne poblíž 0: na vlajku jen zřídka náhodou narazí a malá penalizace za sílu odrazuje od zkoušení. Neuroevoluce tu bývá lepší — v celé populaci některá síť dojede k vlajce a úspěch se rozšíří. Skvělá úloha pro porovnání obou.',
       },
+      bipedalwalker: {
+        en: 'Only PPO is offered here. Walking is a hard continuous-control task with four leg joints, and PPO is the method that actually learns a gait (given a few million steps). Neuroevolution is deliberately turned off — population search is impractical on this. Training is reserved for a GPU machine, so Run is disabled here; you can still play it by hand now and watch a trained AI once one exists.',
+        cz: 'Tady je k dispozici jen PPO. Chůze je těžká úloha spojitého řízení se čtyřmi klouby nohou a PPO je metoda, která chůzi skutečně zvládne (za pár milionů kroků). Neuroevoluce je záměrně vypnutá — populační hledání je tu nepraktické. Trénink je vyhrazen pro stroj s GPU, takže Spustit je zde zakázané; rukama si to ale zahrajete už teď a natrénovanou AI uvidíte, jakmile bude existovat.',
+      },
+      bipedalwalkerhardcore: {
+        en: 'Only PPO, same as the standard course — and the hardcore terrain (ladders, stumps, pits) makes it one of the hardest continuous-control benchmarks, needing the largest budget. Training is GPU-only (Run disabled here); play it by hand now.',
+        cz: 'Jen PPO, stejně jako u standardní dráhy — a hardcore terén (žebříky, pařezy, jámy) z ní dělá jeden z nejtěžších benchmarků spojitého řízení, který potřebuje největší rozpočet. Trénink je jen na GPU (Spustit je zde zakázané); rukama si to zahrajete už teď.',
+      },
       frozenlake: {
         en: 'Both can solve it. The state is a single grid cell (one-hot–encoded for the network), and the reward is sparse — only reaching the goal pays — so a little exploration matters. Because the ice slips, success is a *rate*: even a good policy scores below 1.0. A nice task to compare PPO and Neuroevolution.',
         cz: 'Vyřešit ho zvládnou obě. Stav je jediná buňka mřížky (pro síť kódovaná jako one-hot) a odměna je řídká — platí jen dosažení cíle — takže záleží na trošce zkoumání. Protože led klouže, je úspěch *míra*: i dobrá strategie skóruje pod 1,0. Pěkná úloha pro porovnání PPO a Neuroevoluce.',
@@ -133,6 +141,14 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
       mountaincarcontinuous: {
         en: 'The default 3e-4 is fine. As with MountainCar the bottleneck is exploration, not step size — if the score sits near 0, raise the Entropy bonus or try Neuroevolution before touching the rate.',
         cz: 'Výchozí 3e-4 je v pořádku. Stejně jako u MountainCar je překážkou zkoumání, ne velikost kroku — pokud skóre vězí poblíž 0, zvyšte raději bonus za entropii nebo zkuste Neuroevoluci než měnit rychlost.',
+      },
+      bipedalwalker: {
+        en: 'The default 3e-4 is the standard starting point for BipedalWalker too. It is a hard, sometimes unstable task, so if anything lower it rather than raise it — too large a step can make the gait collapse. (Training is GPU-only, so this applies once you train on the desktop.)',
+        cz: 'Výchozí 3e-4 je standardní výchozí bod i pro BipedalWalker. Je to těžká, místy nestabilní úloha, takže ji spíš snižte než zvyšujte — příliš velký krok může chůzi rozhodit. (Trénink je jen na GPU, takže se to týká až tréninku na desktopu.)',
+      },
+      bipedalwalkerhardcore: {
+        en: 'Same 3e-4 starting point; the harder terrain is even more prone to instability, so keep the rate moderate and lean on more steps instead.',
+        cz: 'Stejný výchozí bod 3e-4; těžší terén je ještě náchylnější k nestabilitě, takže držte rychlost umírněnou a spoléhejte raději na víc kroků.',
       },
       frozenlake: {
         en: 'Default 3e-4 is fine. The bottleneck here is exploration (slippery ice, sparse reward), not step size — if it stalls, raise Entropy or add steps before touching this.',
@@ -208,6 +224,14 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
         en: 'Reaching the flag is a long build-up, so keep γ high (0.99): the agent must value the distant +100 over the small force cost it pays each step.',
         cz: 'Dojezd k vlajce je dlouhé rozhoupávání, takže nechte γ vysoké (0.99): agent musí cenit vzdálených +100 víc než malou cenu za sílu, kterou platí každý krok.',
       },
+      bipedalwalker: {
+        en: 'Walking forward is a long sequence of coordinated steps, so keep γ high (0.99): the agent must value staying upright and making progress many steps ahead, not just the next torque.',
+        cz: 'Chůze vpřed je dlouhá řada koordinovaných kroků, takže nechte γ vysoké (0.99): agent musí cenit setrvání ve vzpřímené poloze a postup mnoho kroků dopředu, ne jen další moment.',
+      },
+      bipedalwalkerhardcore: {
+        en: 'Keep γ high (0.99) — clearing each obstacle pays off only over the steps that follow, so the agent must plan well ahead.',
+        cz: 'Nechte γ vysoké (0.99) — překonání každé překážky se vyplatí až v dalších krocích, takže agent musí plánovat hodně dopředu.',
+      },
       frozenlake: {
         en: 'Reaching the goal is a long sequence with no reward along the way, so keep γ high (0.99) — the agent must value the distant goal across many zero-reward steps. Too low and it cannot "see" the goal from far away.',
         cz: 'Dosažení cíle je dlouhá řada kroků bez odměny po cestě, takže nechte γ vysoké (0.99) — agent musí cenit vzdálený cíl přes mnoho kroků s nulovou odměnou. Při nízkém γ cíl zdálky „neuvidí“.',
@@ -282,6 +306,14 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
         en: '0.2 is fine — clipping is not the bottleneck on MountainCarContinuous; exploration is. Leave it and adjust Entropy and steps instead.',
         cz: '0.2 je v pořádku — ořezávání není u MountainCarContinuous překážkou; tou je zkoumání. Nechte ji a laďte raději entropii a počet kroků.',
       },
+      bipedalwalker: {
+        en: '0.2 is the right default. BipedalWalker can be unstable to train, and the clip is what keeps one bad batch from wrecking a working gait — leave it at 0.2 and tune steps and learning rate first.',
+        cz: '0.2 je správná výchozí hodnota. BipedalWalker se může trénovat nestabilně a ořezávání je to, co brání jedné špatné dávce zničit funkční chůzi — nechte ji na 0.2 a laďte nejdřív počet kroků a rychlost učení.',
+      },
+      bipedalwalkerhardcore: {
+        en: 'Leave it at 0.2 — on this harder course the safety rail matters even more; tune budget and exploration instead.',
+        cz: 'Nechte ji na 0.2 — na této těžší dráze záleží na bezpečnostním zábradlí ještě víc; laďte raději rozpočet a zkoumání.',
+      },
     },
   },
 
@@ -319,6 +351,14 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
       mountaincarcontinuous: {
         en: 'This is the key dial for MountainCarContinuous. The reward is sparse, so a little extra exploration is often what lets PPO find the flag at all — raise it (e.g. 0.01–0.1) if the score is stuck near 0, or try Neuroevolution.',
         cz: 'U MountainCarContinuous je tohle klíčový knoflík. Odměna je řídká, takže trocha zkoumání navíc je často to, co PPO vůbec umožní najít vlajku — zvyšte ji (např. 0,01–0,1), pokud skóre vězí poblíž 0, nebo zkuste Neuroevoluci.',
+      },
+      bipedalwalker: {
+        en: 'PPO\'s continuous action head already explores with its own noise, so 0 can work, but a small bonus (e.g. 0.01) often helps it discover a forward gait instead of standing still. Do not push it too high — too much randomness just makes the robot flail and fall.',
+        cz: 'Spojitá akční hlava PPO už zkoumá vlastním šumem, takže 0 může stačit, ale drobný bonus (např. 0,01) často pomůže objevit chůzi vpřed místo stání na místě. Nezvyšujte ho příliš — moc náhodnosti robota jen rozhází a shodí.',
+      },
+      bipedalwalkerhardcore: {
+        en: 'A small bonus (e.g. 0.01) helps it explore the moves needed to get over obstacles, but keep it modest — too much and it flails into a fall.',
+        cz: 'Drobný bonus (např. 0,01) pomůže prozkoumat pohyby potřebné k překonání překážek, ale držte ho mírný — při přemíře robot spadne.',
       },
       frozenlake: {
         en: 'Exploration matters here — only the goal pays, so a small bonus (e.g. 0.01) helps PPO discover a route before settling. At 0 it can stall on the slippery map, never finding the goal.',
@@ -545,6 +585,14 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
       mountaincarcontinuous: {
         en: 'More steps alone may not solve MountainCarContinuous — with too little exploration the score sits near 0 no matter the budget. Pair a healthy step count with a higher Entropy bonus, or try Neuroevolution.',
         cz: 'Samotné kroky navíc MountainCarContinuous nemusí vyřešit — při příliš malém zkoumání skóre vězí poblíž 0 bez ohledu na rozpočet. Spojte rozumný počet kroků s vyšším bonusem za entropii, nebo zkuste Neuroevoluci.',
+      },
+      bipedalwalker: {
+        en: 'BipedalWalker needs a lot of practice — a smooth gait typically takes a few million steps, hence the large ★ budget. (Training runs on a GPU machine; here Run is disabled until then.)',
+        cz: 'BipedalWalker potřebuje hodně cviku — plynulá chůze obvykle zabere pár milionů kroků, odtud velký ★ rozpočet. (Trénink běží na stroji s GPU; tady je Spustit do té doby zakázané.)',
+      },
+      bipedalwalkerhardcore: {
+        en: 'The obstacle course is notoriously hard, so it needs an even larger budget (the ★ 10M) — and may still not fully solve. Training is GPU-only.',
+        cz: 'Překážková dráha je pověstně těžká, takže potřebuje ještě větší rozpočet (★ 10M) — a i tak nemusí plně vyřešit. Trénink je jen na GPU.',
       },
       frozenlake: {
         en: 'Slippery and sparse, so give it a generous budget (the ★ 200k). A success rate stuck near 0 means it has not found a route yet — raise the Entropy bonus rather than just adding steps.',
@@ -957,6 +1005,14 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
         en: 'MountainCarContinuous pays +100 for reaching the flag minus a small force cost, so the curve sits near 0 until the agent first reaches the flag, then jumps toward +90. A flat line near 0 means it has not found the flag yet — the exploration problem, not a bug.',
         cz: 'MountainCarContinuous vyplácí +100 za dosažení vlajky minus malou cenu za sílu, takže křivka sedí poblíž 0, dokud agent poprvé nedojede k vlajce, pak vyskočí k +90. Rovná čára poblíž 0 znamená, že vlajku ještě nenašel — to je ten problém se zkoumáním, ne chyba.',
       },
+      bipedalwalker: {
+        en: 'BipedalWalker pays a little for each bit of forward progress, costs a little for using the motors, and −100 for a fall, so the curve climbs from about −100 toward +300 as the agent learns to walk; +300 means a clean walk to the far end ("solved").',
+        cz: 'BipedalWalker platí trochu za každý kousek postupu vpřed, něco stojí použití motorů a −100 za pád, takže křivka stoupá zhruba z −100 k +300, jak se agent učí chodit; +300 znamená čistou chůzi až na konec („vyřešeno“).',
+      },
+      bipedalwalkerhardcore: {
+        en: 'Same reward shape, but progress is much slower and the curve stays low far longer while the agent learns to clear the obstacles; +300 (finishing) is hard to reach.',
+        cz: 'Stejný tvar odměny, ale postup je mnohem pomalejší a křivka zůstává nízko mnohem déle, než se agent naučí překonávat překážky; +300 (dojití) je těžké dosáhnout.',
+      },
       frozenlake: {
         en: 'FrozenLake pays 1 only for reaching the goal, else 0, so each episode scores 0 or 1 and the training curve is the success *rate*. "Solved" is 0.70 — the curve climbs from ~0 toward 0.7+, and cannot reach 1.0 because the ice sometimes slips you into a hole.',
         cz: 'FrozenLake platí 1 jen za dosažení cíle, jinak 0, takže každá epizoda dá 0 nebo 1 a tréninková křivka je *míra* úspěšnosti. „Vyřešeno“ je 0,70 — křivka stoupá z ~0 k 0,7+ a nemůže dosáhnout 1,0, protože led vás občas smekne do díry.',
@@ -1025,6 +1081,14 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
       mountaincarcontinuous: {
         en: 'The loss just wobbles here too; read progress from the reward curve (has it jumped toward +90?), not from the loss.',
         cz: 'Ztráta i tady jen kolísá; pokrok čtěte z křivky odměny (vyskočila k +90?), ne ze ztráty.',
+      },
+      bipedalwalker: {
+        en: 'As always the loss just wobbles — judge BipedalWalker progress from the reward curve climbing toward +300, not from this one. Wild spikes can hint at instability (lower the learning rate).',
+        cz: 'Jako vždy ztráta jen kolísá — pokrok u BipedalWalkeru posuzujte podle křivky odměny stoupající k +300, ne podle ní. Divoké výkyvy mohou naznačovat nestabilitu (snižte rychlost učení).',
+      },
+      bipedalwalkerhardcore: {
+        en: 'The loss just wobbles here too; read progress from the reward curve, not the loss.',
+        cz: 'Ztráta i tady jen kolísá; pokrok čtěte z křivky odměny, ne ze ztráty.',
       },
     },
   },

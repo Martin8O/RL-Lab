@@ -267,6 +267,108 @@ register(
 
 
 # ---------------------------------------------------------------------------
+# Box2D family — BipedalWalker (G3b-play, "install + human-play on CPU now,
+# training GPU-gated"). Like LunarLander these are vector-obs Box2D physics envs,
+# but the action space is **continuous** Box(4) — the four leg-joint torques
+# [hip1, knee1, hip2, knee2], each in [-1, 1] — so they ride the G1b continuous-box
+# seam (box-aware predict/play/preview; the numpy forwards tanh-scale into [low,
+# high]) plus the existing server-JPEG render. No new engine code: human play is
+# data + content. Human play sends a *per-joint vector* (one key per joint/direction,
+# summed client-side; the WS action frame + play_session already accept list[float]).
+#
+# Training is **gated** (hw_requirement="gpu") like Atari, but for a different reason:
+# the obs is a vector (MlpPolicy, no CnnPolicy needed), yet learning to walk takes
+# millions of steps — impractical on the laptop CPU. So Run is disabled here until the
+# desktop (G3b-train); human play needs no training and stays available now.
+#
+# supported_algos=["ppo"] (PPO-only, opted out of neuroevolution as data, like
+# CarRacing): the box action itself IS supported by the G1b numpy genome, but
+# population search is impractical on a hard 4-DoF locomotion task — so this is a
+# difficulty gate, not a seam limitation.
+#
+# Skill: solved_score=300 (the gym reward_threshold). min_score=-100 is the
+# fall/timeout baseline (ADR-026), NOT the deeper random floor: a do-nothing/flailing
+# agent falls for ≈ -92…-115 (venv-measured), and -100 (the fall penalty) is the honest
+# 0% floor so a non-walker reads ~0% — exactly LunarLander-shaped. floor_scales_with_steps
+# is False (a fall ends the episode early ≈ -100; the failure score does not grow with the
+# step cap), and play_step_scale=1 (1600 steps at 50 fps ≈ 32 s is already long enough by hand).
+# ---------------------------------------------------------------------------
+
+
+def _bipedal_spec(
+    env_id: str,
+    display: str,
+    difficulty: Literal["beginner", "intermediate", "advanced"],
+    default_total_timesteps: int,
+    make_kwargs: dict[str, Any],
+    desc_en: str,
+    desc_cz: str,
+) -> EnvSpec:
+    """Build one BipedalWalker EnvSpec from a data row (the variants share everything but the
+    terrain — Hardcore adds ladders/stumps/pits via ``make_kwargs={"hardcore": True}``)."""
+    return EnvSpec(
+        id=env_id,
+        gym_id="BipedalWalker-v3",  # both variants share the gym id; Hardcore differs by make_kwargs
+        display_name=Bilingual(en=display, cz=display),
+        description=Bilingual(en=desc_en, cz=desc_cz),
+        family="box2d",
+        obs_type="vector",
+        action_space="box",  # continuous Box(4): four leg-joint torques — the G1b seam
+        supported_algos=["ppo"],  # PPO-only (evolution opted out as data — hard 4-DoF locomotion)
+        hyperparams=_standard_hyperparams(),
+        make_kwargs=make_kwargs,
+        solved_score=300.0,  # BipedalWalker-v3 reward_threshold (walk smoothly to the far end)
+        min_score=-100.0,  # fall/timeout baseline (ADR-026): a non-walker falls ≈ -92…-115; -100 = 0% floor
+        default_total_timesteps=default_total_timesteps,  # the ★ PPO budget when GPU training lands
+        play_step_scale=1,  # 1600 steps @ 50 fps ≈ 32 s — already long enough to play by hand
+        floor_scales_with_steps=False,  # shaped/terminal: a fall ends early ≈ -100, doesn't scale with steps
+        human_playable=True,
+        competitive=False,
+        difficulty=difficulty,
+        hw_requirement="gpu",  # training deferred to the desktop (millions of steps); play available now
+    )
+
+
+register(
+    _bipedal_spec(
+        "bipedalwalker",
+        "BipedalWalker-v3",
+        "advanced",
+        5_000_000,  # hard continuous locomotion — a realistic PPO budget for the GPU desktop
+        {},
+        "Teach a two-legged robot to walk across gently uneven ground without falling over. A "
+        "Box2D physics task with a 24-number state (joint angles, hull tilt, ground contacts and "
+        "lidar) and four continuous leg-joint torques. Moving forward earns reward, using the "
+        "motors costs a little, and a fall ends the run with a −100 penalty; walking smoothly to "
+        "the far end scores around +300 (the 'solved' mark).",
+        "Naučte dvounohého robota přejít mírně nerovný terén, aniž by upadl. Úloha s fyzikou Box2D "
+        "se stavem o 24 číslech (úhly kloubů, náklon trupu, kontakty se zemí a lidar) a čtyřmi "
+        "spojitými momenty v kloubech nohou. Pohyb vpřed dává odměnu, použití motorů něco stojí a "
+        "pád ukončí běh penalizací −100; plynulá chůze až na konec dá kolem +300 (hranice „vyřešeno“).",
+    )
+)
+
+
+register(
+    _bipedal_spec(
+        "bipedalwalkerhardcore",
+        "BipedalWalker-v3 (Hardcore)",
+        "advanced",
+        10_000_000,  # notoriously hard — needs an even larger budget than the standard course
+        {"hardcore": True},
+        "The same two-legged robot, but now the terrain is an obstacle course of ladders, stumps "
+        "and pits to climb over, step around and leap across. Same 24-number state and four "
+        "continuous leg torques, same +reward for progress and −100 for a fall — but far harder, "
+        "and one of the classic 'hard' continuous-control benchmarks.",
+        "Stejný dvounohý robot, ale terén je teď překážková dráha plná žebříků, pařezů a jam, "
+        "které je třeba přelézt, obejít a přeskočit. Stejný stav o 24 číslech a čtyři spojité "
+        "momenty nohou, stejná odměna za postup a −100 za pád — ale mnohem těžší, a jeden z "
+        "klasických „těžkých“ benchmarků spojitého řízení.",
+    )
+)
+
+
+# ---------------------------------------------------------------------------
 # Classic Control family — the rest of the discrete/vector envs (G1a). Like
 # CartPole, these reuse the exact MlpPolicy/CPU PPO path and the numpy
 # neuroevolution path with no engine changes (vector obs + discrete actions);

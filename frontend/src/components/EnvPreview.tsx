@@ -263,12 +263,58 @@ export default function EnvPreview() {
   useEffect(() => {
     if (!(playState === 'playing' && playMode === 'human')) return
     const keymap = keymapFor(selectedEnvId, envs.find((e) => e.id === selectedEnvId)?.family)
-    const lookup = new Map<string, number>()
-    for (const b of keymap.bindings) for (const k of b.keys) lookup.set(k, b.action)
     const isFormField = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement | null)?.tagName
       return tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA'
     }
+
+    // Multi-joint continuous envs (BipedalWalker, Box(4)): each key carries a per-joint VECTOR
+    // contribution (e.g. ← = [-1,0,0,0]); held keys are SUMMED element-wise into one action vector
+    // and sent (the backend reshapes + clips it). No alternation — the joints are independent, unlike
+    // the discrete one-engine-per-step case below. Releasing all keys sends the scalar idle (0), which
+    // the backend fills into a zero-torque vector.
+    const vectorBinding = keymap.bindings.find((b) => Array.isArray(b.action))
+    if (vectorBinding) {
+      const dim = (vectorBinding.action as number[]).length
+      const vlookup = new Map<string, number[]>()
+      for (const b of keymap.bindings)
+        if (Array.isArray(b.action)) for (const k of b.keys) vlookup.set(k, b.action)
+      const heldV: string[] = []
+      const applyV = () => {
+        if (heldV.length === 0) {
+          if (keymap.idleAction !== null) sendPlayAction(keymap.idleAction)
+          return
+        }
+        const vec = new Array<number>(dim).fill(0)
+        for (const k of heldV) {
+          const a = vlookup.get(k)
+          if (a) for (let i = 0; i < dim; i++) vec[i] += a[i]
+        }
+        sendPlayAction(vec)
+      }
+      const onDownV = (e: KeyboardEvent) => {
+        if (isFormField(e) || !vlookup.has(e.key)) return
+        e.preventDefault()
+        if (!heldV.includes(e.key)) heldV.push(e.key)
+        applyV()
+      }
+      const onUpV = (e: KeyboardEvent) => {
+        if (!vlookup.has(e.key)) return
+        const i = heldV.indexOf(e.key)
+        if (i >= 0) heldV.splice(i, 1)
+        applyV()
+      }
+      window.addEventListener('keydown', onDownV)
+      window.addEventListener('keyup', onUpV)
+      return () => {
+        window.removeEventListener('keydown', onDownV)
+        window.removeEventListener('keyup', onUpV)
+      }
+    }
+
+    // Scalar keymaps (discrete + single-torque continuous): key → one action value.
+    const lookup = new Map<string, number>()
+    for (const b of keymap.bindings) for (const k of b.keys) lookup.set(k, b.action as number)
 
     // Turn-based grid-worlds (Toy Text): send exactly one action per key press — no auto-repeat,
     // no idle. The backend steps the agent one cell per received action.

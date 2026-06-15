@@ -13,12 +13,15 @@ export interface KeyBinding {
   keys: string[]
   /**
    * The value to send for the env. For a *discrete* env this is the action id (CartPole 0=left,
-   * LunarLander 2=main engine). For a *continuous* (box) env it is the analog command — a real
-   * number the backend wraps into the env's action vector (Pendulum ±2 = full torque each way,
-   * MountainCarContinuous ±1 = full throttle each way). A keyboard can only do "full one way /
-   * full the other / nothing", which is plenty to play these by hand.
+   * LunarLander 2=main engine). For a *scalar continuous* (box) env it is the analog command — a
+   * real number the backend wraps into the whole action vector (Pendulum ±2 = full torque each
+   * way, MountainCarContinuous ±1 = full throttle each way). For a *multi-joint continuous* env
+   * (BipedalWalker, Box(4)) it is a per-joint VECTOR contribution (e.g. ← = [-1,0,0,0]); the
+   * EnvPreview handler sums the held keys element-wise into one action vector that the backend
+   * reshapes + clips. A keyboard can only do "full one way / full the other / nothing", which is
+   * plenty to play these by hand.
    */
-  action: number
+  action: number | number[]
 }
 
 export interface PlayKeymap {
@@ -84,6 +87,29 @@ const MINIGRID_KEYMAP: PlayKeymap = {
   turnBased: true,
 }
 
+// BipedalWalker (G3b) — continuous Box(4): the four leg-joint torques [hip1, knee1, hip2, knee2],
+// each in [-1, 1]. Unlike Pendulum/MountainCarContinuous (one scalar torque filled across the whole
+// action), this needs PER-JOINT control, so each key carries a 4-element VECTOR contribution and the
+// EnvPreview handler SUMS the held keys element-wise into one action vector (the backend reshapes +
+// clips it — the WS action frame + play_session already accept list[float] from the G1b seam). Arrow
+// keys drive leg 1, WASD drives leg 2; releasing all keys sends the scalar idle 0, which the backend
+// fills into a zero-torque vector [0,0,0,0]. Real-time (not turn-based) — pace it with the speed slider.
+const BIPEDAL_KEYMAP: PlayKeymap = {
+  bindings: [
+    // Leg 1 — arrow keys: ← / → hip torque each way, ↑ / ↓ knee torque each way
+    { keys: ['ArrowLeft'], action: [-1, 0, 0, 0] },
+    { keys: ['ArrowRight'], action: [1, 0, 0, 0] },
+    { keys: ['ArrowUp'], action: [0, 1, 0, 0] },
+    { keys: ['ArrowDown'], action: [0, -1, 0, 0] },
+    // Leg 2 — WASD: A / D hip torque each way, W / S knee torque each way
+    { keys: ['a', 'A'], action: [0, 0, -1, 0] },
+    { keys: ['d', 'D'], action: [0, 0, 1, 0] },
+    { keys: ['w', 'W'], action: [0, 0, 0, 1] },
+    { keys: ['s', 'S'], action: [0, 0, 0, -1] },
+  ],
+  idleAction: 0, // all keys released → backend fills a zero-torque vector [0,0,0,0]
+}
+
 export const PLAY_KEYMAPS: Record<string, PlayKeymap> = {
   // CartPole: 0 = push left, 1 = push right. No idle action — the cart always moves.
   cartpole: {
@@ -139,6 +165,9 @@ export const PLAY_KEYMAPS: Record<string, PlayKeymap> = {
     ],
     idleAction: 0,
   },
+  // BipedalWalker (+ Hardcore) — per-joint vector control (see BIPEDAL_KEYMAP).
+  bipedalwalker: BIPEDAL_KEYMAP,
+  bipedalwalkerhardcore: BIPEDAL_KEYMAP,
   // Toy Text grid-worlds — turn-based: one move per key press (see FROZENLAKE_KEYMAP).
   frozenlake: FROZENLAKE_KEYMAP,
   frozenlake_noslip: FROZENLAKE_KEYMAP,
