@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Build the RL Dashboard standalone Windows app (F5) — one double-click executable, no Python
+    Build the RL Dashboard standalone Windows app (F5) -- one double-click executable, no Python
     needed on the target machine.
 
 .DESCRIPTION
@@ -50,7 +50,7 @@ if (-not $SkipFrontend) {
     Write-Host "`n==> Skipping frontend build (-SkipFrontend)" -ForegroundColor Yellow
 }
 if (-not (Test-Path "$Frontend\dist\index.html")) {
-    throw "frontend/dist/index.html missing — build the frontend first (drop -SkipFrontend)."
+    throw "frontend/dist/index.html missing -- build the frontend first (drop -SkipFrontend)."
 }
 
 # 2. PyInstaller present? ----------------------------------------------------------------------
