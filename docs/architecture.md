@@ -107,6 +107,28 @@ typed seams need real code — see [`adding-an-environment.md`](adding-an-enviro
 4. **Competitive play** — a `side` selector + a 2-agent env (Pong).
 5. **Board games** — a parallel turn-based/self-play subsystem (OpenSpiel), not a registry row.
 
+## Standalone packaging (F5)
+
+The app can be built into a **one-folder Windows executable** (no Python needed on the target machine):
+
+```
+build-standalone.ps1 -Zip          # npm run build → PyInstaller → dist\RL-Dashboard.zip
+dist\RL-Dashboard\RL-Dashboard.exe  # double-click to run
+```
+
+**Single-process design:** `backend/launcher.py` is the entry point. It picks a free port, launches
+uvicorn, opens the browser once the server is up, and runs in the foreground. FastAPI mounts the built
+SPA (`frontend/dist`, bundled as `frontend_dist` under `sys._MEIPASS`) at `/` *after* all `/api/*` and
+`/ws` routes, so the same process serves UI + API + WebSocket on one origin — the frontend needs no
+configuration change.
+
+**Path resolution (`app/core/paths.py`):** `is_frozen()` detects the bundle; `data_dir()` redirects
+writable state to `%LOCALAPPDATA%\RLDashboard\data` (vs repo-root `data/` in dev); `frontend_dist_dir()`
+finds the bundled SPA under `sys._MEIPASS`. Overridable via `RL_DASHBOARD_DATA_DIR` for portable/test use.
+
+**CPU edition:** GPU games are absent on hardware without CUDA via the registry's `hw_requirement` + 
+`torch.cuda.is_available()` — no crash, just the CPU catalogue. See `rl_dashboard.spec` + `Local/standalone-build.md` for build notes and the clean-machine test checklist.
+
 ## Related documentation
 
 - [`adding-an-environment.md`](adding-an-environment.md) — the data-only path + the five seams.

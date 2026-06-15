@@ -1,0 +1,7 @@
+# Build-only tooling for the F5 standalone packaging — NOT a runtime dependency.
+# Install into the project .venv before packaging:
+#   .\.venv\Scripts\python.exe -m pip install -r backend/requirements-build.txt
+#
+# PyInstaller pulls pyinstaller-hooks-contrib automatically (the bundled hooks for torch,
+# numpy, gymnasium, pygame, etc.). Keep it current — recent torch/numpy need recent hooks.
+pyinstaller>=6.11,<7

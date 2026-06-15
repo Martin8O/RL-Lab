@@ -19,6 +19,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from app.core.logging import get_logger
+from app.core.paths import data_dir
 from app.schemas.play_scores import (
     TOP_N,
     PlayCategory,
@@ -29,7 +30,8 @@ from app.schemas.play_scores import (
 
 logger = get_logger(__name__)
 
-_DEFAULT_PATH = Path(__file__).resolve().parents[3] / "data" / "play_scores.json"
+# Per-user writable data dir (repo-root data/ in dev, %LOCALAPPDATA% when packaged — paths.py).
+_DEFAULT_PATH = data_dir() / "play_scores.json"
 _MAX_NAME_LEN = 24
 
 

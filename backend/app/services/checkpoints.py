@@ -29,14 +29,15 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from app.core.logging import get_logger
+from app.core.paths import data_dir
 from app.schemas.checkpoints import CheckpointMeta
 from app.schemas.training import TrainConfig
 
 logger = get_logger(__name__)
 
-# backend/app/services/checkpoints.py → repo root is parents[3]; keep slots out of the package
-# tree under the gitignored data/ dir.
-_DEFAULT_ROOT = Path(__file__).resolve().parents[3] / "data" / "checkpoints"
+# Slots live under the per-user writable data dir (repo-root data/ in dev, %LOCALAPPDATA% when
+# packaged — see app.core.paths), never inside the read-only package tree.
+_DEFAULT_ROOT = data_dir() / "checkpoints"
 
 
 def _utc_now_iso() -> str:

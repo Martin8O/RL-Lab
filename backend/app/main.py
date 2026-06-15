@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from app.api.checkpoints import router as checkpoints_router
 from app.api.envs import router as envs_router
@@ -18,6 +19,7 @@ from app.api.system import router as system_router
 from app.api.training import router as training_router
 from app.core.config import settings
 from app.core.logging import configure_logging, get_logger
+from app.core.paths import frontend_dist_dir
 from app.services.connection_manager import manager
 from app.services.play_session import play_session
 from app.services.preview_streamer import preview_streamer
@@ -112,3 +114,17 @@ def _route_action(message: dict) -> None:
         play_session.submit_action(action)
     else:
         logger.debug("Ignoring malformed action frame: %r", message)
+
+
+# ---------------------------------------------------------------------------
+# Static frontend (F5 — single-process packaged build)
+# ---------------------------------------------------------------------------
+# When a built single-page frontend is present (a PyInstaller bundle, or a local `npm run build`),
+# serve it from this same process so one executable serves UI + API + WS. Mounted LAST, after all
+# `/api/*` routes and `/ws`, so those keep precedence and only unmatched paths fall through to the
+# SPA. Absent in the normal Vite-dev workflow (no dist) — then the backend serves only the API and
+# Vite proxies, exactly as before.
+_frontend_dist = frontend_dist_dir()
+if _frontend_dist is not None:
+    app.mount("/", StaticFiles(directory=str(_frontend_dist), html=True), name="frontend")
+    logger.info("Serving bundled frontend from %s", _frontend_dist)
