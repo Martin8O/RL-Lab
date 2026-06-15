@@ -92,6 +92,10 @@ def make_env(
     # is actually built (G4a; image obs → CnnPolicy/GPU).
     if gid.startswith("ALE/"):
         import ale_py  # noqa: F401 — import side effect registers the ALE namespace
+    # MiniGrid envs are registered the same way — by import side effect — so import lazily here, before
+    # gym.spec()/gym.make() touches the id (the family has no native gym TimeLimit; it self-truncates). G2c.
+    if gid.startswith("MiniGrid"):
+        import minigrid  # noqa: F401 — import side effect registers the MiniGrid-* envs
 
     kwargs: dict[str, Any] = {}
     if spec is not None:
@@ -103,6 +107,16 @@ def make_env(
         kwargs["render_mode"] = render_mode
 
     env = gym.make(gid, **kwargs)
+    # MiniGrid: a Dict obs (7×7×3 image + direction + mission) → FlatObsWrapper flattens it to a 1-D Box
+    # vector, so the same MlpPolicy (PPO) / numpy genome (neuroevolution) used for CartPole apply with no
+    # engine change — the same idea as the one-hot seam below, a different wrapper. Applied for the whole
+    # family on EVERY path (train/play/preview) so the obs shape never drifts between training and AI-play.
+    # render() is unaffected (an ObservationWrapper passes it through), so the colourful grid still renders
+    # server-side as a JPEG (the family is not in client_render → image path). G2c.
+    if spec is not None and spec.family == "minigrid":
+        from minigrid.wrappers import FlatObsWrapper
+
+        env = FlatObsWrapper(env)
     # Discrete (single-int) observation → one-hot vector, so vector-obs policies/genomes apply.
     if isinstance(env.observation_space, spaces.Discrete):
         env = OneHotObservation(env)

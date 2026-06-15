@@ -80,6 +80,22 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
         en: 'CliffWalking is a classic exploration trap, not a fair fight for these two. Sitting safely in the corner scores about −200 (just running out the clock), while heading for the goal means risking the −100 cliff falls first — so the reward landscape lures PPO and neuroevolution into the "play it safe, never reach the goal" corner and tends to keep them there (≈ −200, ~0% on the meter). PPO occasionally breaks out, but it is unreliable and seed-dependent, and more steps usually will not rescue a run that has already settled — this is not a bug, it is the well-known weakness of policy-gradient and population methods on a deceptive-reward grid. It is exactly the textbook task that value-based tabular Q-learning solves cleanly.',
         cz: 'CliffWalking je klasická past na zkoumání, ne férový souboj pro tyhle dvě metody. Bezpečné sezení v rohu dá kolem −200 (jen vyčerpá čas), kdežto cesta k cíli nejdřív znamená riskovat pády z útesu za −100 — odměnová krajina tak láká PPO i neuroevoluci do rohu „hraj na jistotu, do cíle nikdy" a většinou je tam drží (≈ −200, ~0 % na ukazateli). PPO se občas vymaní, ale nespolehlivě a podle seedu, a víc kroků už zaseknutý běh většinou nezachrání — to není chyba, je to známá slabina metod policy-gradient a populačních metod na mřížce s klamavou odměnou. Je to přesně ta učebnicová úloha, kterou hodnotové tabulkové Q-učení vyřeší čistě.',
       },
+      minigrid_empty: {
+        en: 'Both can be tried, and Empty-5x5 is easy enough for either. PPO is the clean choice — it reaches ~0.95 in seconds. Neuroevolution can also find the goal, but each network carries a huge ~2835-input layer (the flattened 7×7 view + the mission text), so its tiny genome is slower and clumsier than on a small Toy Text grid.',
+        cz: 'Vyzkoušet lze obě a Empty-5x5 je dost snadné pro obě. Čistou volbou je PPO — dosáhne ~0,95 během vteřin. Neuroevoluce cíl také najde, ale každá síť nese obří vstupní vrstvu ~2835 (zploštělý pohled 7×7 + text mise), takže její drobný genom je pomalejší a neohrabanější než na malé mřížce Toy Text.',
+      },
+      minigrid_fourrooms: {
+        en: 'PPO is the practical choice. Sparse reward plus a randomly-placed start and goal makes this a real exploration problem — PPO can solve it, and nudging Entropy up from its 0 default (see the Entropy note) helps it find the goal. Neuroevolution runs, but the ~2835-dim observation makes its small-network genome weak, so it explores poorly here — a fair comparison, not a like-for-like contest.',
+        cz: 'Praktickou volbou je PPO. Řídká odměna spolu s náhodně umístěným startem i cílem dělá z této úlohy skutečný problém zkoumání — PPO ho vyřešit umí a pomůže mu, když entropii zvýšíte z výchozí 0 (viz poznámka u Entropie). Neuroevoluce běží, ale obří obs (~2835) dělá její malou síť slabou, takže tu zkoumá špatně — férové srovnání, ne souboj rovného s rovným.',
+      },
+      minigrid_doorkey: {
+        en: 'PPO is the right tool. The key → door → goal sequence needs credit assignment across many steps, which PPO handles; the tiny evolution network struggles both with the big observation and the multi-step sub-goal. Watch PPO learn the ordering over a few hundred thousand steps.',
+        cz: 'Správným nástrojem je PPO. Posloupnost klíč → dveře → cíl vyžaduje přiřazení zásluh přes mnoho kroků, což PPO zvládá; drobná evoluční síť bojuje jak s velkým obs, tak s vícekrokovým dílčím cílem. Sledujte, jak se PPO naučí pořadí během pár set tisíc kroků.',
+      },
+      minigrid_keycorridor: {
+        en: 'Realistically PPO only. This hierarchical task (find the key behind a door, then unlock the ball\'s room) is hard even for PPO and needs a large budget; neuroevolution\'s small genome on a 2835-dim obs rarely makes progress — it is here for comparison, but expect it to stay near 0.',
+        cz: 'Realisticky jen PPO. Tato hierarchická úloha (najít klíč za dveřmi a pak odemknout místnost s míčkem) je těžká i pro PPO a potřebuje velký rozpočet; malý genom neuroevoluce na obs o 2835 rozměrech jen zřídka udělá pokrok — je tu pro srovnání, ale čekejte, že zůstane poblíž 0.',
+      },
     },
   },
 
@@ -138,6 +154,22 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
         en: '3e-4 is fine. The −100 cliff penalties are large, so a much higher rate can make learning lurch — keep it moderate.',
         cz: '3e-4 je v pořádku. Penalizace −100 za útes jsou velké, takže výrazně vyšší rychlost může učení rozkolísat — držte ji umírněnou.',
       },
+      minigrid_empty: {
+        en: '3e-4 solves Empty-5x5 quickly; there is no reason to change it.',
+        cz: '3e-4 vyřeší Empty-5x5 rychle; není důvod ji měnit.',
+      },
+      minigrid_fourrooms: {
+        en: '3e-4 is fine. The bottleneck on MiniGrid is exploration, not step size — add steps or raise Entropy before touching this.',
+        cz: '3e-4 je v pořádku. Překážkou u MiniGridu je zkoumání, ne velikost kroku — přidejte raději kroky nebo zvyšte entropii.',
+      },
+      minigrid_doorkey: {
+        en: '3e-4 works for the key-and-door task; give it more steps rather than a bigger rate, which can destabilise the multi-step learning.',
+        cz: '3e-4 pro úlohu s klíčem a dveřmi funguje; dejte mu raději víc kroků než větší krok, který může vícekrokové učení rozhodit.',
+      },
+      minigrid_keycorridor: {
+        en: '3e-4 is fine — this hard task needs budget and exploration far more than a higher learning rate.',
+        cz: '3e-4 je v pořádku — tato těžká úloha potřebuje rozpočet a zkoumání mnohem víc než vyšší rychlost učení.',
+      },
     },
   },
 
@@ -195,6 +227,22 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
       cliffwalking: {
         en: 'Keep γ high (0.99) so the goal\'s value reaches back across the path — it also makes the −100 cliff loom large enough to plan around.',
         cz: 'Nechte γ vysoké (0.99), aby se hodnota cíle přenesla zpět přes cestu — díky tomu také −100 za útes „čouhá“ dost na to, aby se mu agent vyhýbal.',
+      },
+      minigrid_empty: {
+        en: 'Keep γ high (0.99) so the single goal reward propagates back the few steps to the start.',
+        cz: 'Nechte γ vysoké (0.99), aby se jediná odměna za cíl přenesla zpět těch pár kroků ke startu.',
+      },
+      minigrid_fourrooms: {
+        en: 'A high γ (0.99) is essential — the goal can be rooms away, so its value must travel far back through the doorways.',
+        cz: 'Vysoké γ (0.99) je nutné — cíl může být místnosti daleko, takže jeho hodnota musí cestovat daleko zpět přes průchody.',
+      },
+      minigrid_doorkey: {
+        en: 'Keep γ high (0.99): the goal reward must reach back past the door and the key pickup for the agent to value those earlier sub-steps.',
+        cz: 'Nechte γ vysoké (0.99): odměna za cíl musí dosáhnout zpět za dveře a sebrání klíče, aby agent cenil tyto dřívější dílčí kroky.',
+      },
+      minigrid_keycorridor: {
+        en: 'A high γ (0.99) is critical — the ball reward is many steps (key, door, room) away and must propagate all the way back.',
+        cz: 'Vysoké γ (0.99) je klíčové — odměna za míček je mnoho kroků daleko (klíč, dveře, místnost) a musí se přenést celou cestu zpět.',
       },
     },
   },
@@ -291,6 +339,22 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
       cliffwalking: {
         en: 'A small bonus (~0.01) speeds early route-finding, but the dense −1 reward already gives a clear signal, so 0 works fine here too.',
         cz: 'Drobný bonus (~0,01) urychlí počáteční hledání cesty, ale hustá odměna −1 už dává jasný signál, takže 0 tu funguje také dobře.',
+      },
+      minigrid_empty: {
+        en: '0 usually works on this small room (the goal is close), but a tiny 0.01 can speed up finding it. Not a critical dial here.',
+        cz: 'Na této malé místnosti 0 obvykle stačí (cíl je blízko), ale drobných 0,01 může urychlit jeho nalezení. Tady to není kritický knoflík.',
+      },
+      minigrid_fourrooms: {
+        en: 'A key dial here — raise it (e.g. 0.01–0.05) so PPO explores enough to find the randomly-placed goal across the rooms. At 0 it can wander and never reach it.',
+        cz: 'Tady klíčový knoflík — zvyšte ho (např. 0,01–0,05), aby PPO zkoumalo dost na nalezení náhodně umístěného cíle napříč místnostmi. Při 0 může bloudit a cíl nikdy nedosáhnout.',
+      },
+      minigrid_doorkey: {
+        en: 'Raise it (e.g. 0.01–0.05) so PPO tries picking up the key and opening the door before settling — with sparse reward and a sub-goal, exploration is what unlocks progress.',
+        cz: 'Zvyšte ho (např. 0,01–0,05), aby PPO zkusilo sebrat klíč a otevřít dveře dřív, než se ustálí — při řídké odměně a dílčím cíli je právě zkoumání tím, co odemkne pokrok.',
+      },
+      minigrid_keycorridor: {
+        en: 'The most important dial here — almost nothing is rewarded until the ball is picked up, so push exploration (0.01–0.1). Even then this hierarchical task is hard.',
+        cz: 'Nejdůležitější knoflík tady — dokud se nesebere míček, neodměňuje se téměř nic, takže přidejte zkoumání (0,01–0,1). I tak je tato hierarchická úloha těžká.',
       },
     },
   },
@@ -502,6 +566,22 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
         en: 'Usually learns a good path within the ★ 200k; the dense −1 reward makes progress steady, so you will see it climb out of the deep negatives fairly quickly.',
         cz: 'Dobrou cestu se obvykle naučí během ★ 200k; hustá odměna −1 dělá pokrok plynulým, takže ho uvidíte vyšplhat z hlubokého záporu poměrně rychle.',
       },
+      minigrid_empty: {
+        en: 'Solves within the ★ 100k, often in far less (~25k) — the success curve jumps to ~0.95 quickly once it finds the goal.',
+        cz: 'Vyřeší se během ★ 100k, často za mnohem méně (~25k) — křivka úspěšnosti vyskočí k ~0,95 rychle, jakmile cíl najde.',
+      },
+      minigrid_fourrooms: {
+        en: 'Needs a generous budget (★ 500k) for the exploration. A flat curve near 0 early on is normal — it pays nothing until it first reaches the randomly-placed goal.',
+        cz: 'Potřebuje štědrý rozpočet (★ 500k) na zkoumání. Rovná křivka poblíž 0 na začátku je normální — nic neplatí, dokud poprvé nedosáhne náhodně umístěného cíle.',
+      },
+      minigrid_doorkey: {
+        en: 'The ★ 300k is a starting point; the key → door → goal sequence takes practice, so give it more if the success curve has not begun to climb.',
+        cz: '★ 300k je výchozí bod; posloupnost klíč → dveře → cíl chce cvik, takže přidejte víc, pokud křivka úspěšnosti ještě nezačala stoupat.',
+      },
+      minigrid_keycorridor: {
+        en: 'The hardest of these — choose the largest budget (★ 500k) and expect a long flat start. It may still not fully solve at this budget; more steps and Entropy help.',
+        cz: 'Nejtěžší z nich — zvolte největší rozpočet (★ 500k) a počítejte s dlouhým rovným začátkem. I tak nemusí při tomto rozpočtu plně vyřešit; pomohou další kroky a entropie.',
+      },
     },
   },
 
@@ -563,6 +643,22 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
       cliffwalking: {
         en: '50 networks find a path within a reasonable number of generations; a larger population helps a little, at a proportional cost in time.',
         cz: '50 sítí najde cestu za rozumný počet generací; větší populace pomůže o něco víc, za úměrnou cenu v čase.',
+      },
+      minigrid_empty: {
+        en: 'Even ~50 networks can find the small room\'s goal, though the ~2835-input genome is heavy. Lean higher if it stalls.',
+        cz: 'I ~50 sítí najde cíl malé místnosti, i když genom s ~2835 vstupy je těžký. Posuňte se výš, pokud učení vázne.',
+      },
+      minigrid_fourrooms: {
+        en: 'Lean to the upper end (100+): more networks per generation improve the odds one finds the goal. The big observation keeps evolution weak here regardless, so PPO is the better tool.',
+        cz: 'Posuňte se k horní hranici (100+): víc sítí za generaci zvyšuje šanci, že některá najde cíl. Velký obs tu i tak drží evoluci slabou, takže lepším nástrojem je PPO.',
+      },
+      minigrid_doorkey: {
+        en: 'A larger population helps a little, but the multi-step key → door task is hard for the tiny genome on this big observation — PPO is the better tool here.',
+        cz: 'Větší populace trochu pomůže, ale vícekroková úloha klíč → dveře je pro drobný genom na tomto velkém obs těžká — lepším nástrojem je tu PPO.',
+      },
+      minigrid_keycorridor: {
+        en: 'Even a big population rarely cracks this hierarchical task with a small genome on a 2835-dim observation. Included for comparison, but PPO is the practical choice.',
+        cz: 'I velká populace zřídka rozlouskne tuto hierarchickou úlohu s malým genomem na obs o 2835 rozměrech. Je tu pro srovnání, ale praktickou volbou je PPO.',
       },
     },
   },
@@ -736,6 +832,22 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
         en: 'Improves steadily over a few dozen generations as the population learns to avoid the cliff; push higher to keep refining toward the optimal path.',
         cz: 'Plynule se zlepšuje během pár desítek generací, jak se populace učí vyhýbat útesu; vyšší hodnotou ji necháte dál ladit k optimální cestě.',
       },
+      minigrid_empty: {
+        en: 'Improves over a few dozen generations on this easy room; push higher to keep refining toward a short route to the goal.',
+        cz: 'Zlepšuje se během pár desítek generací na této snadné místnosti; vyšší hodnotou ji necháte dál ladit ke krátké cestě k cíli.',
+      },
+      minigrid_fourrooms: {
+        en: 'Needs many generations and may still explore poorly — the ~2835-dim observation limits the tiny genome here.',
+        cz: 'Potřebuje mnoho generací a stejně může zkoumat špatně — obs o ~2835 rozměrech tu drobný genom omezuje.',
+      },
+      minigrid_doorkey: {
+        en: 'Many generations are needed, and the tiny network often plateaus before mastering the key → door sequence. PPO is the faster route.',
+        cz: 'Je potřeba mnoho generací a drobná síť často uvázne, než zvládne posloupnost klíč → dveře. Rychlejší cestou je PPO.',
+      },
+      minigrid_keycorridor: {
+        en: 'Even many generations rarely solve this hierarchical task with evolution — expect a low plateau. PPO is the practical choice.',
+        cz: 'I mnoho generací tuto hierarchickou úlohu evolucí jen zřídka vyřeší — čekejte nízké uváznutí. Praktickou volbou je PPO.',
+      },
     },
   },
 
@@ -865,6 +977,22 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
         en: 'CliffWalking gives −1 per step and −100 per cliff fall, so a flailing agent scores in the thousands negative; the curve climbs toward about −13 (the optimal path) as it learns to avoid the cliff.',
         cz: 'CliffWalking dává −1 za krok a −100 za pád z útesu, takže zmatený agent skóruje v tisících záporných; křivka stoupá zhruba k −13 (optimální cesta), jak se učí útesu vyhýbat.',
       },
+      minigrid_empty: {
+        en: 'MiniGrid pays nothing until the goal, then 1 − 0.9·(steps/max) on success (≈0.9–0.97), so the curve sits near 0 until it first reaches the goal, then climbs to ~0.95 ("solved").',
+        cz: 'MiniGrid neplatí nic až do cíle, pak při úspěchu 1 − 0,9·(kroky/max) (≈0,9–0,97), takže křivka sedí poblíž 0, dokud cíl poprvé nedosáhne, pak stoupá k ~0,95 („vyřešeno“).',
+      },
+      minigrid_fourrooms: {
+        en: 'Same sparse reward — the curve is flat near 0 until exploration finds the goal, then rises. A long flat line means it has not found the goal yet; raise exploration.',
+        cz: 'Stejná řídká odměna — křivka je rovná poblíž 0, dokud zkoumání nenajde cíl, pak stoupá. Dlouhá rovná čára znamená, že cíl ještě nenašlo; zvyšte zkoumání.',
+      },
+      minigrid_doorkey: {
+        en: 'Same shape — it stays near 0 until the full key → door → goal is completed, then climbs. A flat line means the sequence is not solved yet.',
+        cz: 'Stejný tvar — drží se poblíž 0, dokud se nedokončí celé klíč → dveře → cíl, pak stoupá. Rovná čára znamená, že posloupnost ještě není vyřešená.',
+      },
+      minigrid_keycorridor: {
+        en: 'Same sparse reward; expect a long flat 0 (the ball is hard to reach) before any climb — that is the sparse-reward profile, not a bug.',
+        cz: 'Stejná řídká odměna; čekejte dlouhou rovnou 0 (na míček je těžké dosáhnout), než vůbec začne stoupat — to je profil řídké odměny, ne chyba.',
+      },
     },
   },
 
@@ -950,6 +1078,22 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
       cliffwalking: {
         en: 'Per generation; climbs from deeply negative toward about −13 as the population learns to avoid the cliff and take a short path.',
         cz: 'Za generaci; stoupá z hluboce záporných hodnot zhruba k −13, jak se populace učí vyhnout útesu a jít krátkou cestou.',
+      },
+      minigrid_empty: {
+        en: 'Same as reward but per generation — rises from ~0 toward ~0.95 once a network finds the goal.',
+        cz: 'Stejné jako odměna, ale za generaci — stoupá z ~0 k ~0,95, jakmile některá síť najde cíl.',
+      },
+      minigrid_fourrooms: {
+        en: 'Per-generation success reward; it rises slowly and, with the tiny genome on the big observation, often plateaus low.',
+        cz: 'Odměna za úspěch za generaci; stoupá pomalu a s drobným genomem na velkém obs často uvázne nízko.',
+      },
+      minigrid_doorkey: {
+        en: 'Per generation; often plateaus below "solved" as the small network struggles with the key → door sub-goal.',
+        cz: 'Za generaci; často uvázne pod „vyřešeno“, jak malá síť bojuje s dílčím cílem klíč → dveře.',
+      },
+      minigrid_keycorridor: {
+        en: 'Per generation; usually stays near 0 — neuroevolution rarely cracks this hierarchical task.',
+        cz: 'Za generaci; obvykle zůstává poblíž 0 — neuroevoluce tuto hierarchickou úlohu jen zřídka rozlouskne.',
       },
     },
   },

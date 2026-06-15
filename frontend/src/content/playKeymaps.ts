@@ -67,6 +67,23 @@ const FROZENLAKE_KEYMAP: PlayKeymap = {
   turnBased: true,
 }
 
+// MiniGrid (G2c) — ONE shared keymap for the whole family (mirrors Atari). The action space is
+// Discrete(7); we bind navigation + interaction: 0 turn-left, 1 turn-right, 2 move-forward, 3 pickup,
+// 4 drop, 5 toggle (open a door). DoorKey/KeyCorridor need pickup (3) + toggle (5). Turn-based — one
+// move per key press, no auto-repeat, no idle. There is no "move backward", so ↓ is intentionally unbound.
+const MINIGRID_KEYMAP: PlayKeymap = {
+  bindings: [
+    { keys: ['ArrowLeft', 'a', 'A'], action: 0 }, // turn left
+    { keys: ['ArrowRight', 'd', 'D'], action: 1 }, // turn right
+    { keys: ['ArrowUp', 'w', 'W'], action: 2 }, // move forward
+    { keys: ['p', 'P', 'Enter'], action: 3 }, // pick up (the key / the ball)
+    { keys: ['o', 'O'], action: 4 }, // drop
+    { keys: [' ', 'Spacebar', 'e', 'E'], action: 5 }, // toggle (open a door)
+  ],
+  idleAction: null,
+  turnBased: true,
+}
+
 export const PLAY_KEYMAPS: Record<string, PlayKeymap> = {
   // CartPole: 0 = push left, 1 = push right. No idle action — the cart always moves.
   cartpole: {
@@ -160,5 +177,6 @@ export const DEFAULT_KEYMAP: PlayKeymap = PLAY_KEYMAPS.cartpole
 export function keymapFor(envId: string | null, family?: string): PlayKeymap {
   if (envId !== null && PLAY_KEYMAPS[envId]) return PLAY_KEYMAPS[envId]
   if (family === 'atari') return ATARI_KEYMAP
+  if (family === 'minigrid') return MINIGRID_KEYMAP
   return DEFAULT_KEYMAP
 }

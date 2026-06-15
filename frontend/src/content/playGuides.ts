@@ -16,6 +16,34 @@ export interface PlayGuide {
   tips: Bilingual
 }
 
+// MiniGrid (G2c) — shared controls + tips across the family (the per-env goal differs). The agent has
+// a facing direction (turn, then move forward), play is turn-based, and the reward is sparse.
+const MINIGRID_CONTROLS: PlayControl[] = [
+  { keys: '← / A', action: { en: 'Turn left', cz: 'Otočit se doleva' } },
+  { keys: '→ / D', action: { en: 'Turn right', cz: 'Otočit se doprava' } },
+  { keys: '↑ / W', action: { en: 'Move forward', cz: 'Krok vpřed' } },
+  { keys: 'P / Enter', action: { en: 'Pick up (key / ball)', cz: 'Sebrat (klíč / míček)' } },
+  { keys: 'O', action: { en: 'Drop the carried key', cz: 'Odložit nesený klíč' } },
+  { keys: 'Space / E', action: { en: 'Toggle — open a door', cz: 'Interakce — otevřít dveře' } },
+]
+
+const MINIGRID_TIPS: Bilingual = {
+  en: 'You do not slide around the grid like Toy Text — you have a facing direction, so turn (← / →) to '
+    + 'face the way you want to go, then step forward (↑). Picking up (P), dropping (O) and opening a '
+    + 'door (Space) all act on the square directly in front of you, and you can carry only one object '
+    + 'at a time. It is turn-based: one move per key press, so '
+    + 'take your time. The reward is sparse — you score nothing until you reach the goal (or pick up the '
+    + 'ball), so be patient and explore. The small 7×7 window around the agent is all it actually sees. '
+    + 'Switch to "Watch AI" to see a trained policy explore efficiently.',
+  cz: 'Nekloužete po mřížce jako u Toy Textu — máte směr, kterým koukáte, takže se nejdřív otočte (← / →) '
+    + 'tam, kam chcete jít, a pak udělejte krok vpřed (↑). Sebrání (P), odložení (O) i otevření dveří '
+    + '(mezerník) působí na políčko přímo před vámi a najednou unesete jen jednu věc. Hra je tahová: '
+    + 'jeden pohyb na stisk klávesy, '
+    + 'takže nespěchejte. Odměna je řídká — dokud nedojdete do cíle (nebo neseberete míček), nezískáte nic, '
+    + 'takže buďte trpěliví a zkoumejte. Malé okno 7×7 kolem agenta je vše, co sám vidí. Přepněte na '
+    + '„Sledovat AI“ a uvidíte, jak natrénovaná strategie zkoumá efektivně.',
+}
+
 export const PLAY_GUIDES: Record<string, PlayGuide> = {
   cartpole: {
     goal: {
@@ -314,6 +342,66 @@ export const PLAY_GUIDES: Record<string, PlayGuide> = {
         + 'poté dojeďte k vlajce cíle a stiskem O ho vysaďte. Nabrání či vysazení jinde stojí 10 bodů. '
         + 'Přepněte na „Sledovat AI“ a uvidíte úspornou trasu.',
     },
+  },
+
+  // ── MiniGrid (G2c) — turn-based, sparse-reward exploration grids ─────────────────────────────
+  minigrid_empty: {
+    goal: {
+      en: 'Reach the green goal square in the small empty room. Turn to face the way you want to go, then '
+        + 'step forward. The simplest level — no obstacles, just find the goal. You score only on reaching '
+        + 'it, and the fewer steps you take the higher the score. (MiniGrid counts the surrounding wall in '
+        + 'the grid size, so this "5×5" is a 3×3 room inside.)',
+      cz: 'Dojděte na zelené cílové pole v malé prázdné místnosti. Otočte se směrem, kterým chcete jít, a '
+        + 'pak udělejte krok vpřed. Nejjednodušší úroveň — žádné překážky, jen najděte cíl. Bodujete jen za '
+        + 'jeho dosažení a čím méně kroků uděláte, tím vyšší skóre. (MiniGrid počítá do velikosti i '
+        + 'obvodovou zeď, takže tahle „5×5“ je uvnitř místnost 3×3.)',
+    },
+    controls: MINIGRID_CONTROLS,
+    tips: MINIGRID_TIPS,
+  },
+
+  minigrid_fourrooms: {
+    goal: {
+      en: 'Find and reach the green goal square in a layout of four rooms joined by narrow doorways. Your '
+        + 'start and the goal are placed randomly each game, so you must explore from room to room through '
+        + 'the gaps to find it. You score only on reaching the goal.',
+      cz: 'Najděte a dosáhněte zeleného cílového pole v rozložení čtyř místností spojených úzkými průchody. '
+        + 'Váš start i cíl jsou každou hru umístěny náhodně, takže musíte zkoumat z místnosti do místnosti '
+        + 'přes průchody, abyste cíl našli. Bodujete jen za dosažení cíle.',
+    },
+    controls: MINIGRID_CONTROLS,
+    tips: MINIGRID_TIPS,
+  },
+
+  minigrid_doorkey: {
+    goal: {
+      en: 'Pick up the key, unlock the door with it, then reach the green goal on the far side. Stand on '
+        + 'the key and press P to grab it, face the locked door and press Space to open it, then walk '
+        + 'through to the goal. You must do these in order — the door will not open without the key.',
+      cz: 'Seberte klíč, odemkněte jím dveře a pak dojděte k zelenému cíli na druhé straně. Postavte se na '
+        + 'klíč a stiskem P ho seberte, otočte se čelem k zamčeným dveřím a stiskem mezerníku je otevřete, '
+        + 'pak projděte k cíli. Musíte to udělat v pořadí — bez klíče se dveře neotevřou.',
+    },
+    controls: MINIGRID_CONTROLS,
+    tips: MINIGRID_TIPS,
+  },
+
+  minigrid_keycorridor: {
+    goal: {
+      en: 'Pick up the coloured ball that is locked inside a room. Explore the corridor to find the key '
+        + '(it sits behind a door): face it and press P to grab it, then face the locked door and press '
+        + 'Space to open it. Now the catch — you can carry only one thing at a time, so before you can '
+        + 'pick up the ball you must face an empty square and press O to drop the key, then turn to face '
+        + 'the ball and press P. The hardest of these four; it needs real, patient exploration.',
+      cz: 'Seberte barevný míček zamčený uvnitř jedné místnosti. Prozkoumejte chodbu a najděte klíč '
+        + '(je za dveřmi): otočte se k němu čelem a stiskem P ho seberte, pak se postavte čelem k '
+        + 'zamčeným dveřím a stiskem mezerníku je otevřete. A teď ten háček — najednou unesete jen jednu '
+        + 'věc, takže než seberete míček, musíte se otočit čelem na prázdné políčko a stiskem O klíč '
+        + 'odložit, pak se otočit čelem k míčku a stisknout P. Nejtěžší ze čtyř; vyžaduje skutečné, '
+        + 'trpělivé zkoumání.',
+    },
+    controls: MINIGRID_CONTROLS,
+    tips: MINIGRID_TIPS,
   },
 }
 

@@ -8,6 +8,7 @@ import type { Bilingual } from '../api/types'
 export const ENV_CATEGORIES: { id: string; label: Bilingual }[] = [
   { id: 'classic_control', label: { en: 'Classic Control', cz: 'Klasické řízení' } },
   { id: 'toy_text',        label: { en: 'Toy Text (tabular)', cz: 'Toy Text (tabulkové)' } },
+  { id: 'minigrid',        label: { en: 'MiniGrid', cz: 'MiniGrid' } },
   { id: 'box2d',           label: { en: 'Box2D (physics)', cz: 'Box2D (fyzika)' } },
   { id: 'atari',           label: { en: 'Atari', cz: 'Atari' } },
   { id: 'mujoco',          label: { en: 'MuJoCo (robotics)', cz: 'MuJoCo (robotika)' } },

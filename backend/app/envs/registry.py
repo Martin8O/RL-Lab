@@ -1002,3 +1002,105 @@ _ATARI_GAMES: list[
 
 for _row in _ATARI_GAMES:
     register(_atari_spec(*_row))
+
+
+# ---------------------------------------------------------------------------
+# MiniGrid family (Farama) — G2c "new CPU grid family".
+#
+# The native observation is a Dict (a 7×7×3 partial-view "image" + the agent's
+# facing direction + a natural-language mission string), NOT a vector. The shared
+# factory wraps every minigrid env in ``minigrid.wrappers.FlatObsWrapper``, which
+# flattens that Dict into a length-2835 ``Box(uint8)`` vector — so the SAME
+# ``MlpPolicy`` (PPO) and numpy genome (neuroevolution) used for CartPole apply with
+# no engine change (the same idea as the Toy Text one-hot seam, a different wrapper).
+# Hence ``obs_type="vector"`` and ``hw_requirement="cpu"`` (verified: PPO solves
+# Empty-5x5 to ~0.95 in ~6k steps on the laptop CPU, no SB3 warning on the uint8 obs)
+# — unlike Atari, these are NOT GPU-gated and train here now.
+#
+# Reward is SPARSE: 0 until the goal, then ``1 − 0.9·(steps/max_steps)`` on success
+# (≈0.9–0.97), so ``solved_score=0.95``, ``min_score=0.0``, ``sparse_reward=True`` (the
+# play meter "measures" until the episode ends, like FrozenLake — ADR-030). The envs
+# have NO native gym ``TimeLimit`` (``gym.spec().max_episode_steps`` is None) but the
+# MiniGrid env truncates itself at its internal ``max_steps``, so no ``episode_step_limit``
+# is needed (unlike CliffWalking).
+#
+# Grid-worlds, so played TURN-BASED (one move per key press, reusing the G2a path); but
+# unlike Toy Text they are rendered SERVER-SIDE as a JPEG (the family is not in
+# client_render, so ``client_state`` returns None → ``env.render()`` rgb_array → JPEG —
+# exactly like Atari, minus the retro skin). Action space is ``Discrete(7)``: turn-left,
+# turn-right, forward, pickup, drop, toggle, done; DoorKey/KeyCorridor need pickup +
+# toggle. ``supported_algos`` keeps PPO + neuroevolution (the latter is weak on the big
+# 2835-dim obs — documented honestly in content/parameters.ts). Adding more of the 80+
+# MiniGrid levels later is a one-row-per-game data change here.
+# ---------------------------------------------------------------------------
+
+
+def _minigrid_spec(
+    env_id: str,
+    gym_id: str,
+    display: str,
+    difficulty: Literal["beginner", "intermediate", "advanced"],
+    default_total_timesteps: int,
+    desc_en: str,
+    desc_cz: str,
+) -> EnvSpec:
+    """Build one MiniGrid EnvSpec from a data row (the family is otherwise identical)."""
+    return EnvSpec(
+        id=env_id,
+        gym_id=gym_id,
+        display_name=Bilingual(en=display, cz=display),  # MiniGrid level names are proper nouns
+        description=Bilingual(en=desc_en, cz=desc_cz),
+        family="minigrid",
+        obs_type="vector",  # after FlatObsWrapper (applied in the shared factory)
+        action_space="discrete",
+        supported_algos=["ppo", "neuroevolution"],
+        hyperparams=_standard_hyperparams(),
+        solved_score=0.95,  # no gym reward_threshold; success pays 1 − 0.9·steps/max ≈ 0.9–0.97
+        min_score=0.0,  # sparse 0/1-shaped reward — a failing agent scores 0, the meter fills 0 → 0.95
+        sparse_reward=True,  # 0 until the goal → play meter "measures" until the episode ends (ADR-030)
+        default_total_timesteps=default_total_timesteps,
+        play_step_scale=1,  # turn-based human play — no time pressure
+        turn_based=True,
+        human_playable=True,
+        competitive=False,
+        difficulty=difficulty,
+        hw_requirement="cpu",  # FlatObs + MlpPolicy trains on CPU now (not GPU-gated like Atari)
+    )
+
+
+# id, gym_id, display, difficulty, default_total_timesteps, description EN, description CZ
+_MINIGRID_GAMES: list[
+    tuple[str, str, str, Literal["beginner", "intermediate", "advanced"], int, str, str]
+] = [
+    ("minigrid_empty", "MiniGrid-Empty-5x5-v0", "MiniGrid Empty 5×5", "beginner", 100_000,
+     "Reach the green goal square in a small empty room. The simplest MiniGrid level — turn to face a "
+     "direction, then step forward — and the gentlest introduction to its sparse reward: you score only "
+     "on reaching the goal, and the sooner you get there the higher the score.",
+     "Dojděte na zelené cílové pole v malé prázdné místnosti. Nejjednodušší úroveň MiniGridu — otočte se "
+     "směrem a pak udělejte krok vpřed — a nejmírnější úvod do její řídké odměny: bod získáte jen za "
+     "dosažení cíle a čím dřív tam dojdete, tím vyšší skóre."),
+    ("minigrid_fourrooms", "MiniGrid-FourRooms-v0", "MiniGrid Four Rooms", "intermediate", 500_000,
+     "Find the goal in a layout of four rooms joined by narrow gaps. Far more exploration than the empty "
+     "room: the goal and your start are placed randomly, so you must travel between rooms through the "
+     "doorways to find it. Sparse reward — you score only on reaching the goal.",
+     "Najděte cíl v rozložení čtyř místností spojených úzkými průchody. Mnohem víc zkoumání než prázdná "
+     "místnost: cíl i váš start jsou umístěny náhodně, takže musíte procházet mezi místnostmi přes dveře, "
+     "abyste cíl našli. Řídká odměna — bodujete jen za dosažení cíle."),
+    ("minigrid_doorkey", "MiniGrid-DoorKey-5x5-v0", "MiniGrid Door & Key", "intermediate", 300_000,
+     "Pick up the key, use it to unlock the door, then reach the goal on the far side. The first level "
+     "with a sub-goal you must do in order — find and grab the key, open the locked door, then cross — a "
+     "classic test of multi-step exploration. Sparse reward: only completing it scores.",
+     "Seberte klíč, odemkněte jím dveře a pak dojděte k cíli na druhé straně. První úroveň s dílčím cílem, "
+     "který musíte splnit v pořadí — najít a vzít klíč, otevřít zamčené dveře a přejít — klasický test "
+     "vícekrokového zkoumání. Řídká odměna: boduje jen dokončení."),
+    ("minigrid_keycorridor", "MiniGrid-KeyCorridorS3R1-v0", "MiniGrid Key Corridor", "advanced", 500_000,
+     "Pick up the coloured ball locked away in a room. You must first find a key hidden behind another "
+     "door, then use it to unlock the room with the ball — a hierarchical goal that needs real exploration "
+     "of the corridor and its rooms. The hardest of these four; sparse reward.",
+     "Seberte barevný míček zamčený v jedné z místností. Nejdřív musíte najít klíč ukrytý za jinými dveřmi "
+     "a teprve jím odemknout místnost s míčkem — hierarchický cíl vyžadující skutečné prozkoumání chodby a "
+     "jejích místností. Nejtěžší ze čtyř; řídká odměna."),
+]
+
+for _mg_row in _MINIGRID_GAMES:
+    register(_minigrid_spec(*_mg_row))

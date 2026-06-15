@@ -14,6 +14,10 @@ An **image-observation** env (Atari / ALE — `obs_type="image"`) is **human-pla
 reuses the existing server-JPEG render + play loop, so a registry row + `hw_requirement="gpu"` +
 `supported_algos=["ppo"]` + a shared keymap is enough to play it now (G4a). Its *training* still needs the
 `CnnPolicy`+CUDA seam, so Run is gated off until a GPU is present (`/api/system` `gpu_available`). A
+**dict-observation** env (MiniGrid — a 7×7×3 view + `direction` + a `mission` string) is **data too**:
+`make_env` applies `FlatObsWrapper` for `family=="minigrid"`, flattening it to a vector so the same
+`MlpPolicy`/genome train (on CPU) with no engine change, while the colourful grid still renders server-side
+as a JPEG and play is turn-based (G2c). A
 **2-agent / competitive setup or turn-based self-play** needs code at one of the five seams (bottom of this page).
 
 ## 1. Verify the env's truths in the venv — never guess
@@ -70,6 +74,16 @@ it's still data + content. Notes: a deprecated gym id (e.g. `CliffWalking-v0` �
 native `TimeLimit`** both surface here — use the verified id and set `episode_step_limit` so a poor policy
 can't loop forever. Variants that differ only by kwargs (FrozenLake's `map_name`/`is_slippery`) are separate
 registry rows sharing one `gym_id` via `make_kwargs`.
+
+### Dict observations (image + extras) — MiniGrid
+
+If the obs is a `Dict` bundling a small image with extra fields (MiniGrid: a 7×7×3 partial view + the agent's
+`direction` + a `mission` string), keep `obs_type="vector"` and set `family="minigrid"`: `make_env` applies
+`minigrid.wrappers.FlatObsWrapper` for that family (flattening the Dict to a length-2835 `Box`), exactly as it
+applies the one-hot wrapper for Toy Text — so PPO/neuroevolution train with no engine change, on CPU. Rendering
+is **server-side** (the family isn't in `client_render`, so `client_state` returns None → the env's `rgb_array`
+→ JPEG, like Atari but no retro skin), and play is `turn_based=True`. These envs have **no native `TimeLimit`**
+but self-truncate at their internal `max_steps`, so no `episode_step_limit` is needed (G2c).
 
 The registry is the source of truth: the sidebar, skill bands, step ladder, compare filter, and the algo
 dropdown all read from it. `supported_algos` is how a game opts out of an algorithm (e.g. an image env can be
