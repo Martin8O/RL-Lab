@@ -10,6 +10,21 @@ from typing import Literal
 from pydantic import BaseModel
 
 
+class GridLayout(BaseModel):
+    """Static board layout for a client-rendered grid-world (Toy Text), streamed with each frame.
+
+    The dynamic part (agent / passenger / destination position) rides in the frame's ``state``; this
+    describes the fixed board the client draws under it. ``cells`` is row-major (length ``rows*cols``),
+    each entry one of: ``"normal"``, ``"start"``, ``"goal"``, ``"hole"`` (FrozenLake), ``"cliff"``
+    (CliffWalking) or ``"stop"`` (Taxi pickup/drop-off points). ``kind`` selects the client renderer.
+    """
+
+    kind: Literal["frozenlake", "cliffwalking", "taxi"]
+    rows: int
+    cols: int
+    cells: list[str]
+
+
 class FrameMessage(BaseModel):
     """One rendered env frame, pushed over WS as {type:"frame", ...}.
 
@@ -31,6 +46,8 @@ class FrameMessage(BaseModel):
     # Per-episode scene geometry the client can't derive from the obs — currently LunarLander's random
     # moon surface as obs-space [x, y] points (None for envs whose scene is fixed/derivable).
     terrain: list[list[float]] | None = None
+    # Static board layout for a grid-world (Toy Text), so the client can draw the board (None elsewhere).
+    grid: GridLayout | None = None
 
 
 class PreviewState(BaseModel):

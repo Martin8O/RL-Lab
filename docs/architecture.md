@@ -82,7 +82,9 @@ Two paths, chosen per env:
   the surface). The frontend draws an SVG "stage" and updates the moving parts **imperatively** from each
   frame (no React re-render per frame). Stages live in `frontend/src/components/EnvStages.tsx`, geometry in
   `envGeometry.ts`, dispatch in `EnvPreview.tsx` (`clientKind`). Today: CartPole, MountainCar(+Continuous),
-  Pendulum, Acrobot, LunarLander.
+  Pendulum, Acrobot, LunarLander, and the Toy Text **grid-worlds** (FrozenLake / Taxi / CliffWalking) — these
+  add a `grid` frame field (`client_render.grid_layout` → a static `GridLayout` board) drawn declaratively by
+  a `GridStage`, with `client_state` carrying the agent's cell; the human plays them **turn-based**.
 - **Server image**: the streamer renders `rgb_array` → JPEG (`{… image, width, height}`) and the frontend
   draws it to a `<canvas>`. The fallback for any env not in the client-render set (e.g. image-obs envs).
 

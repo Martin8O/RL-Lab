@@ -5,6 +5,7 @@
 // state layout in sync with the backend's client_state.
 
 import type { RefObject } from 'react'
+import type { GridLayout } from '../api/types'
 import {
   MC_GOAL, MC_GROUND_PATH, MC_SURFACE_PATH, mcX, mcY,
   PEND_CX, PEND_CY, PEND_L, ACRO_CX, ACRO_CY, ACRO_L, ACRO_JOINT_Y,
@@ -148,6 +149,115 @@ export function LunarLanderStage({ envName, landerRef, mainPlumeRef, leftPlumeRe
         <line x1="-23" y1="21" x2="-17" y2="21" stroke="var(--border-strong)" strokeWidth="3" strokeLinecap="round" />
         <line x1="17" y1="21" x2="23" y2="21" stroke="var(--border-strong)" strokeWidth="3" strokeLinecap="round" />
       </g>
+    </svg>
+  )
+}
+
+// ── Toy Text grid-worlds (FrozenLake / CliffWalking / Taxi) ──────────────────────────────────
+// One renderer for all three: the backend streams the static board (grid: kind/rows/cols/cells)
+// plus the dynamic agent position (state), and this draws the board + agent declaratively. Grid
+// moves are infrequent (turn-based human / paced AI), so a React render per move is fine — no need
+// for the imperative per-frame transforms the physics stages use. Keep in sync with the backend's
+// client_render.grid_layout cell tags and the default boards in content/gridMaps.ts.
+const GRID_CELL = 56
+const TAXI_STOPS: ReadonlyArray<readonly [number, number]> = [[0, 0], [0, 4], [4, 0], [4, 3]]  // R G Y B
+const TAXI_STOP_COLOR = ['var(--viz-3)', 'var(--viz-2)', 'var(--viz-5)', 'var(--viz-1)']
+const TAXI_STOP_LABEL = ['R', 'G', 'Y', 'B']
+// Taxi's fixed internal walls: an impassable edge on the right of cell [row, col].
+const TAXI_WALLS: ReadonlyArray<readonly [number, number]> = [[0, 1], [1, 1], [3, 0], [3, 2], [4, 0], [4, 2]]
+
+function GridFlag({ x, y, color }: { x: number; y: number; color: string }) {
+  return (
+    <g>
+      <line x1={x} y1={y + 13} x2={x} y2={y - 15} stroke="var(--border-strong)" strokeWidth="2.5" />
+      <path d={`M ${x} ${y - 15} l 16 6 l -16 6 z`} fill={color} />
+    </g>
+  )
+}
+
+function GridPerson({ x, y, color }: { x: number; y: number; color: string }) {
+  return (
+    <g>
+      <circle cx={x} cy={y - 8} r="5" fill={color} />
+      <path d={`M ${x - 7} ${y + 10} q 7 -16 14 0 z`} fill={color} />
+    </g>
+  )
+}
+
+function TaxiPieces({ agent, cx, cy }: {
+  agent: number[]; cx: (c: number) => number; cy: (r: number) => number
+}) {
+  const taxiRow = agent[0] ?? 0
+  const taxiCol = agent[1] ?? 0
+  const passLoc = agent[2] ?? 0   // 0..3 = waiting at R/G/Y/B; 4 = riding in the taxi
+  const dest = agent[3] ?? 0      // 0..3 = drop-off at R/G/Y/B
+  const [dr, dc] = TAXI_STOPS[Math.min(3, Math.max(0, dest))]
+  return (
+    <g>
+      {TAXI_WALLS.map(([r, c], i) => (
+        <line key={`w${i}`} x1={(c + 1) * GRID_CELL} y1={r * GRID_CELL} x2={(c + 1) * GRID_CELL} y2={(r + 1) * GRID_CELL}
+          stroke="var(--border-strong)" strokeWidth="4" strokeLinecap="round" />
+      ))}
+      {TAXI_STOPS.map(([r, c], i) => (
+        <text key={`s${i}`} x={c * GRID_CELL + 7} y={r * GRID_CELL + 18}
+          fontSize="13" fontWeight={700} fontFamily="var(--font-mono)" fill={TAXI_STOP_COLOR[i]}>
+          {TAXI_STOP_LABEL[i]}
+        </text>
+      ))}
+      <GridFlag x={cx(dc)} y={cy(dr)} color="var(--accent)" />
+      {passLoc < 4 && (
+        <GridPerson x={cx(TAXI_STOPS[passLoc][1])} y={cy(TAXI_STOPS[passLoc][0])} color="var(--viz-1)" />
+      )}
+      <g transform={`translate(${cx(taxiCol)} ${cy(taxiRow)})`}>
+        <rect x="-16" y="-9" width="32" height="18" rx="4" fill="var(--accent)" stroke="var(--surface-1)" strokeWidth="2" />
+        <circle cx="-9" cy="10" r="3.5" fill="var(--text-strong)" />
+        <circle cx="9" cy="10" r="3.5" fill="var(--text-strong)" />
+        {passLoc === 4 && <circle cx="0" cy="-2" r="4.5" fill="var(--viz-1)" />}
+      </g>
+    </g>
+  )
+}
+
+export function GridStage({ envName, grid, agent }: {
+  envName: string; grid: GridLayout; agent: number[]
+}) {
+  const { rows, cols, cells, kind } = grid
+  const w = cols * GRID_CELL
+  const h = rows * GRID_CELL
+  const cx = (c: number) => c * GRID_CELL + GRID_CELL / 2
+  const cy = (r: number) => r * GRID_CELL + GRID_CELL / 2
+  const maxW = kind === 'cliffwalking' ? 780 : 460
+  return (
+    <svg viewBox={`-6 -6 ${w + 12} ${h + 12}`} preserveAspectRatio="xMidYMid meet"
+      style={{ width: '100%', maxWidth: maxW, maxHeight: '100%' }} role="img" aria-label={envName}>
+      {cells.map((tag, i) => {
+        const r = Math.floor(i / cols)
+        const c = i % cols
+        const base = tag === 'goal' ? 'var(--accent-surface)'
+          : tag === 'start' || tag === 'stop' ? 'var(--surface-3)'
+          : 'var(--surface-2)'
+        return (
+          <g key={i}>
+            <rect x={c * GRID_CELL} y={r * GRID_CELL} width={GRID_CELL} height={GRID_CELL} rx="5"
+              fill={base} stroke="var(--border-default)" strokeWidth="1.5" />
+            {tag === 'cliff' && (
+              <rect x={c * GRID_CELL} y={r * GRID_CELL} width={GRID_CELL} height={GRID_CELL} rx="5"
+                fill="var(--danger)" fillOpacity="0.32" />
+            )}
+            {tag === 'hole' && (
+              <circle cx={cx(c)} cy={cy(r)} r={GRID_CELL * 0.3}
+                fill="var(--surface-1)" stroke="var(--danger)" strokeWidth="2" />
+            )}
+            {tag === 'goal' && kind !== 'taxi' && <GridFlag x={cx(c)} y={cy(r)} color="var(--accent)" />}
+          </g>
+        )
+      })}
+      {kind === 'taxi' ? (
+        <TaxiPieces agent={agent} cx={cx} cy={cy} />
+      ) : (
+        <circle cx={cx(agent[1] ?? 0)} cy={cy(agent[0] ?? 0)} r={GRID_CELL * 0.27}
+          fill="var(--accent)" stroke="var(--surface-1)" strokeWidth="2.5" />
+      )}
     </svg>
   )
 }

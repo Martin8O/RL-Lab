@@ -137,8 +137,10 @@ class TrainingManager:
             daemon=True,
         )
         self._thread.start()
-        # Let the (decoupled) preview streamer begin watching this run, if visual is on.
-        preview_streamer.attach_run(gym_id)
+        # Let the (decoupled) preview streamer begin watching this run, if visual is on. It builds
+        # the env from the registry id (same factory + wrappers as the trainer), so its decoupled
+        # predict policy sees the obs shape the model was trained on.
+        preview_streamer.attach_run(config.env_id)
         return initial_status
 
     # -- checkpoints ------------------------------------------------------------

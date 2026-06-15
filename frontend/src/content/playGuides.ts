@@ -181,6 +181,140 @@ export const PLAY_GUIDES: Record<string, PlayGuide> = {
         + 'nachází dobře.',
     },
   },
+
+  // ── Toy Text grid-worlds (turn-based: one move per key press) ───────────────────────────────
+  frozenlake: {
+    goal: {
+      en: 'Cross the frozen lake from the start (top-left) to the goal flag (bottom-right) without '
+        + 'stepping into a hole (the dark circles). The ice is slippery: you only go the way you press '
+        + 'about one time in three — the other two thirds the ice slides you to one side (never '
+        + 'straight backwards). Reaching the goal scores 1; falling in a hole or running out of moves '
+        + 'scores 0. (Want a version that always goes where you point? Pick "FrozenLake (4×4, no slip)".)',
+      cz: 'Přejděte zamrzlé jezero ze startu (vlevo nahoře) k vlajce cíle (vpravo dole), aniž byste '
+        + 'šlápli do díry (tmavé kruhy). Led klouže: tam, kam zmáčknete, půjdete jen asi jednou ze tří '
+        + 'pokusů — ve zbylých dvou třetinách vás led smekne do strany (nikdy ne rovnou zpět). Dosažení '
+        + 'cíle dá 1 bod; pád do díry nebo vyčerpání tahů dá 0. (Chcete verzi, kde jdete vždy tam, kam '
+        + 'míříte? Zvolte „FrozenLake (4×4, bez kluzu)".)',
+    },
+    controls: [
+      { keys: '← / A', action: { en: 'Move left', cz: 'Krok doleva' } },
+      { keys: '→ / D', action: { en: 'Move right', cz: 'Krok doprava' } },
+      { keys: '↑ / W', action: { en: 'Move up', cz: 'Krok nahoru' } },
+      { keys: '↓ / S', action: { en: 'Move down', cz: 'Krok dolů' } },
+    ],
+    tips: {
+      en: 'One move per key press (turn-based) — take your time. Because the ice slips, aim for paths '
+        + 'that keep a margin from the holes rather than hugging their edges. Switch to "Watch AI" to '
+        + 'see a learned policy thread the safe route.',
+      cz: 'Jeden krok na stisk klávesy (tahová hra) — nespěchejte. Protože led klouže, volte cesty s '
+        + 'odstupem od děr, ne těsně podél nich. Přepněte na „Sledovat AI“ a uvidíte, jak se naučená '
+        + 'strategie protáhne bezpečnou cestou.',
+    },
+  },
+
+  frozenlake_noslip: {
+    goal: {
+      en: 'The same frozen lake, but the ice does NOT slip — every move goes exactly where you point '
+        + 'it. Find the single safe path from the start (top-left) to the goal flag (bottom-right), '
+        + 'avoiding the holes. Reaching the goal scores 1; falling in a hole scores 0.',
+      cz: 'Stejné jezero, ale led NEKLOUŽE — každý krok jde přesně tam, kam míříte. Najděte jedinou '
+        + 'bezpečnou cestu ze startu (vlevo nahoře) k vlajce cíle (vpravo dole) a vyhněte se dírám. '
+        + 'Dosažení cíle dá 1 bod; pád do díry dá 0.',
+    },
+    controls: [
+      { keys: '← / A', action: { en: 'Move left', cz: 'Krok doleva' } },
+      { keys: '→ / D', action: { en: 'Move right', cz: 'Krok doprava' } },
+      { keys: '↑ / W', action: { en: 'Move up', cz: 'Krok nahoru' } },
+      { keys: '↓ / S', action: { en: 'Move down', cz: 'Krok dolů' } },
+    ],
+    tips: {
+      en: 'With no slipping this is a pure maze — plan a route around the holes and follow it exactly. '
+        + 'It is the gentlest grid-world, so a trained agent solves it almost perfectly. Switch to '
+        + '"Watch AI" to see the shortest safe path.',
+      cz: 'Bez klouzání jde o čisté bludiště — naplánujte cestu kolem děr a držte se jí přesně. Je to '
+        + 'nejjednodušší mřížkový svět, takže ho natrénovaný agent vyřeší téměř dokonale. Přepněte na '
+        + '„Sledovat AI“ a uvidíte nejkratší bezpečnou cestu.',
+    },
+  },
+
+  frozenlake8x8: {
+    goal: {
+      en: 'The bigger 8×8 frozen lake — more holes and a longer slippery path from the start '
+        + '(top-left) to the goal flag (bottom-right). Same rules and the same slippery ice as the 4×4: '
+        + 'you go where you press only about one time in three, the rest you slide sideways — over this '
+        + 'longer path that adds up, so expect to be pushed off course often. Reaching the goal scores '
+        + '1; falling in a hole or running out of moves scores 0.',
+      cz: 'Větší zamrzlé jezero 8×8 — víc děr a delší kluzká cesta ze startu (vlevo nahoře) k vlajce '
+        + 'cíle (vpravo dole). Stejná pravidla i stejně kluzký led jako u 4×4: tam, kam zmáčknete, '
+        + 'půjdete jen asi jednou ze tří, jinak vás to smekne do strany — na delší cestě se to nasčítá, '
+        + 'takže čekejte, že vás to bude často srážet z kurzu. Dosažení cíle dá 1 bod; pád do díry nebo '
+        + 'vyčerpání tahů dá 0.',
+    },
+    controls: [
+      { keys: '← / A', action: { en: 'Move left', cz: 'Krok doleva' } },
+      { keys: '→ / D', action: { en: 'Move right', cz: 'Krok doprava' } },
+      { keys: '↑ / W', action: { en: 'Move up', cz: 'Krok nahoru' } },
+      { keys: '↓ / S', action: { en: 'Move down', cz: 'Krok dolů' } },
+    ],
+    tips: {
+      en: 'A longer route means more chances for the ice to slip you off course, so keep clear of the '
+        + 'holes and re-plan after each unexpected slide. Switch to "Watch AI" to see how a trained '
+        + 'agent handles the bigger board.',
+      cz: 'Delší cesta znamená víc příležitostí, aby vás led smekl z dráhy, takže se držte dál od děr a '
+        + 'po každém nečekaném smyku cestu přeplánujte. Přepněte na „Sledovat AI“ a uvidíte, jak si s '
+        + 'větší deskou poradí natrénovaný agent.',
+    },
+  },
+
+  cliffwalking: {
+    goal: {
+      en: 'Walk from the start (bottom-left) to the goal flag (bottom-right) along the edge of the '
+        + 'cliff (the red squares). Every step costs −1; stepping onto the cliff costs −100 and sends '
+        + 'you back to the start. Reach the goal in as few steps as you can — the best route is about −13.',
+      cz: 'Dojděte ze startu (vlevo dole) k vlajce cíle (vpravo dole) podél okraje útesu (červená '
+        + 'políčka). Každý krok stojí −1; vstup na útes stojí −100 a vrátí vás na start. Dojděte do cíle '
+        + 'na co nejméně kroků — nejlepší cesta je kolem −13.',
+    },
+    controls: [
+      { keys: '↑ / W', action: { en: 'Move up', cz: 'Krok nahoru' } },
+      { keys: '→ / D', action: { en: 'Move right', cz: 'Krok doprava' } },
+      { keys: '↓ / S', action: { en: 'Move down', cz: 'Krok dolů' } },
+      { keys: '← / A', action: { en: 'Move left', cz: 'Krok doleva' } },
+    ],
+    tips: {
+      en: 'The shortest route runs one row above the cliff and straight across — risky but fast. A '
+        + 'safer route climbs to the top row first, crosses, then drops to the goal. Switch to "Watch '
+        + 'AI" to compare what a trained agent prefers.',
+      cz: 'Nejkratší cesta vede jednu řadu nad útesem a rovnou napříč — riskantní, ale rychlá. '
+        + 'Bezpečnější cesta nejdřív vystoupá do horní řady, přejde a teprve pak klesne do cíle. '
+        + 'Přepněte na „Sledovat AI“ a porovnejte, co si vybere natrénovaný agent.',
+    },
+  },
+
+  taxi: {
+    goal: {
+      en: 'Drive the taxi to the waiting passenger, pick them up, then drive to their destination flag '
+        + 'and drop them off. Each step costs −1, a correct drop-off pays +20, and an illegal pickup or '
+        + 'drop-off costs −10. A good run scores around +8 — so be quick and only pick up / drop off at '
+        + 'the right stop.',
+      cz: 'Dojeďte taxíkem k čekajícímu cestujícímu, naberte ho a pak dojeďte k vlajce jeho cíle a '
+        + 'vysaďte ho. Každý krok stojí −1, správné vysazení vyplatí +20 a nelegální nabrání či vysazení '
+        + 'stojí −10. Dobrý běh dá kolem +8 — buďte rychlí a nabírejte/vysazujte jen na správné zastávce.',
+    },
+    controls: [
+      { keys: '↑ ↓ ← →', action: { en: 'Drive the taxi (also WASD)', cz: 'Řídit taxík (také WASD)' } },
+      { keys: 'P / Space', action: { en: 'Pick up the passenger', cz: 'Nabrat cestujícího' } },
+      { keys: 'O / Enter', action: { en: 'Drop off the passenger', cz: 'Vysadit cestujícího' } },
+    ],
+    tips: {
+      en: 'Drive to the passenger\'s coloured stop first and press P to pick them up (they then ride in '
+        + 'the taxi), then drive to the destination flag and press O to drop off. Picking up or dropping '
+        + 'off anywhere else wastes 10 points. Switch to "Watch AI" to see an efficient route.',
+      cz: 'Nejdřív dojeďte k barevné zastávce cestujícího a stiskem P ho naberte (pak jede v taxíku), '
+        + 'poté dojeďte k vlajce cíle a stiskem O ho vysaďte. Nabrání či vysazení jinde stojí 10 bodů. '
+        + 'Přepněte na „Sledovat AI“ a uvidíte úspornou trasu.',
+    },
+  },
 }
 
 export const DEFAULT_PLAY_GUIDE: PlayGuide = PLAY_GUIDES.cartpole

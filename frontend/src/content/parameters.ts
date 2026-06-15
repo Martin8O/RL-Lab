@@ -60,6 +60,26 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
         en: 'A continuous exploration trap. PPO often stalls near 0: it rarely stumbles onto the flag, and the small force penalty discourages trying. Neuroevolution tends to do better — among a whole population some network reaches the flag and that success spreads. A great task for comparing the two.',
         cz: 'Spojitá past na zkoumání. PPO často uvázne poblíž 0: na vlajku jen zřídka náhodou narazí a malá penalizace za sílu odrazuje od zkoušení. Neuroevoluce tu bývá lepší — v celé populaci některá síť dojede k vlajce a úspěch se rozšíří. Skvělá úloha pro porovnání obou.',
       },
+      frozenlake: {
+        en: 'Both can solve it. The state is a single grid cell (one-hot–encoded for the network), and the reward is sparse — only reaching the goal pays — so a little exploration matters. Because the ice slips, success is a *rate*: even a good policy scores below 1.0. A nice task to compare PPO and Neuroevolution.',
+        cz: 'Vyřešit ho zvládnou obě. Stav je jediná buňka mřížky (pro síť kódovaná jako one-hot) a odměna je řídká — platí jen dosažení cíle — takže záleží na trošce zkoumání. Protože led klouže, je úspěch *míra*: i dobrá strategie skóruje pod 1,0. Pěkná úloha pro porovnání PPO a Neuroevoluce.',
+      },
+      frozenlake_noslip: {
+        en: 'The easiest grid — both solve it fast. With no slipping it is a clean shortest-path maze: Neuroevolution often nails it in a few generations, PPO in a few thousand steps. Ideal for watching the two learn side by side.',
+        cz: 'Nejjednodušší mřížka — obě ji vyřeší rychle. Bez klouzání jde o čisté bludiště s nejkratší cestou: Neuroevoluce ji často zvládne za pár generací, PPO za pár tisíc kroků. Ideální pro pozorování obou vedle sebe.',
+      },
+      frozenlake8x8: {
+        en: 'Both can learn it, but it is much harder: 64 cells and a long slippery path mean success is rare early on. Give either method a generous budget — PPO with a little Entropy, or Neuroevolution with a larger population, both help.',
+        cz: 'Naučit se ho zvládnou obě, ale je mnohem těžší: 64 buněk a dlouhá kluzká cesta znamenají, že úspěch je zpočátku vzácný. Dejte oběma štědrý rozpočet — pomůže PPO s trochou entropie i Neuroevoluce s větší populací.',
+      },
+      taxi: {
+        en: 'Taxi has 500 states and a long pick-up-then-drop-off routine, which is hard for both methods here: PPO needs a lot of practice and the tiny evolution network struggles with so many states (you will often see the agent wander without ever picking the passenger up). This is exactly the kind of small, fully-observed task where a value-based method like tabular Q-learning shines.',
+        cz: 'Taxi má 500 stavů a dlouhou rutinu „naber a vysaď", což je tu pro obě metody těžké: PPO potřebuje hodně tréninku a drobná evoluční síť s tolika stavy bojuje (často uvidíte agenta bloudit, aniž by cestujícího vůbec nabral). Přesně na takových malých, plně pozorovatelných úlohách vyniká hodnotová metoda jako tabulkové Q-učení.',
+      },
+      cliffwalking: {
+        en: 'CliffWalking is a classic exploration trap, not a fair fight for these two. Sitting safely in the corner scores about −200 (just running out the clock), while heading for the goal means risking the −100 cliff falls first — so the reward landscape lures PPO and neuroevolution into the "play it safe, never reach the goal" corner and tends to keep them there (≈ −200, ~0% on the meter). PPO occasionally breaks out, but it is unreliable and seed-dependent, and more steps usually will not rescue a run that has already settled — this is not a bug, it is the well-known weakness of policy-gradient and population methods on a deceptive-reward grid. It is exactly the textbook task that value-based tabular Q-learning solves cleanly.',
+        cz: 'CliffWalking je klasická past na zkoumání, ne férový souboj pro tyhle dvě metody. Bezpečné sezení v rohu dá kolem −200 (jen vyčerpá čas), kdežto cesta k cíli nejdřív znamená riskovat pády z útesu za −100 — odměnová krajina tak láká PPO i neuroevoluci do rohu „hraj na jistotu, do cíle nikdy" a většinou je tam drží (≈ −200, ~0 % na ukazateli). PPO se občas vymaní, ale nespolehlivě a podle seedu, a víc kroků už zaseknutý běh většinou nezachrání — to není chyba, je to známá slabina metod policy-gradient a populačních metod na mřížce s klamavou odměnou. Je to přesně ta učebnicová úloha, kterou hodnotové tabulkové Q-učení vyřeší čistě.',
+      },
     },
   },
 
@@ -98,6 +118,26 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
         en: 'The default 3e-4 is fine. As with MountainCar the bottleneck is exploration, not step size — if the score sits near 0, raise the Entropy bonus or try Neuroevolution before touching the rate.',
         cz: 'Výchozí 3e-4 je v pořádku. Stejně jako u MountainCar je překážkou zkoumání, ne velikost kroku — pokud skóre vězí poblíž 0, zvyšte raději bonus za entropii nebo zkuste Neuroevoluci než měnit rychlost.',
       },
+      frozenlake: {
+        en: 'Default 3e-4 is fine. The bottleneck here is exploration (slippery ice, sparse reward), not step size — if it stalls, raise Entropy or add steps before touching this.',
+        cz: 'Výchozí 3e-4 je v pořádku. Překážkou je tu zkoumání (kluzký led, řídká odměna), ne velikost kroku — pokud učení vázne, zvyšte raději entropii nebo přidejte kroky.',
+      },
+      frozenlake_noslip: {
+        en: '3e-4 solves this easy deterministic maze quickly; there is little reason to change it.',
+        cz: '3e-4 toto snadné deterministické bludiště vyřeší rychle; není důvod ji měnit.',
+      },
+      frozenlake8x8: {
+        en: '3e-4 works on the bigger lake too — give it more steps rather than a larger step size, which can destabilise the longer task.',
+        cz: '3e-4 funguje i na větším jezeře — dejte mu raději víc kroků než větší krok, který může delší úlohu rozhodit.',
+      },
+      taxi: {
+        en: '3e-4 is a solid default for Taxi. With 500 states, more steps help far more than a higher learning rate.',
+        cz: '3e-4 je pro Taxi dobrá výchozí hodnota. Při 500 stavech pomůže víc kroků mnohem víc než vyšší rychlost učení.',
+      },
+      cliffwalking: {
+        en: '3e-4 is fine. The −100 cliff penalties are large, so a much higher rate can make learning lurch — keep it moderate.',
+        cz: '3e-4 je v pořádku. Penalizace −100 za útes jsou velké, takže výrazně vyšší rychlost může učení rozkolísat — držte ji umírněnou.',
+      },
     },
   },
 
@@ -135,6 +175,26 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
       mountaincarcontinuous: {
         en: 'Reaching the flag is a long build-up, so keep γ high (0.99): the agent must value the distant +100 over the small force cost it pays each step.',
         cz: 'Dojezd k vlajce je dlouhé rozhoupávání, takže nechte γ vysoké (0.99): agent musí cenit vzdálených +100 víc než malou cenu za sílu, kterou platí každý krok.',
+      },
+      frozenlake: {
+        en: 'Reaching the goal is a long sequence with no reward along the way, so keep γ high (0.99) — the agent must value the distant goal across many zero-reward steps. Too low and it cannot "see" the goal from far away.',
+        cz: 'Dosažení cíle je dlouhá řada kroků bez odměny po cestě, takže nechte γ vysoké (0.99) — agent musí cenit vzdálený cíl přes mnoho kroků s nulovou odměnou. Při nízkém γ cíl zdálky „neuvidí“.',
+      },
+      frozenlake_noslip: {
+        en: 'Keep γ high (0.99): even on this easy map the only reward is at the goal, so the agent must value it across the whole path.',
+        cz: 'Nechte γ vysoké (0.99): i na této snadné mapě je jediná odměna v cíli, takže ji agent musí cenit přes celou cestu.',
+      },
+      frozenlake8x8: {
+        en: 'Even more important on the bigger board — the goal is many steps away, so a high γ (0.99) is essential to carry its value back across the lake.',
+        cz: 'Na větší desce ještě důležitější — cíl je mnoho kroků daleko, takže vysoké γ (0.99) je nutné, aby se jeho hodnota přenesla zpět přes jezero.',
+      },
+      taxi: {
+        en: 'Keep γ high (0.99): the +20 drop-off comes only after a long run of −1 steps, so the agent must value that distant payoff to plan the whole trip.',
+        cz: 'Nechte γ vysoké (0.99): +20 za vysazení přijde až po dlouhé řadě kroků po −1, takže agent musí tuto vzdálenou výplatu cenit, aby naplánoval celou jízdu.',
+      },
+      cliffwalking: {
+        en: 'Keep γ high (0.99) so the goal\'s value reaches back across the path — it also makes the −100 cliff loom large enough to plan around.',
+        cz: 'Nechte γ vysoké (0.99), aby se hodnota cíle přenesla zpět přes cestu — díky tomu také −100 za útes „čouhá“ dost na to, aby se mu agent vyhýbal.',
       },
     },
   },
@@ -211,6 +271,26 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
       mountaincarcontinuous: {
         en: 'This is the key dial for MountainCarContinuous. The reward is sparse, so a little extra exploration is often what lets PPO find the flag at all — raise it (e.g. 0.01–0.1) if the score is stuck near 0, or try Neuroevolution.',
         cz: 'U MountainCarContinuous je tohle klíčový knoflík. Odměna je řídká, takže trocha zkoumání navíc je často to, co PPO vůbec umožní najít vlajku — zvyšte ji (např. 0,01–0,1), pokud skóre vězí poblíž 0, nebo zkuste Neuroevoluci.',
+      },
+      frozenlake: {
+        en: 'Exploration matters here — only the goal pays, so a small bonus (e.g. 0.01) helps PPO discover a route before settling. At 0 it can stall on the slippery map, never finding the goal.',
+        cz: 'Zkoumání tu hraje roli — platí jen cíl, takže drobný bonus (např. 0,01) pomůže PPO objevit cestu, než se ustálí. Při 0 může na kluzké mapě uváznout a cíl nikdy nenajít.',
+      },
+      frozenlake_noslip: {
+        en: '0 is usually fine on this easy deterministic map; a tiny 0.01 will not hurt if learning stalls.',
+        cz: '0 na této snadné deterministické mapě obvykle stačí; drobných 0,01 neuškodí, pokud učení vázne.',
+      },
+      frozenlake8x8: {
+        en: 'The key dial here — with 64 cells and sparse reward, raise it (e.g. 0.01–0.05) so PPO explores enough to ever reach the goal across the big lake.',
+        cz: 'Tady klíčový knoflík — při 64 buňkách a řídké odměně ji zvyšte (např. 0,01–0,05), aby PPO zkoumalo dost na to, aby přes velké jezero cíl vůbec našlo.',
+      },
+      taxi: {
+        en: 'A little exploration (e.g. 0.01) helps PPO discover the pick-up and drop-off actions early; 0 still works but can learn slowly.',
+        cz: 'Trocha zkoumání (např. 0,01) pomůže PPO brzy objevit akce nabrání a vysazení; 0 také funguje, ale učení může být pomalé.',
+      },
+      cliffwalking: {
+        en: 'A small bonus (~0.01) speeds early route-finding, but the dense −1 reward already gives a clear signal, so 0 works fine here too.',
+        cz: 'Drobný bonus (~0,01) urychlí počáteční hledání cesty, ale hustá odměna −1 už dává jasný signál, takže 0 tu funguje také dobře.',
       },
     },
   },
@@ -402,6 +482,26 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
         en: 'More steps alone may not solve MountainCarContinuous — with too little exploration the score sits near 0 no matter the budget. Pair a healthy step count with a higher Entropy bonus, or try Neuroevolution.',
         cz: 'Samotné kroky navíc MountainCarContinuous nemusí vyřešit — při příliš malém zkoumání skóre vězí poblíž 0 bez ohledu na rozpočet. Spojte rozumný počet kroků s vyšším bonusem za entropii, nebo zkuste Neuroevoluci.',
       },
+      frozenlake: {
+        en: 'Slippery and sparse, so give it a generous budget (the ★ 200k). A success rate stuck near 0 means it has not found a route yet — raise the Entropy bonus rather than just adding steps.',
+        cz: 'Kluzké a řídké, takže mu dejte štědrý rozpočet (★ 200k). Úspěšnost zaseknutá poblíž 0 znamená, že ještě nenašlo cestu — zvyšte raději bonus za entropii než jen přidávat kroky.',
+      },
+      frozenlake_noslip: {
+        en: 'Deterministic and tiny, so it solves fast — the ★ 50k is plenty.',
+        cz: 'Deterministické a drobné, takže se vyřeší rychle — ★ 50k bohatě stačí.',
+      },
+      frozenlake8x8: {
+        en: 'The hardest FrozenLake — pick the largest budget (the ★ 400k) and expect slow early progress while it explores the big lake.',
+        cz: 'Nejtěžší FrozenLake — zvolte největší rozpočet (★ 400k) a počítejte s pomalým začátkem, než prozkoumá velké jezero.',
+      },
+      taxi: {
+        en: 'Taxi needs lots of practice (500 states) — the ★ 500k is a starting point. Give it more if the score is not yet climbing past 0 toward +8.',
+        cz: 'Taxi potřebuje hodně cviku (500 stavů) — ★ 500k je výchozí bod. Dejte mu víc, pokud se skóre ještě nešplhá přes 0 k +8.',
+      },
+      cliffwalking: {
+        en: 'Usually learns a good path within the ★ 200k; the dense −1 reward makes progress steady, so you will see it climb out of the deep negatives fairly quickly.',
+        cz: 'Dobrou cestu se obvykle naučí během ★ 200k; hustá odměna −1 dělá pokrok plynulým, takže ho uvidíte vyšplhat z hlubokého záporu poměrně rychle.',
+      },
     },
   },
 
@@ -443,6 +543,26 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
       mountaincarcontinuous: {
         en: 'A bigger population is a real advantage here: with more networks tried per generation, one is far more likely to reach the flag and seed the whole herd. Lean toward the upper end (e.g. 100).',
         cz: 'Větší populace je tu skutečná výhoda: s víc sítěmi za generaci je mnohem pravděpodobnější, že některá dojede k vlajce a „nasází“ celé stádo. Posuňte se k horní hranici (např. 100).',
+      },
+      frozenlake: {
+        en: 'A bigger population tries more routes per generation, raising the odds one finds the goal on the slippery ice — lean higher (e.g. 100).',
+        cz: 'Větší populace zkouší za generaci víc cest a zvyšuje šanci, že některá najde cíl na kluzkém ledu — posuňte se výš (např. 100).',
+      },
+      frozenlake_noslip: {
+        en: 'Even 30–50 networks find the short safe path quickly on this easy deterministic map.',
+        cz: 'I 30–50 sítí najde na této snadné deterministické mapě krátkou bezpečnou cestu rychle.',
+      },
+      frozenlake8x8: {
+        en: 'Lean to the upper end (100+): more networks per generation improves the odds of crossing the bigger lake at all.',
+        cz: 'Posuňte se k horní hranici (100+): víc sítí za generaci zvyšuje šanci, že větší jezero vůbec přejde.',
+      },
+      taxi: {
+        en: 'Taxi\'s 500 states are hard for the tiny genome, so a larger population helps a little — but PPO is the better tool here.',
+        cz: '500 stavů Taxi je pro drobný genom těžkých, takže větší populace trochu pomůže — lepším nástrojem je tu ale PPO.',
+      },
+      cliffwalking: {
+        en: '50 networks find a path within a reasonable number of generations; a larger population helps a little, at a proportional cost in time.',
+        cz: '50 sítí najde cestu za rozumný počet generací; větší populace pomůže o něco víc, za úměrnou cenu v čase.',
       },
     },
   },
@@ -596,6 +716,26 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
         en: 'It can take many generations before a network first reaches the flag — then progress accelerates. Give it plenty (e.g. 50+) and a larger population to improve the odds.',
         cz: 'Než nějaká síť poprvé dojede k vlajce, může to trvat řadu generací — pak se pokrok zrychlí. Dejte jí dost (např. 50+) a větší populaci, ať zvýšíte šance.',
       },
+      frozenlake: {
+        en: 'Give it plenty (50+) and a larger population — it can take many generations before a network first reaches the goal on the slippery ice, after which the herd refines quickly.',
+        cz: 'Dejte jí dost (50+) a větší populaci — než nějaká síť poprvé dojde do cíle na kluzkém ledu, může to trvat řadu generací; poté se stádo rychle doladí.',
+      },
+      frozenlake_noslip: {
+        en: 'Often solved within a few dozen generations on this easy deterministic map.',
+        cz: 'Na této snadné deterministické mapě bývá vyřešeno během pár desítek generací.',
+      },
+      frozenlake8x8: {
+        en: 'Push it high (100+) — the bigger lake needs many rounds to discover and refine a crossing.',
+        cz: 'Posuňte hodně vysoko (100+) — větší jezero potřebuje mnoho kol, než objeví a doladí přechod.',
+      },
+      taxi: {
+        en: 'Many generations are needed and the tiny genome may still not master Taxi\'s 500 states — PPO is the faster route here.',
+        cz: 'Je potřeba mnoho generací a drobný genom 500 stavů Taxi stejně nemusí zvládnout — rychlejší cestou je tu PPO.',
+      },
+      cliffwalking: {
+        en: 'Improves steadily over a few dozen generations as the population learns to avoid the cliff; push higher to keep refining toward the optimal path.',
+        cz: 'Plynule se zlepšuje během pár desítek generací, jak se populace učí vyhýbat útesu; vyšší hodnotou ji necháte dál ladit k optimální cestě.',
+      },
     },
   },
 
@@ -632,6 +772,26 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
       mountaincarcontinuous: {
         en: 'MountainCarContinuous pays +100 for reaching the flag minus a small force cost, so the curve sits near 0 until the agent first reaches the flag, then jumps toward +90. A flat line near 0 means it has not found the flag yet — the exploration problem, not a bug.',
         cz: 'MountainCarContinuous vyplácí +100 za dosažení vlajky minus malou cenu za sílu, takže křivka sedí poblíž 0, dokud agent poprvé nedojede k vlajce, pak vyskočí k +90. Rovná čára poblíž 0 znamená, že vlajku ještě nenašel — to je ten problém se zkoumáním, ne chyba.',
+      },
+      frozenlake: {
+        en: 'FrozenLake pays 1 only for reaching the goal, else 0, so each episode scores 0 or 1 and the training curve is the success *rate*. "Solved" is 0.70 — the curve climbs from ~0 toward 0.7+, and cannot reach 1.0 because the ice sometimes slips you into a hole.',
+        cz: 'FrozenLake platí 1 jen za dosažení cíle, jinak 0, takže každá epizoda dá 0 nebo 1 a tréninková křivka je *míra* úspěšnosti. „Vyřešeno“ je 0,70 — křivka stoupá z ~0 k 0,7+ a nemůže dosáhnout 1,0, protože led vás občas smekne do díry.',
+      },
+      frozenlake_noslip: {
+        en: 'Reward is 1 for the goal, else 0. With no slipping a good policy reaches the goal every time, so the success-rate curve can climb all the way to 1.0; "solved" is 0.70.',
+        cz: 'Odměna je 1 za cíl, jinak 0. Bez klouzání dojde dobrá strategie do cíle pokaždé, takže křivka úspěšnosti může vyšplhat až na 1,0; „vyřešeno“ je 0,70.',
+      },
+      frozenlake8x8: {
+        en: 'Same 0/1 reward → the curve is the success rate, climbing from ~0 toward 0.7+ on the bigger, slippier lake. A flat line at 0 means it has not found the goal yet — raise exploration.',
+        cz: 'Stejná odměna 0/1 → křivka je míra úspěšnosti, stoupající z ~0 k 0,7+ na větším, kluzčím jezeře. Rovná čára na 0 znamená, že cíl ještě nenašlo — zvyšte zkoumání.',
+      },
+      taxi: {
+        en: 'Taxi gives −1 per step, +20 for a correct drop-off and −10 for an illegal pickup/drop-off, so early scores are very negative (−200 to −800) and climb toward +8 ("solved") as the agent stops wasting moves and illegal actions.',
+        cz: 'Taxi dává −1 za krok, +20 za správné vysazení a −10 za nelegální nabrání/vysazení, takže rané skóre je hodně záporné (−200 až −800) a stoupá k +8 („vyřešeno“), jak agent přestává plýtvat kroky a dělat nelegální akce.',
+      },
+      cliffwalking: {
+        en: 'CliffWalking gives −1 per step and −100 per cliff fall, so a flailing agent scores in the thousands negative; the curve climbs toward about −13 (the optimal path) as it learns to avoid the cliff.',
+        cz: 'CliffWalking dává −1 za krok a −100 za pád z útesu, takže zmatený agent skóruje v tisících záporných; křivka stoupá zhruba k −13 (optimální cesta), jak se učí útesu vyhýbat.',
       },
     },
   },
@@ -698,6 +858,26 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
       mountaincarcontinuous: {
         en: "Same idea as reward, but per generation. Fitness sits near 0 until some network first reaches the flag, then jumps up — neuroevolution's population search is well suited to making that discovery.",
         cz: 'Stejný princip jako odměna, ale za generaci. Fitness sedí poblíž 0, dokud nějaká síť poprvé nedojede k vlajce, pak vyskočí — populační hledání neuroevoluce se k takovému objevu dobře hodí.',
+      },
+      frozenlake: {
+        en: 'Same as reward but per generation — the population\'s success rate, climbing from ~0 toward 0.7 (it cannot reach 1.0 because the ice slips).',
+        cz: 'Stejné jako odměna, ale za generaci — míra úspěšnosti populace, stoupající z ~0 k 0,7 (nemůže dosáhnout 1,0, protože led klouže).',
+      },
+      frozenlake_noslip: {
+        en: 'Per-generation success rate; on this easy deterministic map it can climb all the way to 1.0.',
+        cz: 'Míra úspěšnosti za generaci; na této snadné deterministické mapě může vyšplhat až na 1,0.',
+      },
+      frozenlake8x8: {
+        en: 'Per-generation success rate on the big lake; it rises slowly and, with the tiny genome, often plateaus below the 0.7 "solved" line.',
+        cz: 'Míra úspěšnosti za generaci na velkém jezeře; stoupá pomalu a s drobným genomem často uvázne pod hranicí 0,7 („vyřešeno“).',
+      },
+      taxi: {
+        en: 'Per generation; starts very negative and rises toward +8 — though the tiny evolution network struggles with Taxi\'s 500 states, so it often plateaus well short.',
+        cz: 'Za generaci; začíná hodně záporně a stoupá k +8 — drobná evoluční síť ale s 500 stavy Taxi bojuje, takže často uvázne daleko před cílem.',
+      },
+      cliffwalking: {
+        en: 'Per generation; climbs from deeply negative toward about −13 as the population learns to avoid the cliff and take a short path.',
+        cz: 'Za generaci; stoupá z hluboce záporných hodnot zhruba k −13, jak se populace učí vyhnout útesu a jít krátkou cestou.',
       },
     },
   },

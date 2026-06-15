@@ -8,8 +8,10 @@
 
 A **vector-observation + discrete-action** Gymnasium env (CartPole, LunarLander, MountainCar, Acrobot …)
 is added as **data**: one row in the registry plus bilingual content. A **continuous (`box`) action** env
-reuses the now-built continuous seam (also data + content). Anything with **image observations, a 2-agent /
-competitive setup, or turn-based self-play** needs code at one of the five seams (bottom of this page).
+reuses the now-built continuous seam, and a **discrete (single-integer) observation** env (Toy Text:
+FrozenLake / Taxi / CliffWalking) reuses the now-built one-hot seam — both are also data + content. Anything
+with **image observations, a 2-agent / competitive setup, or turn-based self-play** needs code at one of the
+five seams (bottom of this page).
 
 ## 1. Verify the env's truths in the venv — never guess
 
@@ -21,9 +23,13 @@ e = gym.make("YourEnv-v0")
 print(e.observation_space, e.action_space)        # vector vs image; discrete vs box (+ bounds)
 ```
 
-Measure a random / do-nothing policy's return to choose the meter's 0% floor (`min_score`). For a
-step-penalty env this is roughly `−1 × max_episode_steps`; for a shaped env it's where a flailing agent
-bottoms out. If `reward_threshold` is `None`, pick and **document** a sensible "solved" value.
+Choose the meter's 0% floor (`min_score`) as the score of an agent that **achieves nothing** — *not* the
+deepest score a flailing/random agent can reach (ADR-026). For a step-penalty env that baseline is "ran out
+the clock doing nothing" ≈ `−1 × max_episode_steps` (e.g. CliffWalking/Taxi = −200), so an idle/stuck agent
+reads ~0% and only real progress lifts the meter; worse runs simply clamp to 0%. A too-deep floor (set from
+random returns) makes a do-nothing run read as near-mastery — the bug ADR-026 fixes. For a shaped env
+(LunarLander) it's where a non-progressing agent sits (≈ −200). If `reward_threshold` is `None`, pick and
+**document** a sensible "solved" value.
 
 ## 2. Register the env (data) — `backend/app/envs/registry.py`
 
@@ -34,18 +40,31 @@ register(EnvSpec(
     display_name=Bilingual(en="…", cz="…"),
     description=Bilingual(en="…", cz="…"),
     family="classic_control",          # category for the game picker (see content/envCategories.ts)
-    obs_type="vector",                 # "vector" | "image"
+    obs_type="vector",                 # "vector" | "image" | "discrete" (single int → one-hot, Toy Text)
     action_space="discrete",           # "discrete" | "box"
     supported_algos=["ppo", "neuroevolution"],   # gates the algo dropdown per-env
     hyperparams=_standard_hyperparams(),         # shared PPO + neuroevolution surface
     solved_score=200.0,                # 100% on the meter; the run-archive / "solved @" threshold
-    min_score=-200.0,                  # 0% on the meter (negative for shaped/penalty envs)
+    min_score=-200.0,                  # 0% on the meter (see "skill floor" in §1 — the idle/timeout baseline)
     default_total_timesteps=500_000,   # the ★ PPO budget; the sidebar step ladder is ×0.2…×4 of this
     play_step_scale=1,                 # play episodes run this × longer (so a human has time to play)
+    # Optional: make_kwargs={...} for variants sharing one gym_id (FrozenLake map_name/is_slippery);
+    # episode_step_limit=N for an env with no native TimeLimit (CliffWalking); turn_based=True for a
+    # grid-world the human plays one move per key press (see "Discrete observations" below).
     human_playable=True, competitive=False,
     difficulty="intermediate", hw_requirement="cpu",
 ))
 ```
+
+### Discrete (single-integer) observations — Toy Text
+
+If `observation_space` is `Discrete(n)` (the state is one int — which grid cell / which Taxi configuration),
+set `obs_type="discrete"`. The shared `make_env` factory wraps the env in `OneHotObservation` (int →
+length-`n` vector) automatically, so PPO's `MlpPolicy` and the numpy genome train with **no engine change** —
+it's still data + content. Notes: a deprecated gym id (e.g. `CliffWalking-v0` → `-v1`) and an env with **no
+native `TimeLimit`** both surface here — use the verified id and set `episode_step_limit` so a poor policy
+can't loop forever. Variants that differ only by kwargs (FrozenLake's `map_name`/`is_slippery`) are separate
+registry rows sharing one `gym_id` via `make_kwargs`.
 
 The registry is the source of truth: the sidebar, skill bands, step ladder, compare filter, and the algo
 dropdown all read from it. `supported_algos` is how a game opts out of an algorithm (e.g. an image env can be
@@ -74,6 +93,12 @@ content files, not the i18n JSON.
   provide (a randomized terrain), also return it from `client_render.terrain` in the **same obs-normalized
   coordinates** as the agent — draw both in one space, and clamp the agent's lowest point to the surface so
   it rests on the ground, not in it (see LunarLander's moon).
+- **Grid-worlds** (Toy Text): `client_state` returns the agent's `[row, col]` (Taxi: the decoded
+  `[taxi_row, taxi_col, passenger, destination]`) and `client_render.grid_layout` returns the **static board**
+  as a `GridLayout` (`kind`+`rows`/`cols`+row-major `cells`), streamed in the `grid` frame field. Draw it with
+  a `GridStage` in `EnvStages.tsx` (declarative — grids change slowly) and add an idle default to
+  `content/gridMaps.ts`. Set `turn_based=True` so the human advances one cell per key press (the AI/preview
+  still step continuously); the keymap sends one action per `keydown` for these.
 - **Server image**: do nothing — envs not in the client-render set are rendered to JPEG automatically.
 
 ## 5. Skill bands — automatic

@@ -15,6 +15,7 @@ from typing import Literal
 
 from pydantic import BaseModel
 
+from app.schemas.preview import GridLayout
 from app.schemas.skill import SkillRating
 
 # Who controls the agent: a human at the keyboard, or a loaded checkpoint playing itself.
@@ -98,6 +99,8 @@ class PlayFrame(BaseModel):
     # Per-episode scene geometry the client can't derive from the obs — currently LunarLander's random
     # moon surface as obs-space [x, y] points (None for envs whose scene is fixed/derivable).
     terrain: list[list[float]] | None = None
+    # Static board layout for a grid-world (Toy Text), so the client can draw the board (None elsewhere).
+    grid: GridLayout | None = None
 
 
 class PlayActionMessage(BaseModel):

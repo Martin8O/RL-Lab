@@ -35,7 +35,7 @@ from PIL import Image
 
 from app.core.logging import get_logger
 from app.schemas.preview import PreviewState
-from app.services.client_render import client_state, terrain
+from app.services.client_render import client_state, grid_layout, terrain
 from app.services.connection_manager import ConnectionManager, manager
 
 logger = get_logger(__name__)
@@ -71,7 +71,7 @@ class PreviewStreamer:
         self._speed = 1.0
         self._run_active = False
         self._paused = False
-        self._gym_id: str | None = None
+        self._env_id: str | None = None
         self._predict: PredictFn | None = None
 
     # -- wiring -----------------------------------------------------------------
@@ -105,12 +105,12 @@ class PreviewStreamer:
 
     # -- run lifecycle (driven by the training manager) -------------------------
 
-    def attach_run(self, gym_id: str) -> None:
+    def attach_run(self, env_id: str) -> None:
         """A training run started: remember its env and (if visual on) begin streaming."""
         with self._lock:
             self._run_active = True
             self._paused = False
-            self._gym_id = gym_id
+            self._env_id = env_id
             self._predict = None
         self._ensure_loop()
         self._broadcast(self.state().model_dump())
@@ -142,21 +142,23 @@ class PreviewStreamer:
                 return
             if self._thread is not None and self._thread.is_alive():
                 return
-            gym_id = self._gym_id
-            if gym_id is None:
+            env_id = self._env_id
+            if env_id is None:
                 return
             self._thread = threading.Thread(
-                target=self._run, args=(gym_id,), name="preview-streamer", daemon=True
+                target=self._run, args=(env_id,), name="preview-streamer", daemon=True
             )
             self._thread.start()
 
-    def _run(self, gym_id: str) -> None:
-        import gymnasium as gym  # lazy: keep gym out of startup
+    def _run(self, env_id: str) -> None:
+        from app.envs.factory import make_env  # lazy: keep gym out of startup
 
         try:
-            env = gym.make(gym_id, render_mode="rgb_array")
+            # Shared factory — same wrappers as training (incl. the discrete-obs one-hot), so the
+            # decoupled predict fn the trainer publishes gets the obs shape it was built for.
+            env = make_env(env_id, render_mode="rgb_array")
         except Exception:  # noqa: BLE001 — a bad render env must not crash anything
-            logger.exception("Preview env creation failed for %s", gym_id)
+            logger.exception("Preview env creation failed for %s", env_id)
             return
 
         render_fps = float(env.metadata.get("render_fps", _DEFAULT_RENDER_FPS))
@@ -203,6 +205,9 @@ class PreviewStreamer:
             scene = terrain(env)  # LunarLander streams its real moon surface; None elsewhere
             if scene is not None:
                 frame["terrain"] = scene
+            board = grid_layout(env)  # Toy Text streams its static board; None elsewhere
+            if board is not None:
+                frame["grid"] = board
             self._broadcast(frame)
             return
         try:

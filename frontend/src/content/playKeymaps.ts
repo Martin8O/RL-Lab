@@ -29,6 +29,24 @@ export interface PlayKeymap {
    * env's idle action (LunarLander 0 = no thrust), so letting go cuts the engines.
    */
   idleAction: number | null
+  /**
+   * Grid-worlds (Toy Text): play is turn-based — send exactly one action per key press, with no
+   * auto-repeat or idle (the backend steps one cell per received action). Mirrors EnvSpec.turn_based.
+   */
+  turnBased?: boolean
+}
+
+// FrozenLake (4×4 / 4×4 no-slip / 8×8 share one keymap). Actions verified in the venv:
+// 0 = Left, 1 = Down, 2 = Right, 3 = Up. Turn-based — one move per key press.
+const FROZENLAKE_KEYMAP: PlayKeymap = {
+  bindings: [
+    { keys: ['ArrowLeft', 'a', 'A'], action: 0 },
+    { keys: ['ArrowDown', 's', 'S'], action: 1 },
+    { keys: ['ArrowRight', 'd', 'D'], action: 2 },
+    { keys: ['ArrowUp', 'w', 'W'], action: 3 },
+  ],
+  idleAction: null,
+  turnBased: true,
 }
 
 export const PLAY_KEYMAPS: Record<string, PlayKeymap> = {
@@ -85,6 +103,35 @@ export const PLAY_KEYMAPS: Record<string, PlayKeymap> = {
       { keys: ['ArrowRight', 'd', 'D'], action: 1 },
     ],
     idleAction: 0,
+  },
+  // Toy Text grid-worlds — turn-based: one move per key press (see FROZENLAKE_KEYMAP).
+  frozenlake: FROZENLAKE_KEYMAP,
+  frozenlake_noslip: FROZENLAKE_KEYMAP,
+  frozenlake8x8: FROZENLAKE_KEYMAP,
+  // CliffWalking (verified in venv): 0 = Up, 1 = Right, 2 = Down, 3 = Left.
+  cliffwalking: {
+    bindings: [
+      { keys: ['ArrowUp', 'w', 'W'], action: 0 },
+      { keys: ['ArrowRight', 'd', 'D'], action: 1 },
+      { keys: ['ArrowDown', 's', 'S'], action: 2 },
+      { keys: ['ArrowLeft', 'a', 'A'], action: 3 },
+    ],
+    idleAction: null,
+    turnBased: true,
+  },
+  // Taxi (verified in venv): 0 = South(↓), 1 = North(↑), 2 = East(→), 3 = West(←), 4 = Pickup,
+  // 5 = Drop-off. Move with the arrows/WASD; P (or Space) picks up, O (or Enter) drops off.
+  taxi: {
+    bindings: [
+      { keys: ['ArrowDown', 's', 'S'], action: 0 },
+      { keys: ['ArrowUp', 'w', 'W'], action: 1 },
+      { keys: ['ArrowRight', 'd', 'D'], action: 2 },
+      { keys: ['ArrowLeft', 'a', 'A'], action: 3 },
+      { keys: ['p', 'P', ' '], action: 4 },
+      { keys: ['o', 'O', 'Enter'], action: 5 },
+    ],
+    idleAction: null,
+    turnBased: true,
   },
 }
 

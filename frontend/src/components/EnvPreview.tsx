@@ -2,8 +2,9 @@ import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAppStore } from '../store/useAppStore'
 import { sendPlayAction, setFrameHandler, setPlayFrameHandler, setPreview } from '../api/client'
-import type { PlayFrame, PreviewFrame } from '../api/types'
+import type { GridLayout, PlayFrame, PreviewFrame } from '../api/types'
 import { keymapFor } from '../content/playKeymaps'
+import { DEFAULT_AGENT, DEFAULT_GRIDS, isGridEnv } from '../content/gridMaps'
 import PlayControls from './PlayControls'
 import SkillMeter from './SkillMeter'
 import {
@@ -11,7 +12,9 @@ import {
   PEND_CX, PEND_CY, ACRO_CX, ACRO_CY, ACRO_JOINT_Y,
   LL_START, llLanderTransform, llTerrainPaths, LL_DEFAULT_TERRAIN, llX, llY,
 } from './envGeometry'
-import { CartPoleStage, MountainCarStage, PendulumStage, AcrobotStage, LunarLanderStage } from './EnvStages'
+import {
+  CartPoleStage, MountainCarStage, PendulumStage, AcrobotStage, LunarLanderStage, GridStage,
+} from './EnvStages'
 
 const MIN_SPEED = 1
 const MAX_SPEED = 20
@@ -76,14 +79,19 @@ export default function EnvPreview() {
   // "live" = frames are (or just were) flowing for this env.
   const live         = (visual && runLive) || playState === 'playing' || (playVisible && hasFrame)
   // Which client-side renderer to use (else a server JPEG on the canvas).
-  const clientKind: 'cartpole' | 'mountaincar' | 'pendulum' | 'acrobot' | 'lunarlander' | null =
+  const clientKind: 'cartpole' | 'mountaincar' | 'pendulum' | 'acrobot' | 'lunarlander' | 'grid' | null =
     selectedEnvId === 'cartpole' ? 'cartpole'
     : selectedEnvId === 'mountaincar' || selectedEnvId === 'mountaincarcontinuous' ? 'mountaincar'
     : selectedEnvId === 'pendulum' ? 'pendulum'
     : selectedEnvId === 'acrobot' ? 'acrobot'
     : selectedEnvId === 'lunarlander' ? 'lunarlander'
+    : isGridEnv(selectedEnvId) ? 'grid'
     : null
   const clientRender = clientKind !== null
+  // Toy Text grids re-render declaratively (low-frequency moves), unlike the imperative physics
+  // stages: the latest streamed board + agent position live in React state here, tagged with the env
+  // it belongs to so a stale board never flashes after an env switch.
+  const [gridFrame, setGridFrame] = useState<{ envId: string; grid: GridLayout; agent: number[] } | null>(null)
 
   // Sync persisted toggle/speed to the backend whenever it comes online (UI is source of truth).
   useEffect(() => {
@@ -168,6 +176,21 @@ export default function EnvPreview() {
       llRightRef.current?.setAttribute('opacity', action === 1 ? '1' : '0')
     }
     const onFrame = (frame: PreviewFrame | PlayFrame) => {
+      // Toy Text grids: declarative re-render from the streamed board + agent (low-frequency moves).
+      if (clientKind === 'grid') {
+        if (frame.state) {
+          const envId = selectedEnvId ?? ''
+          setHasFrame(true)
+          setGridFrame((prev) => ({
+            envId,
+            grid: frame.grid
+              ?? (prev && prev.envId === envId ? prev.grid : undefined)
+              ?? DEFAULT_GRIDS[envId] ?? DEFAULT_GRIDS.frozenlake,
+            agent: frame.state!,
+          }))
+        }
+        return
+      }
       if (frame.state && frame.state.length >= 2) {
         setHasFrame(true)
         const s = frame.state
@@ -184,7 +207,7 @@ export default function EnvPreview() {
     setFrameHandler(onFrame)
     setPlayFrameHandler(onFrame)
     return () => { setFrameHandler(null); setPlayFrameHandler(null) }
-  }, [clientKind])
+  }, [clientKind, selectedEnvId])
 
   // When nothing is live, reset to a resting pose (drop the last streamed transform): the cart
   // re-centres, the MountainCar car parks in the valley (its typical start) — also on env switch.
@@ -219,6 +242,23 @@ export default function EnvPreview() {
     const keymap = keymapFor(selectedEnvId)
     const lookup = new Map<string, number>()
     for (const b of keymap.bindings) for (const k of b.keys) lookup.set(k, b.action)
+    const isFormField = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement | null)?.tagName
+      return tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA'
+    }
+
+    // Turn-based grid-worlds (Toy Text): send exactly one action per key press — no auto-repeat,
+    // no idle. The backend steps the agent one cell per received action.
+    if (keymap.turnBased) {
+      const onPress = (e: KeyboardEvent) => {
+        if (isFormField(e) || !lookup.has(e.key)) return
+        e.preventDefault()
+        sendPlayAction(lookup.get(e.key)!)
+      }
+      window.addEventListener('keydown', onPress)
+      return () => window.removeEventListener('keydown', onPress)
+    }
+
     const held: string[] = []  // ordered; last entry = most recently pressed
     let timer: number | null = null
     const stopTimer = () => { if (timer !== null) { clearInterval(timer); timer = null } }
@@ -249,10 +289,6 @@ export default function EnvPreview() {
       else if (keymap.idleAction !== null) sendPlayAction(keymap.idleAction)
     }
 
-    const isFormField = (e: KeyboardEvent) => {
-      const tag = (e.target as HTMLElement | null)?.tagName
-      return tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA'
-    }
     const onDown = (e: KeyboardEvent) => {
       if (isFormField(e) || !lookup.has(e.key)) return
       e.preventDefault()
@@ -286,6 +322,12 @@ export default function EnvPreview() {
   }
 
   const hint = visual ? t('envpreview.idle_hint') : t('envpreview.visual_off_hint')
+
+  // Grid board to draw: the live streamed one (only if it belongs to the selected env), else the
+  // default board with the agent at its start — mirrors how the physics stages reset when idle.
+  const gridData = live && gridFrame && gridFrame.envId === selectedEnvId ? gridFrame : null
+  const gridBoard = gridData?.grid ?? DEFAULT_GRIDS[selectedEnvId ?? ''] ?? DEFAULT_GRIDS.frozenlake
+  const gridAgent = (gridData?.agent?.length ? gridData.agent : DEFAULT_AGENT[selectedEnvId ?? '']) ?? [0, 0]
 
   return (
     <section style={{
@@ -363,6 +405,8 @@ export default function EnvPreview() {
               <PendulumStage envName={envName} rodRef={pendRodRef} />
             ) : clientKind === 'acrobot' ? (
               <AcrobotStage envName={envName} link1Ref={acroLink1Ref} link2Ref={acroLink2Ref} />
+            ) : clientKind === 'grid' ? (
+              <GridStage envName={envName} grid={gridBoard} agent={gridAgent} />
             ) : (
               <LunarLanderStage
                 envName={envName} landerRef={landerRef}

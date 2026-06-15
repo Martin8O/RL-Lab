@@ -37,6 +37,7 @@ export const cartpoleEnv: EnvSpec = {
   },
   default_total_timesteps: 50_000,
   play_step_scale: 1,
+  turn_based: false,
   human_playable: true,
   competitive: false,
   difficulty: 'beginner',

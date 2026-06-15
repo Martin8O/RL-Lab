@@ -16,6 +16,7 @@ from stable_baselines3.common.base_class import BaseAlgorithm
 from stable_baselines3.common.callbacks import BaseCallback
 from torch import nn
 
+from app.envs.factory import make_env
 from app.schemas.training import (
     TrainConfig,
     TrainingMetrics,
@@ -239,11 +240,14 @@ def _build_model(config: TrainConfig, gym_id: str) -> PPO:
         "net_arch": [hp.neurons_per_layer] * hp.n_hidden_layers,
         "activation_fn": _ACTIVATIONS[hp.activation],
     }
-    # Passing seed= makes SB3 seed python/numpy/torch + the env action space, so the
-    # same seed reproduces the early metrics on CPU.
+    # Build the env through the shared factory (it applies the registry's variant kwargs + the
+    # discrete-obs one-hot wrapper), then hand the env to SB3 — so a Toy Text env presents a vector
+    # observation and trains on the exact same MlpPolicy as CartPole. Passing seed= makes SB3 seed
+    # python/numpy/torch + the env, so the same seed reproduces the early metrics on CPU.
+    env = make_env(config.env_id, gym_id)
     return PPO(
         "MlpPolicy",
-        gym_id,
+        env,
         seed=config.seed,
         learning_rate=hp.learning_rate,
         gamma=hp.gamma,
@@ -257,17 +261,15 @@ def _build_model(config: TrainConfig, gym_id: str) -> PPO:
     )
 
 
-def _load_model(gym_id: str, resume_blob: bytes) -> PPO:
+def _load_model(config: TrainConfig, gym_id: str, resume_blob: bytes) -> PPO:
     """Rebuild a PPO model from a saved ``model.zip`` and attach a fresh env.
 
-    ``PPO.load`` runs ``check_for_correct_spaces`` against the env, so loading a checkpoint
-    whose observation/action space no longer matches the env raises (surfaced as a clear
-    error by the manager). ``num_timesteps`` is restored, so ``reset_num_timesteps=False``
-    continues the global step counter.
+    The env is built through the shared factory (same wrappers as training), so ``PPO.load``'s
+    ``check_for_correct_spaces`` matches; loading a checkpoint whose observation/action space no
+    longer fits the env raises (surfaced as a clear error by the manager). ``num_timesteps`` is
+    restored, so ``reset_num_timesteps=False`` continues the global step counter.
     """
-    import gymnasium as gym  # lazy: keep gym out of startup
-
-    env = gym.make(gym_id)
+    env = make_env(config.env_id, gym_id)
     return PPO.load(io.BytesIO(resume_blob), env=env, device="cpu")
 
 
@@ -296,7 +298,7 @@ def train_ppo(
     """
     resuming = resume_blob is not None
     model = (
-        _load_model(gym_id, resume_blob)
+        _load_model(config, gym_id, resume_blob)
         if resume_blob is not None
         else _build_model(config, gym_id)
     )

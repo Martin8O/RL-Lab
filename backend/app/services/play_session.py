@@ -28,7 +28,7 @@ from app.envs.registry import get_env
 from app.schemas.play import PlayConfig, PlayMode, PlayResult, PlayState, PlayStatus
 from app.services import skill
 from app.services.checkpoints import CheckpointStore, checkpoint_store
-from app.services.client_render import client_state, terrain
+from app.services.client_render import client_state, grid_layout, terrain
 from app.services.connection_manager import ConnectionManager, manager
 from app.services.policy import PolicyLoadError, PredictFn, predict_from_checkpoint
 from app.services.preview_streamer import encode_frame
@@ -94,6 +94,10 @@ class PlaySession:
         # (int); for a continuous (box) env it is the analog command from the keymap (a float, e.g.
         # full torque one way) which _choose_action wraps into the env's action vector.
         self._latest_action: Any = 0
+        # Turn-based human play (grid-worlds): the agent advances one step per key press, so a single
+        # received action is consumed once (here) rather than held. None ⇒ no pending move.
+        self._turn_based = False
+        self._pending_action: Any = None
         self._n_actions: int | None = None  # discrete action count, known once the env is made
         # Continuous (box) action space, captured once the env is made (None ⇒ discrete env).
         self._box_low: np.ndarray | None = None
@@ -142,6 +146,8 @@ class PlaySession:
             # input. CartPole has no idle (idle_action None) so 0 is as good as any there. For a
             # continuous env the idle is the analog rest command (0 = no torque/force).
             self._latest_action = config.idle_action if config.idle_action is not None else 0
+            self._turn_based = spec.turn_based
+            self._pending_action = None
             self._n_actions = None
             self._box_low = self._box_high = self._box_shape = None
             self._play_step_scale = spec.play_step_scale
@@ -191,6 +197,7 @@ class PlaySession:
             if self._state != "playing":
                 return
             self._latest_action = action
+            self._pending_action = action  # one-shot move for turn-based grid play (ignored otherwise)
 
     def set_speed(self, speed: float) -> PlayStatus:
         """Change playback pacing mid-session (the speed selector while a session runs).
@@ -222,20 +229,17 @@ class PlaySession:
     # -- worker thread ----------------------------------------------------------
 
     def _run(self, gym_id: str, seed: int | None) -> None:
-        import gymnasium as gym  # lazy: keep gym out of startup
+        # Shared factory: applies the registry's variant kwargs, the discrete-obs one-hot wrapper
+        # (so a loaded AI policy gets the obs shape it trained on) and the play_step_scale episode
+        # extension — only lengthening truncation; early termination (flag/goal/crash) still ends
+        # the episode normally. Lazy import keeps gym out of startup.
+        from app.envs.factory import make_env
 
         try:
-            # Longer play episodes for short envs (play_step_scale): override the env's TimeLimit
-            # so a person has time to play. Only extends truncation — early termination (reaching
-            # the flag / swinging up) still ends the episode normally.
-            base_steps = gym.spec(gym_id).max_episode_steps
-            if self._play_step_scale > 1 and base_steps:
-                env = gym.make(
-                    gym_id, render_mode="rgb_array",
-                    max_episode_steps=base_steps * self._play_step_scale,
-                )
-            else:
-                env = gym.make(gym_id, render_mode="rgb_array")
+            env = make_env(
+                self._env_id or gym_id, gym_id,
+                render_mode="rgb_array", play_scale=self._play_step_scale,
+            )
         except Exception:  # noqa: BLE001 — a bad env must surface as state, not crash
             logger.exception("Play env creation failed for %s", gym_id)
             self._finalize(0.0, 0, completed=False, error="Could not create play environment")
@@ -253,12 +257,23 @@ class PlaySession:
         last_sent = 0.0
         completed = False
         error: str | None = None
+        # Grid-worlds the human plays turn-based: advance one step per key press instead of stepping
+        # continuously at the render rate (a human can't react to 30 grid moves/second). The AI and
+        # the preview still step continuously, paced by the speed slider.
+        turn_based_human = self._turn_based and self._mode == "human"
         try:
             obs, _ = env.reset(seed=seed)
             self._emit_frame(env, step, score, obs, None)  # show the starting state immediately
             done = False
             while not done and not self._stopped():
-                action = self._choose_action(env, obs)
+                if turn_based_human:
+                    pending = self._take_pending_action()
+                    if pending is None:
+                        time.sleep(0.03)  # wait for a key press — don't advance the episode
+                        continue
+                    action: Any = max(0, min((self._n_actions or 1) - 1, int(pending)))
+                else:
+                    action = self._choose_action(env, obs)
                 obs, reward, terminated, truncated, _ = env.step(action)
                 score += float(reward)
                 step += 1
@@ -271,7 +286,8 @@ class PlaySession:
                 if now - last_sent >= send_interval or done:
                     last_sent = now
                     self._emit_frame(env, step, score, obs, action)
-                time.sleep(base_dt / self._current_speed())
+                if not turn_based_human:
+                    time.sleep(base_dt / self._current_speed())
             completed = done
         except Exception:  # noqa: BLE001 — never let a step/render fault crash the thread
             logger.exception("Play session loop failed")
@@ -396,6 +412,9 @@ class PlaySession:
             scene = terrain(env)  # LunarLander streams its real moon surface; None elsewhere
             if scene is not None:
                 frame["terrain"] = scene
+            board = grid_layout(env)  # Toy Text streams its static board; None elsewhere
+            if board is not None:
+                frame["grid"] = board
             self._broadcast(frame)
             return
         try:
@@ -415,6 +434,13 @@ class PlaySession:
                 "image": image,
             }
         )
+
+    def _take_pending_action(self) -> Any:
+        """Pop the one-shot move for turn-based human play (None if no key has been pressed yet)."""
+        with self._lock:
+            action = self._pending_action
+            self._pending_action = None
+            return action
 
     def _stopped(self) -> bool:
         with self._lock:

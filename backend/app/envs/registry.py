@@ -1,6 +1,6 @@
 from typing import Any, Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class Bilingual(BaseModel):
@@ -24,11 +24,26 @@ class EnvSpec(BaseModel):
     display_name: Bilingual
     description: Bilingual
     family: str
-    obs_type: Literal["vector", "image"]
+    # "vector" = a fixed-length float observation (CartPole); "image" = pixels (Atari, later);
+    # "discrete" = a single integer state (Toy Text — which grid cell / which Taxi configuration).
+    # A discrete obs reaches the vector-obs policies/genomes through a one-hot wrapper applied by
+    # app.envs.factory.make_env (the discrete-observation seam, G2).
+    obs_type: Literal["vector", "image", "discrete"]
     action_space: Literal["discrete", "box"]
     supported_algos: list[str]
     # algo_id -> param_id -> definition
     hyperparams: dict[str, dict[str, HyperparamDef]]
+    # Extra kwargs passed to gym.make for per-variant rows that share one gym_id (e.g. FrozenLake's
+    # map_name / is_slippery). Empty for envs whose id maps 1:1 to a gym id.
+    make_kwargs: dict[str, Any] = Field(default_factory=dict)
+    # An explicit episode step cap for envs Gymnasium leaves *unbounded* (CliffWalking has no native
+    # TimeLimit → a poor policy would loop forever). None = use the env's own TimeLimit. Play scales
+    # this by play_step_scale like every other env.
+    episode_step_limit: int | None = None
+    # Turn-based human play: the agent advances one step per key press (grid-worlds), instead of the
+    # loop stepping continuously at the render rate. The AI/preview still step continuously (paced by
+    # speed). False = the usual real-time control (CartPole, LunarLander, …).
+    turn_based: bool = False
     # Score that counts as "solved" (100% of the goal). Drives the run-history archive
     # threshold (a run must reach ≥10% of this to be kept) and the "steps-to-solve" metric.
     solved_score: float
@@ -362,6 +377,189 @@ register(
         human_playable=True,
         competitive=False,
         difficulty="advanced",
+        hw_requirement="cpu",
+    )
+)
+
+
+# ---------------------------------------------------------------------------
+# Toy Text family (G2a) — the discrete-observation envs. Unlike every env above,
+# the observation is a single integer (which grid cell / which Taxi state), not a
+# vector. That is a new seam: app.envs.factory.OneHotObservation turns the int into
+# a length-n one-hot vector so the *same* MlpPolicy (PPO) and numpy genome
+# (neuroevolution) used for CartPole apply with no engine change. (Tabular
+# Q-learning — the native consumer of a discrete state — lands in G2b.) These are
+# grid-worlds, so they are client-rendered (SVG board) and human-played turn-based:
+# one move per key press. Scores were verified in the venv (random-policy floors,
+# gym reward_threshold, deprecated ids) per the new-env pre-delivery checklist.
+# ---------------------------------------------------------------------------
+
+register(
+    EnvSpec(
+        id="frozenlake",
+        gym_id="FrozenLake-v1",
+        display_name=Bilingual(en="FrozenLake (4×4)", cz="FrozenLake (4×4)"),
+        description=Bilingual(
+            en="Cross a frozen 4×4 lake from start to goal without falling through a hole. The ice "
+            "is slippery, so a move can slide you sideways — you reach the goal only some of the "
+            "time. Reward is 1 for reaching the goal, 0 otherwise; 'solved' is a 70% success rate.",
+            cz="Přejděte zamrzlé jezero 4×4 ze startu do cíle, aniž byste se propadli dírou. Led "
+            "klouže, takže vás krok může smeknout do strany — do cíle se dostanete jen občas. "
+            "Odměna je 1 za dosažení cíle, jinak 0; „vyřešeno“ je 70% úspěšnost.",
+        ),
+        family="toy_text",
+        obs_type="discrete",
+        action_space="discrete",
+        supported_algos=["ppo", "neuroevolution"],
+        hyperparams=_standard_hyperparams(),
+        solved_score=0.7,  # gym reward_threshold: a 70% success rate (reward is 1 on reaching goal)
+        min_score=0.0,  # reward is 0/1 — a failing agent scores 0, so the meter fills 0→0.7
+        default_total_timesteps=200_000,  # slippery + sparse reward needs lots of episodes
+        play_step_scale=1,  # turn-based human play (one move per key press) — no time pressure
+        turn_based=True,
+        human_playable=True,
+        competitive=False,
+        difficulty="beginner",
+        hw_requirement="cpu",
+    )
+)
+
+
+register(
+    EnvSpec(
+        id="frozenlake_noslip",
+        gym_id="FrozenLake-v1",
+        display_name=Bilingual(
+            en="FrozenLake (4×4, no slip)", cz="FrozenLake (4×4, bez kluzu)"
+        ),
+        description=Bilingual(
+            en="The 4×4 frozen lake with the ice made non-slippery: every move goes exactly where "
+            "you point it. The deterministic version — the gentlest grid-world, where a learner can "
+            "find the single safe path to the goal and solve it almost perfectly.",
+            cz="Jezero 4×4 s ledem nastaveným jako neklouzavý: každý krok jde přesně tam, kam "
+            "míříte. Deterministická verze — nejjednodušší mřížkový svět, kde se dá najít jediná "
+            "bezpečná cesta do cíle a vyřešit ho téměř dokonale.",
+        ),
+        family="toy_text",
+        obs_type="discrete",
+        action_space="discrete",
+        supported_algos=["ppo", "neuroevolution"],
+        hyperparams=_standard_hyperparams(),
+        make_kwargs={"is_slippery": False},
+        solved_score=0.7,  # same gym threshold; a deterministic agent reaches ~1.0 success
+        min_score=0.0,
+        default_total_timesteps=50_000,  # deterministic + tiny — solves fast
+        play_step_scale=1,
+        turn_based=True,
+        human_playable=True,
+        competitive=False,
+        difficulty="beginner",
+        hw_requirement="cpu",
+    )
+)
+
+
+register(
+    EnvSpec(
+        id="frozenlake8x8",
+        gym_id="FrozenLake-v1",
+        display_name=Bilingual(en="FrozenLake (8×8)", cz="FrozenLake (8×8)"),
+        description=Bilingual(
+            en="The bigger 8×8 frozen lake — more ice, more holes and a longer slippery path to the "
+            "goal. Same rules as the 4×4 (reach the goal for reward 1; 'solved' is a 70% success "
+            "rate) but a much harder exploration problem.",
+            cz="Větší zamrzlé jezero 8×8 — víc ledu, víc děr a delší kluzká cesta do cíle. Stejná "
+            "pravidla jako u 4×4 (dosáhnout cíle za odměnu 1; „vyřešeno“ je 70% úspěšnost), ale "
+            "mnohem těžší úloha na zkoumání.",
+        ),
+        family="toy_text",
+        obs_type="discrete",
+        action_space="discrete",
+        supported_algos=["ppo", "neuroevolution"],
+        hyperparams=_standard_hyperparams(),
+        make_kwargs={"map_name": "8x8"},
+        solved_score=0.7,
+        min_score=0.0,
+        default_total_timesteps=400_000,  # 64 states + sparse reward — needs the most practice
+        play_step_scale=1,
+        turn_based=True,
+        human_playable=True,
+        competitive=False,
+        difficulty="intermediate",
+        hw_requirement="cpu",
+    )
+)
+
+
+register(
+    EnvSpec(
+        id="taxi",
+        gym_id="Taxi-v3",
+        display_name=Bilingual(en="Taxi-v3", cz="Taxi-v3"),
+        description=Bilingual(
+            en="Drive a taxi on a 5×5 grid: pick up the passenger at one marked stop and drop them "
+            "at another. Every step costs −1, a correct drop-off pays +20, and an illegal pickup or "
+            "drop-off costs −10, so a good driver scores around +8 (the 'solved' mark).",
+            cz="Řiďte taxík na mřížce 5×5: vyzvedněte cestujícího na jedné označené zastávce a "
+            "vysaďte ho na jiné. Každý krok stojí −1, správné vysazení vyplatí +20 a nelegální "
+            "vyzvednutí či vysazení stojí −10, takže dobrý řidič dosáhne kolem +8 (hranice „vyřešeno“).",
+        ),
+        family="toy_text",
+        obs_type="discrete",
+        action_space="discrete",
+        supported_algos=["ppo", "neuroevolution"],
+        hyperparams=_standard_hyperparams(),
+        solved_score=8.0,  # gym reward_threshold
+        # 0% reference = "ran out the 200-step episode without ever delivering" ≈ −200 (−1/step, no
+        # +20). This is the right floor for the skill meter: an idle/stuck agent that delivers nothing
+        # reads ~0% (it has shown no skill), and only an actual delivery (the +20 makes the score climb
+        # toward +8) lifts the meter. Worse runs (lots of illegal −10 pickups/drop-offs go to ~−800)
+        # simply clamp to 0%. A larger floor (−800) was wrong — it made a do-nothing −200 read ~74%.
+        min_score=-200.0,
+        default_total_timesteps=500_000,  # 500 states, six actions — needs a sizeable budget
+        play_step_scale=1,  # turn-based; 200 steps is ample for a human to deliver a fare
+        turn_based=True,
+        human_playable=True,
+        competitive=False,
+        difficulty="intermediate",
+        hw_requirement="cpu",
+    )
+)
+
+
+register(
+    EnvSpec(
+        id="cliffwalking",
+        gym_id="CliffWalking-v1",  # v0 is deprecated in this gymnasium — verified in the venv
+        display_name=Bilingual(en="CliffWalking", cz="CliffWalking"),
+        description=Bilingual(
+            en="Walk from the bottom-left corner to the bottom-right goal along the edge of a cliff. "
+            "Every step costs −1; stepping onto the cliff costs −100 and sends you back to the "
+            "start. The optimal route hugs the cliff edge for a return of about −13.",
+            cz="Dojděte z levého dolního rohu do cíle vpravo dole podél okraje útesu. Každý krok "
+            "stojí −1; vstup na útes stojí −100 a vrátí vás na start. Optimální cesta vede těsně "
+            "podél okraje útesu s návratem kolem −13.",
+        ),
+        family="toy_text",
+        obs_type="discrete",
+        action_space="discrete",
+        supported_algos=["ppo", "neuroevolution"],
+        hyperparams=_standard_hyperparams(),
+        solved_score=-13.0,  # optimal return (no gym reward_threshold); the risky cliff-edge path
+        # 0% reference = "ran out the 200-step cap without reaching the goal" = −200 (−1/step, no
+        # cliff falls). This is the right floor for the skill meter: an agent that just sits/wanders
+        # (e.g. PPO's common local optimum — go up to dodge the cliff, then get stuck) reads ~0%, and
+        # only actually reaching the goal lifts the meter toward 100% (optimal −13). Catastrophic runs
+        # that keep falling off the cliff (−100 each → ≪ −200) clamp to 0%. A larger floor (−2000) was
+        # wrong — it made a stuck −200 read ~91% (near-superhuman), hiding that nothing was achieved.
+        min_score=-200.0,
+        default_total_timesteps=200_000,
+        episode_step_limit=200,  # CliffWalking has NO native TimeLimit — cap it so a run can't hang
+        play_step_scale=1,  # turn-based; 200 steps is ample to reach the goal by hand
+        turn_based=True,
+        human_playable=True,
+        competitive=False,
+        difficulty="intermediate",
         hw_requirement="cpu",
     )
 )

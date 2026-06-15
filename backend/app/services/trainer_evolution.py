@@ -22,6 +22,7 @@ from typing import Any
 
 import numpy as np
 
+from app.envs.factory import make_env
 from app.schemas.training import (
     EvolutionChild,
     EvolutionHyperparams,
@@ -241,11 +242,11 @@ def train_evolution(
     but not bit-identical to an uninterrupted one). ``on_snapshot`` receives the bred
     population each generation so the checkpoint store can persist it.
     """
-    import gymnasium as gym  # lazy: keep gym out of startup
-
     hp = config.evolution or EvolutionHyperparams()
 
-    env: Any = gym.make(gym_id)
+    # Shared factory: applies the registry's variant kwargs + the discrete-obs one-hot wrapper, so a
+    # Toy Text env presents a vector observation the numpy genome can consume (obs_dim = one-hot len).
+    env: Any = make_env(config.env_id, gym_id)
     started_at = time.monotonic()
     total_steps = 0
     try:

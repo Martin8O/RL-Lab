@@ -108,8 +108,9 @@ other text is echoed back as `{echo: <text>}` (the original A3 contract).
 ### Frame payloads (rendering)
 A `frame` / `play_frame` carries **either** a server-rendered image (`image` base64 JPEG + `width`/
 `height`) **or** client-render data (`state`) — never both (ADR-018/022). Client-render frames may also
-carry `action` (the just-applied action, e.g. to draw a firing thruster) and `terrain` (per-episode
-scene geometry the obs can't provide, e.g. LunarLander's random moon in obs-normalized coordinates).
+carry `action` (the just-applied action, e.g. to draw a firing thruster), `terrain` (per-episode scene
+geometry the obs can't provide, e.g. LunarLander's random moon in obs-normalized coordinates), and `grid`
+(a `GridLayout` — the static Toy Text board: `kind` + `rows`/`cols` + a row-major `cells` tag list).
 
 ### Reconnect
 The `status` frame fires only on lifecycle changes, so a client that connects mid-run reconciles by

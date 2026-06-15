@@ -1,4 +1,4 @@
-export type ObsType = 'vector' | 'image'
+export type ObsType = 'vector' | 'image' | 'discrete'
 export type ActionSpace = 'discrete' | 'box'
 export type Difficulty = 'beginner' | 'intermediate' | 'advanced'
 export type HwRequirement = 'cpu' | 'gpu'
@@ -38,6 +38,8 @@ export interface EnvSpec {
   /** Play episodes run this many times longer than training (so a person has time to play); the
    *  play skill meter's 0% floor is widened by the same factor. 1 = same length as training. */
   play_step_scale: number
+  /** Grid-worlds the human plays turn-based (one move per key press) instead of in real time. */
+  turn_based: boolean
   human_playable: boolean
   competitive: boolean
   difficulty: Difficulty
@@ -249,6 +251,17 @@ export interface PreviewState {
   active: boolean
 }
 
+/** Static board layout for a client-rendered grid-world (Toy Text), streamed with each frame.
+ *  The dynamic agent/passenger/destination position rides in the frame's `state`; this is the fixed
+ *  board drawn under it. `cells` is row-major (length rows*cols): "normal" | "start" | "goal" |
+ *  "hole" (FrozenLake) | "cliff" (CliffWalking) | "stop" (Taxi pickup/drop-off). */
+export interface GridLayout {
+  kind: 'frozenlake' | 'cliffwalking' | 'taxi'
+  rows: number
+  cols: number
+  cells: string[]
+}
+
 /** WS frame: {type:"frame", ...} — a rendered env image OR client-render state. */
 export interface PreviewFrame {
   type: 'frame'
@@ -265,6 +278,8 @@ export interface PreviewFrame {
   action?: number | null
   /** Per-episode scene geometry not in the obs — LunarLander's random moon surface as [x, y] points. */
   terrain?: number[][] | null
+  /** Static board layout for a grid-world (Toy Text); the client draws the board under the agent. */
+  grid?: GridLayout | null
 }
 
 /** Partial preview update for POST /api/preview. */
@@ -364,6 +379,8 @@ export interface PlayFrame {
   action?: number | null
   /** Per-episode scene geometry not in the obs — LunarLander's random moon surface as [x, y] points. */
   terrain?: number[][] | null
+  /** Static board layout for a grid-world (Toy Text); the client draws the board under the agent. */
+  grid?: GridLayout | null
 }
 
 /** Outbound human input over WS: {type:"action", action:<number|number[]>}. A discrete action id
