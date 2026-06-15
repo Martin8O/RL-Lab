@@ -80,6 +80,8 @@ def _default_label(config: TrainConfig, artifact: CheckpointArtifact) -> str:
     """A readable auto-label when the user doesn't name the slot."""
     if artifact.generation is not None:
         progress = f"gen {artifact.generation}"
+    elif config.algo == "q_learning":
+        progress = f"ep {artifact.iteration}"  # Q-learning stores episodes elapsed in iteration
     else:
         progress = f"{artifact.timesteps // 1000}k"
     return f"{config.env_id} · {config.algo} · {progress}"

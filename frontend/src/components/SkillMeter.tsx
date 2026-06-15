@@ -38,6 +38,7 @@ export default function SkillMeter({ slot, overlay = false }: {
   const lastProgress   = useAppStore((s) => s.lastProgress)
   const metricsHistory = useAppStore((s) => s.metricsHistory)
   const lastEvolution  = useAppStore((s) => s.lastEvolution)
+  const lastQLearning  = useAppStore((s) => s.lastQLearning)
 
   // One meter, relabelled by what's relevant now: you actively playing always wins (you're at the
   // keyboard); otherwise a training run that has started this session owns the readout — its live
@@ -68,7 +69,9 @@ export default function SkillMeter({ slot, overlay = false }: {
     score =
       algo === 'neuroevolution'
         ? lastEvolution?.best_fitness ?? null
-        : lastProgress?.ep_rew_mean ?? lastMetrics?.ep_rew_mean ?? null
+        : algo === 'q_learning'
+          ? lastQLearning?.ep_rew_mean ?? null
+          : lastProgress?.ep_rew_mean ?? lastMetrics?.ep_rew_mean ?? null
     titleKey = 'skill.title'
   }
 
@@ -93,12 +96,13 @@ export default function SkillMeter({ slot, overlay = false }: {
   // A valid skill READING needs a meaningful score. For an env whose reward climbs from zero
   // (CartPole, scale.min >= 0) the running/partial score is a valid lower bound, so it reads live.
   // For shaped/penalty envs (scale.min < 0 — MountainCar, Acrobot, LunarLander) the running
-  // cumulative score starts ABOVE the "solved" mark and only falls as steps/fuel are spent, so it
-  // is NOT a reading until the episode ends — showing it would make the meter start full and drain
-  // leftward (or, on an early stop, freeze on a bogus high band). So for those envs only a
-  // *finished* episode produces a band; while playing we show "measuring…", and an aborted session
-  // shows nothing. Training (not playVisible) reads ep_rew_mean, already a final-episode metric.
-  const partialNotAReading = playVisible && scale.min < 0 && playState !== 'finished'
+  // cumulative score starts ABOVE the "solved" mark and only falls as steps/fuel are spent; and for
+  // sparse 0/1 envs (FrozenLake) the score stays 0 until the goal — in both cases the partial score
+  // is NOT a reading until the episode ends (showing it would make the meter look wrong/flat). So
+  // for those only a *finished* episode produces a band; while playing we show "measuring…", and an
+  // aborted session shows nothing. Training (not playVisible) reads ep_rew_mean, already final.
+  const partialNotAReading =
+    playVisible && playState !== 'finished' && (scale.min < 0 || (selectedEnv?.sparse_reward ?? false))
   const measuring = partialNotAReading && playState === 'playing'
   const showReading = hasScore && !partialNotAReading
   // Fill + tick positions measured across [scale.min, scale.max], so a shaped env that starts

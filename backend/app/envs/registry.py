@@ -66,6 +66,12 @@ class EnvSpec(BaseModel):
     # ≈ −100 regardless of the cap) — widening their floor would inflate the displayed skill (a crash
     # reading as "above average"). Decouples "longer play episode" from "deeper failure floor".
     floor_scales_with_steps: bool = True
+    # Sparse 0/1 reward (FrozenLake): the episode pays 0 the whole way and +1 only on reaching the
+    # goal, so the *running cumulative* score during PLAY is not a valid skill reading (it sits at 0
+    # until the final step). The play skill meter shows "measuring…" until the episode ends for these
+    # — like it already does for shaped/penalty envs (min_score < 0) whose partial score also isn't a
+    # reading. False = the running score is a valid lower bound (CartPole climbs from 0).
+    sparse_reward: bool = False
     human_playable: bool
     competitive: bool
     difficulty: Literal["beginner", "intermediate", "advanced"]
@@ -87,8 +93,8 @@ def list_envs() -> list[EnvSpec]:
     return list(_REGISTRY.values())
 
 
-def _standard_hyperparams() -> dict[str, dict[str, HyperparamDef]]:
-    """The PPO + neuroevolution tunables shared by every simple vector/discrete env.
+def _standard_hyperparams(q_episodes: int = 5_000) -> dict[str, dict[str, HyperparamDef]]:
+    """The PPO + neuroevolution + Q-learning tunables shared by every simple vector/discrete env.
 
     These are the standard SB3 PPO defaults plus our neuroevolution defaults — sensible
     starting points for CartPole, LunarLander and the classic-control family alike (harder
@@ -96,6 +102,11 @@ def _standard_hyperparams() -> dict[str, dict[str, HyperparamDef]]:
     explained per-env in ``content/parameters.ts``). Built fresh per call so each EnvSpec owns
     its own definitions. Adding a new vector/discrete game reuses this verbatim — the param
     *surface* is identical; only the per-env *guidance* (content) and budget differ.
+
+    The ``q_learning`` block is included for every env but only *exposed* where the env lists
+    ``q_learning`` in ``supported_algos`` (Toy Text, whose discrete obs is the table's native
+    input). ``q_episodes`` is that env's ★ recommended episode budget (Q-learning's "Total Steps"):
+    a small deterministic maze wants a few thousand, Taxi's 500 states want far more.
     """
     return {
         "ppo": {
@@ -156,6 +167,32 @@ def _standard_hyperparams() -> dict[str, dict[str, HyperparamDef]]:
             "generations": HyperparamDef(
                 type="int", default=30, recommended=30,
                 min=5, max=200, step=5,
+            ),
+        },
+        "q_learning": {
+            "learning_rate": HyperparamDef(  # α — the table-update step (far larger than PPO's lr)
+                type="float", default=0.1, recommended=0.1,
+                min=0.01, max=1.0, step=0.01,
+            ),
+            "gamma": HyperparamDef(
+                type="float", default=0.99, recommended=0.99,
+                min=0.8, max=0.999, step=0.001,
+            ),
+            "epsilon_start": HyperparamDef(
+                type="float", default=1.0, recommended=1.0,
+                min=0.1, max=1.0, step=0.05,
+            ),
+            "epsilon_end": HyperparamDef(
+                type="float", default=0.05, recommended=0.05,
+                min=0.0, max=0.5, step=0.01,
+            ),
+            "epsilon_decay": HyperparamDef(  # fraction of the budget to anneal ε over, then hold
+                type="float", default=0.5, recommended=0.5,
+                min=0.1, max=1.0, step=0.05,
+            ),
+            "episodes": HyperparamDef(  # the training budget (this algorithm's "Total Steps")
+                type="int", default=q_episodes, recommended=q_episodes,
+                min=500, max=50_000, step=500,
             ),
         },
     }
@@ -416,8 +453,9 @@ register(
         family="toy_text",
         obs_type="discrete",
         action_space="discrete",
-        supported_algos=["ppo", "neuroevolution"],
-        hyperparams=_standard_hyperparams(),
+        supported_algos=["ppo", "neuroevolution", "q_learning"],
+        hyperparams=_standard_hyperparams(q_episodes=8_000),  # slippery 16-state lake
+        sparse_reward=True,  # 0/1 reward → play meter "measures" until the goal is reached
         solved_score=0.7,  # gym reward_threshold: a 70% success rate (reward is 1 on reaching goal)
         min_score=0.0,  # reward is 0/1 — a failing agent scores 0, so the meter fills 0→0.7
         default_total_timesteps=200_000,  # slippery + sparse reward needs lots of episodes
@@ -449,8 +487,9 @@ register(
         family="toy_text",
         obs_type="discrete",
         action_space="discrete",
-        supported_algos=["ppo", "neuroevolution"],
-        hyperparams=_standard_hyperparams(),
+        supported_algos=["ppo", "neuroevolution", "q_learning"],
+        hyperparams=_standard_hyperparams(q_episodes=3_000),  # deterministic 16-state maze — fast
+        sparse_reward=True,  # 0/1 reward → play meter "measures" until the goal is reached
         make_kwargs={"is_slippery": False},
         solved_score=0.7,  # same gym threshold; a deterministic agent reaches ~1.0 success
         min_score=0.0,
@@ -481,8 +520,9 @@ register(
         family="toy_text",
         obs_type="discrete",
         action_space="discrete",
-        supported_algos=["ppo", "neuroevolution"],
-        hyperparams=_standard_hyperparams(),
+        supported_algos=["ppo", "neuroevolution", "q_learning"],
+        hyperparams=_standard_hyperparams(q_episodes=20_000),  # 64 states + slip — needs the most
+        sparse_reward=True,  # 0/1 reward → play meter "measures" until the goal is reached
         make_kwargs={"map_name": "8x8"},
         solved_score=0.7,
         min_score=0.0,
@@ -513,8 +553,8 @@ register(
         family="toy_text",
         obs_type="discrete",
         action_space="discrete",
-        supported_algos=["ppo", "neuroevolution"],
-        hyperparams=_standard_hyperparams(),
+        supported_algos=["ppo", "neuroevolution", "q_learning"],
+        hyperparams=_standard_hyperparams(q_episodes=20_000),  # 500 states — Q-learning's showcase
         solved_score=8.0,  # gym reward_threshold
         # 0% reference = "ran out the 200-step episode without ever delivering" ≈ −200 (−1/step, no
         # +20). This is the right floor for the skill meter: an idle/stuck agent that delivers nothing
@@ -549,8 +589,8 @@ register(
         family="toy_text",
         obs_type="discrete",
         action_space="discrete",
-        supported_algos=["ppo", "neuroevolution"],
-        hyperparams=_standard_hyperparams(),
+        supported_algos=["ppo", "neuroevolution", "q_learning"],
+        hyperparams=_standard_hyperparams(q_episodes=5_000),  # 48 states, dense reward — solves cleanly
         solved_score=-13.0,  # optimal return (no gym reward_threshold); the risky cliff-edge path
         # 0% reference = "ran out the 200-step cap without reaching the goal" = −200 (−1/step, no
         # cliff falls). This is the right floor for the skill meter: an agent that just sits/wanders

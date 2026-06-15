@@ -38,6 +38,7 @@ export const cartpoleEnv: EnvSpec = {
   default_total_timesteps: 50_000,
   play_step_scale: 1,
   floor_scales_with_steps: true,
+  sparse_reward: false,
   turn_based: false,
   human_playable: true,
   competitive: false,

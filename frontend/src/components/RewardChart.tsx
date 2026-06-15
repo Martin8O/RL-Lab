@@ -234,16 +234,25 @@ function LineChart({ series, markers = [], width, height, xFmt, ariaLabel }: {
 const OVERLAY_COLORS = ['var(--viz-4)', 'var(--viz-5)', 'var(--viz-6)']
 
 // Project a saved run's recorded frames onto the active tab's (x, y), or null if the run has
-// no data for that tab (e.g. an evolution run on the Reward tab).
-function runSeries(run: RunDetail, tab: ChartTab, color: string): Series | null {
+// no data for that tab. The Reward tab's x-unit depends on the *live* algorithm (timesteps for
+// PPO, episodes for Q-learning), so a run is only overlaid there when its frames match that unit
+// — keeping the shared x-axis coherent (an evolution run lives on the Fitness tab instead).
+function runSeries(run: RunDetail, tab: ChartTab, color: string, liveAlgo: string): Series | null {
   const x: number[] = []
   const values: (number | null)[] = []
   for (const f of run.metrics) {
     if (tab === 'fitness') {
       if (f.type !== 'evolution') continue
       x.push(f.generation); values.push(f.best_fitness)
-    } else if (f.type === 'metrics') {
-      x.push(f.timesteps); values.push(tab === 'loss' ? f.loss : f.ep_rew_mean)
+    } else if (tab === 'loss') {
+      if (f.type !== 'metrics') continue
+      x.push(f.timesteps); values.push(f.loss)
+    } else if (liveAlgo === 'q_learning') {  // reward tab, Q-learning context → x = episode
+      if (f.type !== 'q_learning') continue
+      x.push(f.episode); values.push(f.ep_rew_mean)
+    } else {  // reward tab, PPO context → x = timesteps
+      if (f.type !== 'metrics') continue
+      x.push(f.timesteps); values.push(f.ep_rew_mean)
     }
   }
   if (x.length === 0) return null
@@ -417,6 +426,26 @@ function ComparePopover({ runs, selectedOrder, onToggle, onDelete, onClear, onCl
 
 const TABS: ChartTab[] = ['reward', 'loss', 'fitness']
 
+// Which chart tabs each algorithm actually produces — the single source for the empty-state
+// message, so every tab tells the truth per algorithm: if the active tab IS the algo's output, the
+// hint is "start training" (data is coming); otherwise it's "this algorithm doesn't use this chart
+// — see <its tabs>". Adding a new algorithm = add one row here and the messaging stays correct
+// everywhere (bake-in for the S5 algorithm-breadth roadmap — DQN, SAC, …).
+const ALGO_CHART_TABS: Record<string, ChartTab[]> = {
+  ppo: ['reward', 'loss'],
+  neuroevolution: ['fitness'],
+  q_learning: ['reward'],
+}
+
+function algoLabel(t: (k: string) => string, algo: string): string {
+  switch (algo) {
+    case 'ppo': return t('sidebar.algo_ppo')
+    case 'neuroevolution': return t('sidebar.algo_evo')
+    case 'q_learning': return t('sidebar.algo_q')
+    default: return algo
+  }
+}
+
 export default function RewardChart() {
   const { t } = useTranslation()
 
@@ -426,6 +455,8 @@ export default function RewardChart() {
   const lastProgress    = useAppStore((s) => s.lastProgress)
   const evolutionHistory = useAppStore((s) => s.evolutionHistory)
   const lastEvolution   = useAppStore((s) => s.lastEvolution)
+  const qLearningHistory = useAppStore((s) => s.qLearningHistory)
+  const lastQLearning   = useAppStore((s) => s.lastQLearning)
   const selectedEnvId   = useAppStore((s) => s.selectedEnvId)
   const envs            = useAppStore((s) => s.envs)
   const emaAlpha        = useAppStore((s) => s.emaAlpha)
@@ -508,7 +539,16 @@ export default function RewardChart() {
   let liveSeries: Series[]
   let xFmt = fmtSteps
 
-  if (activeTab === 'reward') {
+  if (activeTab === 'reward' && algo === 'q_learning') {
+    // Q-learning's learning curve: mean episode return per report, x = episode (its own unit).
+    const v = win(qLearningHistory)
+    const lx = v.map((q) => q.episode)
+    const raw = v.map((q) => q.ep_rew_mean)
+    liveSeries = [
+      { x: lx, values: raw, color: accent, width: 1, opacity: 0.28 },
+      { x: lx, values: computeEma(raw, emaAlpha), color: accent, width: 2, dot: true, area: true },
+    ]
+  } else if (activeTab === 'reward') {
     const v = win(progressHistory)
     const lx = v.map((p) => p.timesteps)
     const raw = v.map((p) => p.ep_rew_mean)
@@ -549,7 +589,7 @@ export default function RewardChart() {
   const markers: SolvedMarker[] = []
   envSelected.forEach((run, i) => {
     const color = OVERLAY_COLORS[i % OVERLAY_COLORS.length]
-    const s = runSeries(run, activeTab, color)
+    const s = runSeries(run, activeTab, color, algo)
     if (s) {
       overlaySeries.push(s)
       overlays.push({ id: run.meta.id, label: run.meta.label, color })
@@ -563,11 +603,23 @@ export default function RewardChart() {
 
   const series = [...overlaySeries, ...liveSeries]
   const hasChart = series.some((s) => s.x.length > 0)
-  const emptyMsg = activeTab === 'fitness' ? t('chart.fitness_stub') : t('chart.placeholder')
+  // Algorithm-aware empty state: if this tab is one the current algorithm produces, the data is
+  // just not in yet → "start training"; otherwise the tab doesn't apply to this algorithm → say so
+  // and point to the tab(s) it does use. Driven by ALGO_CHART_TABS so new algorithms stay correct.
+  const applicableTabs = ALGO_CHART_TABS[algo] ?? ['reward']
+  const emptyMsg = applicableTabs.includes(activeTab)
+    ? t('chart.placeholder')
+    : t('chart.na_for_algo', {
+        algo: algoLabel(t, algo),
+        tab: t(`chart.tab_${activeTab}`),
+        tabs: applicableTabs.map((tt) => t(`chart.tab_${tt}`)).join(' / '),
+      })
 
   // Live stats are algorithm-aware: PPO reads the ~1 Hz progress frame (with the last
-  // metrics frame as a fallback); neuroevolution reads the per-generation frame.
+  // metrics frame as a fallback); neuroevolution reads the per-generation frame; Q-learning
+  // reads the per-report frame (episode-based).
   const isEvo = algo === 'neuroevolution'
+  const isQ   = algo === 'q_learning'
   const lastMetrics = metricsHistory.at(-1)
   const compactControls = size.w > 0 && size.w < 380
 
@@ -589,6 +641,20 @@ export default function RewardChart() {
     if (evolutionHistory.length >= 2) {
       const a = evolutionHistory[evolutionHistory.length - 2]
       const b = evolutionHistory[evolutionHistory.length - 1]
+      const dt = b.elapsed - a.elapsed
+      if (dt > 0) sps = (b.timesteps - a.timesteps) / dt
+    }
+  } else if (isQ) {
+    const q = lastQLearning
+    hasStats = !!q
+    trainPct = q ? Math.min(100, (q.episode / q.total_episodes) * 100) : null
+    score = q ? q.ep_rew_mean : null
+    steps = q?.timesteps
+    elapsed = q?.elapsed
+    // steps/s from the two most recent report frames (no intra-report frames).
+    if (qLearningHistory.length >= 2) {
+      const a = qLearningHistory[qLearningHistory.length - 2]
+      const b = qLearningHistory[qLearningHistory.length - 1]
       const dt = b.elapsed - a.elapsed
       if (dt > 0) sps = (b.timesteps - a.timesteps) / dt
     }

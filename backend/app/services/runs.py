@@ -47,6 +47,16 @@ def _frame_score(algo: str, frame: dict[str, Any]) -> float | None:
     return frame.get("best_fitness") if algo == "neuroevolution" else frame.get("ep_rew_mean")
 
 
+def _frame_x(algo: str, frame: dict[str, Any]) -> float | None:
+    """A frame's x-coordinate in this algorithm's chart unit: generation (neuroevolution),
+    episode (Q-learning) or timestep (PPO)."""
+    if algo == "neuroevolution":
+        return frame.get("generation")
+    if algo == "q_learning":
+        return frame.get("episode")
+    return frame.get("timesteps")
+
+
 def final_score(config: TrainConfig, metrics: list[dict[str, Any]]) -> float | None:
     """The run's final score (last frame) — best_fitness (evolution) / ep_rew_mean (PPO)."""
     return _frame_score(config.algo, metrics[-1]) if metrics else None
@@ -69,10 +79,9 @@ def _solved_at(config: TrainConfig, metrics: list[dict[str, Any]], solved_score:
     """The x (timestep for PPO, generation for evolution) of the first frame to hit solved."""
     if solved_score <= 0:
         return None
-    evo = config.algo == "neuroevolution"
     for f in metrics:
         score = _frame_score(config.algo, f)
-        x = f.get("generation") if evo else f.get("timesteps")
+        x = _frame_x(config.algo, f)
         if score is not None and x is not None and score >= solved_score:
             return float(x)
     return None
@@ -94,6 +103,18 @@ def _derive(
             "generation": last.get("generation"),
             "total_generations": last.get("total_generations"),
         }
+    if config.algo == "q_learning":
+        # Q-learning is episodic — record the episode counter (its chart x-unit) in ``iteration``
+        # and the episode budget in ``total_generations`` (the generic "progress total" slot).
+        return {
+            "final_reward": last.get("ep_rew_mean"),
+            "solved_at": solved_at,
+            "timesteps": int(last.get("timesteps", 0)),
+            "total_timesteps": 0,
+            "iteration": last.get("episode"),
+            "generation": None,
+            "total_generations": last.get("total_episodes"),
+        }
     return {
         "final_reward": last.get("ep_rew_mean"),
         "solved_at": solved_at,
@@ -109,6 +130,8 @@ def _default_label(config: TrainConfig, summary: dict[str, Any]) -> str:
     """A readable auto-label: env · algo · progress · final reward."""
     if summary["generation"] is not None:
         progress = f"gen {summary['generation']}"
+    elif config.algo == "q_learning":
+        progress = f"ep {summary['iteration']}"
     else:
         progress = f"{summary['timesteps'] // 1000}k"
     rew = summary["final_reward"]

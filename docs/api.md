@@ -33,8 +33,11 @@ Base URL in dev: `http://127.0.0.1:8000`. CORS allows the Vite origin (`CORS_ORI
 | POST | `/api/train/stop` | — | `TrainStatus` |
 | GET | `/api/train/status` | — | `TrainStatus` |
 
-One run is active at a time. `TrainConfig.algo` selects PPO (`hyperparams`) or neuroevolution
-(`evolution`); `seed` + the full config are echoed back in `TrainStatus` for reproducibility.
+One run is active at a time. `TrainConfig.algo` selects PPO (`hyperparams`), neuroevolution
+(`evolution`), or tabular Q-learning (`q_learning` — α/γ/ε-start/ε-end/ε-decay/episodes; available on
+discrete-obs Toy Text envs); `seed` + the full config are echoed back in `TrainStatus` for
+reproducibility. `TrainStatus` also retains `last_metrics` (PPO), `last_evolution` (neuroevolution),
+and `last_q_learning` + `last_qtable` (Q-learning) so a reconnecting client repopulates panels at once.
 
 ### Preview (`/api/preview`)
 | Method | Path | Body | Returns |
@@ -98,6 +101,8 @@ other text is echoed back as `{echo: <text>}` (the original A3 contract).
 | `metrics` | `TrainingMetrics` | once per PPO rollout |
 | `progress` | `TrainingProgress` | ~1 Hz, from a decoupled ticker thread |
 | `evolution` | `EvolutionMetrics` | once per neuroevolution generation (Top-5 + mutation histogram) |
+| `q_learning` | `QLearningMetrics` | periodic tabular-Q report (x = `episode`; `ep_rew_mean` learning curve) |
+| `qtable` | `QTableFrame` | the live `[n_states × n_actions]` Q-table heatmap snapshot (decoupled, unlogged) |
 | `status` | `TrainStatus` | training lifecycle changes |
 | `frame` | `FrameMessage` | training-preview frame (server JPEG **or** client-render `state`) |
 | `preview` | `PreviewState` | preview settings changed |

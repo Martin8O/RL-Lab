@@ -13,6 +13,9 @@ import type {
   PlayState,
   PlayStatus,
   PPOHyperparams,
+  QLearningHyperparams,
+  QLearningMetrics,
+  QTableFrame,
   TrainingMetrics,
   TrainingProgress,
   TrainState,
@@ -28,6 +31,8 @@ export type ChartTab      = 'reward' | 'loss' | 'fitness'
 const PROGRESS_CAP = 10_800
 // Generations are coarse (one frame each), so a generous cap covers any realistic run.
 const EVOLUTION_CAP = 2_000
+// Q-learning reports ~300 frames per run; a generous cap covers several runs of history.
+const Q_LEARNING_CAP = 2_000
 
 const DEFAULT_HYPERPARAMS: PPOHyperparams = {
   learning_rate:   3e-4,
@@ -52,17 +57,39 @@ const DEFAULT_EVOLUTION_PARAMS: EvolutionHyperparams = {
   episodes:        3,
 }
 
+// Matches the registry's ★ recommended q_learning block. ``episodes`` is per-env (Toy Text),
+// snapped from the registry on env switch like the other budgets.
+const DEFAULT_Q_PARAMS: QLearningHyperparams = {
+  learning_rate: 0.1,
+  gamma:         0.99,
+  epsilon_start: 1.0,
+  epsilon_end:   0.05,
+  epsilon_decay: 0.5,
+  episodes:      5000,
+}
+
 // Per-env defaults: when the user picks a different game, the sidebar params + step budget snap
 // to *that* env's ★ recommended values from the registry (LunarLander wants very different
 // settings than CartPole). Falls back to the previous value for any param the env doesn't define.
 function envDefaults(
   spec: EnvSpec | undefined,
-  prev: { hyperparams: PPOHyperparams; evolutionParams: EvolutionHyperparams; totalTimesteps: number },
-): { hyperparams: PPOHyperparams; evolutionParams: EvolutionHyperparams; totalTimesteps: number } | null {
+  prev: {
+    hyperparams: PPOHyperparams
+    evolutionParams: EvolutionHyperparams
+    qLearningParams: QLearningHyperparams
+    totalTimesteps: number
+  },
+): {
+  hyperparams: PPOHyperparams
+  evolutionParams: EvolutionHyperparams
+  qLearningParams: QLearningHyperparams
+  totalTimesteps: number
+} | null {
   if (!spec) return null
   const ppo = spec.hyperparams?.ppo ?? {}
   const evo = spec.hyperparams?.neuroevolution ?? {}
-  const num = (key: keyof PPOHyperparams | keyof EvolutionHyperparams, block: Record<string, { recommended: number | string }>, fb: number) =>
+  const ql = spec.hyperparams?.q_learning ?? {}
+  const num = (key: keyof PPOHyperparams | keyof EvolutionHyperparams | keyof QLearningHyperparams, block: Record<string, { recommended: number | string }>, fb: number) =>
     block[key] !== undefined ? Number(block[key].recommended) : fb
   return {
     hyperparams: {
@@ -84,6 +111,14 @@ function envDefaults(
       generations:     num('generations', evo, prev.evolutionParams.generations),
       episodes:        prev.evolutionParams.episodes,  // non-UI knob — preserve
     },
+    qLearningParams: {
+      learning_rate: num('learning_rate', ql, prev.qLearningParams.learning_rate),
+      gamma:         num('gamma', ql, prev.qLearningParams.gamma),
+      epsilon_start: num('epsilon_start', ql, prev.qLearningParams.epsilon_start),
+      epsilon_end:   num('epsilon_end', ql, prev.qLearningParams.epsilon_end),
+      epsilon_decay: num('epsilon_decay', ql, prev.qLearningParams.epsilon_decay),
+      episodes:      num('episodes', ql, prev.qLearningParams.episodes),
+    },
     totalTimesteps: spec.default_total_timesteps || prev.totalTimesteps,
   }
 }
@@ -93,9 +128,10 @@ interface AppState {
   locale:          Locale
   theme:           Theme
   selectedEnvId:   string | null
-  algo:            Algo       // PPO ↔ neuroevolution
+  algo:            Algo       // PPO ↔ neuroevolution ↔ Q-learning
   hyperparams:     PPOHyperparams
   evolutionParams: EvolutionHyperparams
+  qLearningParams: QLearningHyperparams
   seed:            number
   totalTimesteps:  number
   emaAlpha:        number     // 1 = raw; 0.05 = heavy smoothing
@@ -117,6 +153,9 @@ interface AppState {
   bestReward:      number | null        // best score this session (live high)
   evolutionHistory: EvolutionMetrics[]  // per-generation frames — feeds the Fitness chart
   lastEvolution:   EvolutionMetrics | null
+  qLearningHistory: QLearningMetrics[]  // per-report frames — feeds the reward chart (x=episode)
+  lastQLearning:   QLearningMetrics | null
+  lastQTable:      QTableFrame | null    // latest Q-table snapshot — feeds the heatmap panel
   highScores:      Record<string, HighScore>  // all-time best per env id
 
   // ─ play vs AI (E2) ─────────────────────────────────────────
@@ -139,6 +178,7 @@ interface AppState {
   setAlgo:            (a: Algo)                          => void
   setHyperparams:     (h: Partial<PPOHyperparams>)      => void
   setEvolutionParams: (e: Partial<EvolutionHyperparams>) => void
+  setQLearningParams: (q: Partial<QLearningHyperparams>) => void
   setSeed:            (s: number)                       => void
   setTotalTimesteps:  (n: number)                       => void
   setEmaAlpha:        (a: number)                       => void
@@ -151,6 +191,9 @@ interface AppState {
   setProgress:        (p: TrainingProgress)             => void
   addEvolution:       (e: EvolutionMetrics)             => void
   seedEvolution:      (e: EvolutionMetrics)             => void
+  addQLearning:       (q: QLearningMetrics)             => void
+  setQTable:          (t: QTableFrame)                  => void
+  seedQLearning:      (q: QLearningMetrics, t: QTableFrame | null) => void
   setHighScore:       (hs: HighScore)                   => void
   setHighScores:      (list: HighScore[])               => void
   clearMetrics:       ()                                => void
@@ -177,6 +220,7 @@ export const useAppStore = create<AppState>()(
       algo:            'ppo',
       hyperparams:     DEFAULT_HYPERPARAMS,
       evolutionParams: DEFAULT_EVOLUTION_PARAMS,
+      qLearningParams: DEFAULT_Q_PARAMS,
       seed:            42,
       totalTimesteps:  50_000,
       emaAlpha:        0.3,
@@ -197,6 +241,9 @@ export const useAppStore = create<AppState>()(
       bestReward:      null,
       evolutionHistory: [],
       lastEvolution:   null,
+      qLearningHistory: [],
+      lastQLearning:   null,
+      lastQTable:      null,
       highScores:      {},
 
       playState:        'idle',
@@ -236,6 +283,7 @@ export const useAppStore = create<AppState>()(
       setAlgo:           (algo)           => set({ algo, activeTab: algo === 'neuroevolution' ? 'fitness' : 'reward' }),
       setHyperparams:    (h)              => set((s) => ({ hyperparams: { ...s.hyperparams, ...h } })),
       setEvolutionParams:(e)              => set((s) => ({ evolutionParams: { ...s.evolutionParams, ...e } })),
+      setQLearningParams:(q)              => set((s) => ({ qLearningParams: { ...s.qLearningParams, ...q } })),
       setSeed:           (seed)           => set({ seed }),
       setTotalTimesteps: (n)              => set({ totalTimesteps: n }),
       setEmaAlpha:       (emaAlpha)       => set({ emaAlpha }),
@@ -297,6 +345,40 @@ export const useAppStore = create<AppState>()(
             s.bestReward === null ? e.best_fitness : Math.max(s.bestReward, e.best_fitness),
         })),
 
+      // One frame per Q-learning report: append (capped), track the latest, fold ep_rew_mean into
+      // the session-best (so the same "live high" surface works for all three algorithms).
+      addQLearning: (q) =>
+        set((s) => ({
+          qLearningHistory: [...s.qLearningHistory, q].slice(-Q_LEARNING_CAP),
+          lastQLearning: q,
+          bestReward:
+            q.ep_rew_mean === null
+              ? s.bestReward
+              : s.bestReward === null
+                ? q.ep_rew_mean
+                : Math.max(s.bestReward, q.ep_rew_mean),
+        })),
+
+      // The heatmap snapshot is high-frequency + large, so it only ever overwrites the latest
+      // (never accumulates) — the panel always draws the current table.
+      setQTable: (t) => set({ lastQTable: t }),
+
+      // Late-join reconcile (mirrors seedEvolution): repopulate the Q-learning chart/stats/heatmap
+      // from /api/train/status so a reload mid-run shows the latest report immediately. Only primes
+      // history when empty so a live frame that already arrived is never double-appended.
+      seedQLearning: (q, t) =>
+        set((s) => ({
+          lastQLearning: q,
+          lastQTable: t ?? s.lastQTable,
+          qLearningHistory: s.qLearningHistory.length === 0 ? [q] : s.qLearningHistory,
+          bestReward:
+            q.ep_rew_mean === null
+              ? s.bestReward
+              : s.bestReward === null
+                ? q.ep_rew_mean
+                : Math.max(s.bestReward, q.ep_rew_mean),
+        })),
+
       setHighScore:  (hs)   => set((s) => ({ highScores: { ...s.highScores, [hs.env_id]: hs } })),
       setHighScores: (list) =>
         set({ highScores: Object.fromEntries(list.map((hs) => [hs.env_id, hs])) }),
@@ -305,6 +387,7 @@ export const useAppStore = create<AppState>()(
         set({
           metricsHistory: [], progressHistory: [], lastProgress: null, bestReward: null,
           evolutionHistory: [], lastEvolution: null,
+          qLearningHistory: [], lastQLearning: null, lastQTable: null,
         }),
 
       // ─ play vs AI (E2) ────────────────────────────────────────
@@ -348,6 +431,7 @@ export const useAppStore = create<AppState>()(
         algo:            s.algo,
         hyperparams:     s.hyperparams,
         evolutionParams: s.evolutionParams,
+        qLearningParams: s.qLearningParams,
         seed:            s.seed,
         totalTimesteps:  s.totalTimesteps,
         emaAlpha:        s.emaAlpha,

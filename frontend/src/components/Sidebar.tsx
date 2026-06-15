@@ -87,6 +87,10 @@ function formatValue(id: string, v: number | string): string {
     case 'gamma':          return v.toFixed(4)
     case 'clip_range':     return v.toFixed(2)
     case 'ent_coef':       return v.toFixed(3)
+    case 'q_learning_rate':
+    case 'epsilon_start':
+    case 'epsilon_end':
+    case 'epsilon_decay':
     case 'mutation_rate':
     case 'crossover_rate': return v.toFixed(2)
     default:               return String(Math.round(v))
@@ -214,6 +218,7 @@ function ALGO_LABEL(t: (k: string) => string, id: string): string {
   switch (id) {
     case 'ppo':            return t('sidebar.algo_ppo')
     case 'neuroevolution': return t('sidebar.algo_evo')
+    case 'q_learning':     return t('sidebar.algo_q')
     default:               return id
   }
 }
@@ -295,6 +300,8 @@ export default function Sidebar() {
   const setHyperparams  = useAppStore((s) => s.setHyperparams)
   const evolutionParams = useAppStore((s) => s.evolutionParams)
   const setEvolutionParams = useAppStore((s) => s.setEvolutionParams)
+  const qLearningParams = useAppStore((s) => s.qLearningParams)
+  const setQLearningParams = useAppStore((s) => s.setQLearningParams)
   const seed            = useAppStore((s) => s.seed)
   const setSeed         = useAppStore((s) => s.setSeed)
   const totalTimesteps  = useAppStore((s) => s.totalTimesteps)
@@ -306,7 +313,9 @@ export default function Sidebar() {
   const selectedEnv = envs.find((e) => e.id === selectedEnvId)
   const ppoDefs = selectedEnv?.hyperparams?.['ppo'] ?? {}
   const evoDefs = selectedEnv?.hyperparams?.['neuroevolution'] ?? {}
+  const qlDefs  = selectedEnv?.hyperparams?.['q_learning'] ?? {}
   const isEvo = algo === 'neuroevolution'
+  const isQ   = algo === 'q_learning'
 
   // Per-env step ladder + the ★ recommended budget; always include the current value so the
   // <select> can render it even after a reload with a value off the ladder.
@@ -347,10 +356,10 @@ export default function Sidebar() {
       {/* Scrollable params */}
       <div style={{ flex: 1, overflowY: 'auto', padding: 'var(--space-5)' }}>
         <div style={{ ...sectionEyebrow, marginBottom: 'var(--space-4)' }}>
-          {isEvo ? t('sidebar.evo_params_title') : t('sidebar.params_title')}
+          {isEvo ? t('sidebar.evo_params_title') : isQ ? t('sidebar.q_params_title') : t('sidebar.params_title')}
         </div>
 
-        {!isEvo && (
+        {algo === 'ppo' && (
           <>
             {ppoDefs.learning_rate && (
               <ParamSlider
@@ -476,6 +485,70 @@ export default function Sidebar() {
           </>
         )}
 
+        {isQ && (
+          <>
+            {qlDefs.learning_rate && (
+              <ParamSlider
+                id="q_learning_rate" label={t('sidebar.q_learning_rate')}
+                value={qLearningParams.learning_rate}
+                min={qlDefs.learning_rate.min!} max={qlDefs.learning_rate.max!} step={qlDefs.learning_rate.step!}
+                recommended={qlDefs.learning_rate.recommended as number}
+                onChange={(v) => setQLearningParams({ learning_rate: v })}
+              />
+            )}
+
+            {qlDefs.gamma && (
+              <ParamSlider
+                id="gamma" label={t('sidebar.gamma')}
+                value={qLearningParams.gamma}
+                min={qlDefs.gamma.min!} max={qlDefs.gamma.max!} step={qlDefs.gamma.step!}
+                recommended={qlDefs.gamma.recommended as number}
+                onChange={(v) => setQLearningParams({ gamma: v })}
+              />
+            )}
+
+            {qlDefs.epsilon_start && (
+              <ParamSlider
+                id="epsilon_start" label={t('sidebar.epsilon_start')}
+                value={qLearningParams.epsilon_start}
+                min={qlDefs.epsilon_start.min!} max={qlDefs.epsilon_start.max!} step={qlDefs.epsilon_start.step!}
+                recommended={qlDefs.epsilon_start.recommended as number}
+                onChange={(v) => setQLearningParams({ epsilon_start: v })}
+              />
+            )}
+
+            {qlDefs.epsilon_end && (
+              <ParamSlider
+                id="epsilon_end" label={t('sidebar.epsilon_end')}
+                value={qLearningParams.epsilon_end}
+                min={qlDefs.epsilon_end.min!} max={qlDefs.epsilon_end.max!} step={qlDefs.epsilon_end.step!}
+                recommended={qlDefs.epsilon_end.recommended as number}
+                onChange={(v) => setQLearningParams({ epsilon_end: v })}
+              />
+            )}
+
+            {qlDefs.epsilon_decay && (
+              <ParamSlider
+                id="epsilon_decay" label={t('sidebar.epsilon_decay')}
+                value={qLearningParams.epsilon_decay}
+                min={qlDefs.epsilon_decay.min!} max={qlDefs.epsilon_decay.max!} step={qlDefs.epsilon_decay.step!}
+                recommended={qlDefs.epsilon_decay.recommended as number}
+                onChange={(v) => setQLearningParams({ epsilon_decay: v })}
+              />
+            )}
+
+            {qlDefs.episodes && (
+              <ParamSlider
+                id="episodes" label={t('sidebar.episodes')}
+                value={qLearningParams.episodes}
+                min={qlDefs.episodes.min!} max={qlDefs.episodes.max!} step={qlDefs.episodes.step!}
+                recommended={qlDefs.episodes.recommended as number}
+                onChange={(v) => setQLearningParams({ episodes: Math.round(v) })}
+              />
+            )}
+          </>
+        )}
+
         {/* Divider */}
         <div style={{ height: 1, background: 'var(--border-default)', margin: 'var(--space-3) 0 var(--space-4)' }} />
 
@@ -508,8 +581,8 @@ export default function Sidebar() {
           </div>
         </div>
 
-        {/* Total Steps — PPO only (evolution is bounded by Generations, not a step budget) */}
-        {!isEvo && (
+        {/* Total Steps — PPO only (evolution uses Generations, Q-learning uses Episodes) */}
+        {algo === 'ppo' && (
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <label style={fieldLabel}>
               {t('sidebar.total_steps')}

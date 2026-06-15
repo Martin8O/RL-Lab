@@ -25,6 +25,7 @@ export function useRunControls(): RunControls {
   const totalTimesteps  = useAppStore((s) => s.totalTimesteps)
   const hyperparams     = useAppStore((s) => s.hyperparams)
   const evolutionParams = useAppStore((s) => s.evolutionParams)
+  const qLearningParams = useAppStore((s) => s.qLearningParams)
   const trainState      = useAppStore((s) => s.trainState)
   const clearMetrics    = useAppStore((s) => s.clearMetrics)
 
@@ -44,8 +45,9 @@ export function useRunControls(): RunControls {
         seed,
         total_timesteps: totalTimesteps,
         hyperparams,
-        // Sent only for neuroevolution; null keeps the recorded PPO config clean.
+        // Each block is sent only for its own algorithm; null keeps the recorded config clean.
         evolution: algo === 'neuroevolution' ? evolutionParams : null,
+        q_learning: algo === 'q_learning' ? qLearningParams : null,
       })
     } catch (err) {
       console.error('Failed to start training:', err)

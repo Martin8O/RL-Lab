@@ -27,7 +27,8 @@ def test_toy_text_envs_registered_with_discrete_obs() -> None:
         assert families[eid] == "toy_text"
         assert spec.obs_type == "discrete"
         assert spec.action_space == "discrete"
-        assert spec.supported_algos == ["ppo", "neuroevolution"]
+        # G2b: Toy Text now also supports tabular Q-learning (its native discrete-obs consumer).
+        assert spec.supported_algos == ["ppo", "neuroevolution", "q_learning"]
         assert spec.turn_based is True
         assert spec.human_playable is True
 

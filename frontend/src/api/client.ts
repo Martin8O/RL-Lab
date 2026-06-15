@@ -149,6 +149,8 @@ function syncStoreFromStatus(status: TrainStatus): void {
   // snapshot so a reload mid-run — or a connect after a finished run — shows the latest
   // generation immediately instead of empty panels. PPO uses last_metrics (stats row) instead.
   if (status.last_evolution) st.seedEvolution(status.last_evolution)
+  // Same reconcile for Q-learning: repopulate the chart/stats + heatmap from the retained snapshot.
+  if (status.last_q_learning) st.seedQLearning(status.last_q_learning, status.last_qtable)
 }
 
 /** React hook: opens the /ws connection and dispatches incoming frames. */
@@ -174,6 +176,10 @@ export function useTrainingWs(): void {
           }
         } else if (frame.type === 'evolution') {
           useAppStore.getState().addEvolution(frame)
+        } else if (frame.type === 'q_learning') {
+          useAppStore.getState().addQLearning(frame)
+        } else if (frame.type === 'qtable') {
+          useAppStore.getState().setQTable(frame)
         } else if (frame.type === 'highscore') {
           useAppStore.getState().setHighScore(frame)
         } else if (frame.type === 'frame') {

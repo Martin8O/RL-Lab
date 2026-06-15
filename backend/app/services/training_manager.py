@@ -16,6 +16,8 @@ from app.envs.registry import get_env
 from app.schemas.checkpoints import CheckpointMeta
 from app.schemas.training import (
     EvolutionMetrics,
+    QLearningMetrics,
+    QTableFrame,
     TrainConfig,
     TrainingMetrics,
     TrainingProgress,
@@ -79,6 +81,10 @@ class TrainingManager:
         # /api/train/status sees the current generation (leaderboard / stats / Fitness)
         # without waiting for the next frame — and still sees it after the run finished.
         self._last_evolution: EvolutionMetrics | None = None
+        # Latest tabular Q-learning frame + Q-table snapshot, kept so a late-joining client (or one
+        # connecting after a finished run) sees the current chart/stats/heatmap immediately.
+        self._last_q_learning: QLearningMetrics | None = None
+        self._last_qtable: QTableFrame | None = None
         self._error: str | None = None
         # Latest model snapshot from the trainer + the run's metric frames — the raw material
         # "Save" persists into a checkpoint slot. Both reset when a fresh run launches.
@@ -118,6 +124,8 @@ class TrainingManager:
             self._timesteps = 0
             self._last_metrics = None
             self._last_evolution = None  # clear the previous run's evolution panels
+            self._last_q_learning = None  # clear the previous run's Q-learning chart/stats
+            self._last_qtable = None  # clear the previous run's heatmap
             self._error = None
             self._snapshot = None  # don't let a previous run's model be saved as this one's
             self._metrics_log = []
@@ -238,6 +246,19 @@ class TrainingManager:
                     self._on_snapshot,
                     resume,
                 )
+            elif config.algo == "q_learning":
+                from app.services.trainer_q import train_q_learning  # lazy: numpy/gym
+
+                terminal = train_q_learning(
+                    config,
+                    gym_id,
+                    control,
+                    self._emit_q_learning,
+                    self._emit_qtable,
+                    self._publish_predict,
+                    self._on_snapshot,
+                    resume,
+                )
             else:
                 from app.services.trainer_ppo import train_ppo  # lazy: loads torch/SB3
 
@@ -323,6 +344,24 @@ class TrainingManager:
         self._broadcast(frame)
         self._record_highscore(ev.best_fitness, generation=ev.generation)
 
+    def _emit_q_learning(self, m: QLearningMetrics) -> None:
+        frame = m.model_dump()
+        with self._lock:
+            self._timesteps = m.timesteps
+            self._last_q_learning = m
+            self._metrics_log.append(frame)
+            del self._metrics_log[:-_METRICS_LOG_CAP]
+        self._broadcast(frame)
+        if m.ep_rew_mean is not None:
+            self._record_highscore(m.ep_rew_mean, iteration=m.episode)
+
+    def _emit_qtable(self, frame: QTableFrame) -> None:
+        # The heatmap snapshot is *not* logged into _metrics_log (it is large and the chart/history
+        # only need the QLearningMetrics frame); just retain the latest for late-join reconcile.
+        with self._lock:
+            self._last_qtable = frame
+        self._broadcast(frame.model_dump())
+
     def _record_highscore(
         self, score: float, *, generation: int | None = None, iteration: int | None = None
     ) -> None:
@@ -364,6 +403,8 @@ class TrainingManager:
             config=cfg,
             last_metrics=self._last_metrics,
             last_evolution=self._last_evolution,
+            last_q_learning=self._last_q_learning,
+            last_qtable=self._last_qtable,
             error=self._error,
         )
 

@@ -28,12 +28,12 @@ export interface ParamInfo {
 export const PARAM_INFO: Record<string, ParamInfo> = {
   algorithm: {
     general: {
-      en: '**How the agent learns.**\n**PPO** (reinforcement learning) — tweaks one neural network with gradients after each batch of play; steady and sample-efficient.\n**Neuroevolution** — keeps a whole population of networks, scores them, and breeds the best (mutation + crossover) each generation; simple, gradient-free, like "survival of the fittest".',
-      cz: '**Jak se agent učí.**\n**PPO** (zpětnovazební učení) — upravuje jednu neuronovou síť pomocí gradientů po každé dávce hraní; stabilní a úsporné na data.\n**Neuroevoluce** — udržuje celou populaci sítí, ohodnotí je a v každé generaci množí ty nejlepší (mutace + křížení); jednoduchá, bez gradientů, jako „přežití nejschopnějších“.',
+      en: '**How the agent learns.**\n**PPO** (reinforcement learning) — tweaks one neural network with gradients after each batch of play; steady and sample-efficient.\n**Neuroevolution** — keeps a whole population of networks, scores them, and breeds the best (mutation + crossover) each generation; simple, gradient-free, like "survival of the fittest".\n**Q-learning** — builds a plain table of "how good is each action in each state" and refines it from experience; the classic value-based method, available on the small grid-world games where you can literally watch the table fill in.',
+      cz: '**Jak se agent učí.**\n**PPO** (zpětnovazební učení) — upravuje jednu neuronovou síť pomocí gradientů po každé dávce hraní; stabilní a úsporné na data.\n**Neuroevoluce** — udržuje celou populaci sítí, ohodnotí je a v každé generaci množí ty nejlepší (mutace + křížení); jednoduchá, bez gradientů, jako „přežití nejschopnějších“.\n**Q-učení** — sestavuje jednoduchou tabulku „jak dobrá je každá akce v každém stavu“ a vylepšuje ji ze zkušenosti; klasická hodnotová metoda, dostupná u malých mřížkových her, kde můžete doslova sledovat, jak se tabulka plní.',
     },
     recommended: {
-      en: 'PPO — the reliable, general-purpose default that also scales to harder games. Neuroevolution is gradient-free and can be surprisingly fast on simple tasks — try both and compare (see the per-game note below).',
-      cz: 'PPO — spolehlivá, univerzální volba, která zvládne i těžší hry. Neuroevoluce je bezgradientní a u jednoduchých úloh bývá překvapivě rychlá — vyzkoušejte oba a porovnejte (viz poznámka k dané hře níže).',
+      en: 'PPO — the reliable, general-purpose default that also scales to harder games. Neuroevolution is gradient-free and can be surprisingly fast on simple tasks. On the grid-world games, Q-learning is the star: it solves them cleanly and you can watch its table fill in. Try all three and compare (see the per-game note below).',
+      cz: 'PPO — spolehlivá, univerzální volba, která zvládne i těžší hry. Neuroevoluce je bezgradientní a u jednoduchých úloh bývá překvapivě rychlá. U mřížkových her je hvězdou Q-učení: vyřeší je čistě a můžete sledovat, jak se jeho tabulka plní. Vyzkoušejte všechny tři a porovnejte (viz poznámka k dané hře níže).',
     },
     perEnv: {
       cartpole: {
@@ -736,6 +736,78 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
         en: 'Improves steadily over a few dozen generations as the population learns to avoid the cliff; push higher to keep refining toward the optimal path.',
         cz: 'Plynule se zlepšuje během pár desítek generací, jak se populace učí vyhýbat útesu; vyšší hodnotou ji necháte dál ladit k optimální cestě.',
       },
+    },
+  },
+
+  // ── Tabular Q-learning settings (G2b) ─────────────────────────────────────
+  // The value-based 3rd algorithm: a [states × actions] table refined by the Bellman
+  // update, available on the discrete grid-world games. These pair with the live Q-table
+  // heatmap in the bottom panel.
+
+  q_learning_rate: {
+    general: {
+      en: '**Learning rate (α)** — how much each new experience updates the table.\nQ-learning nudges a cell toward what it just observed; α is the size of that nudge. Higher → learns fast but jumpily (noisy estimates). Lower → smooth but slow. This is a *table* step, so it is far larger than PPO\'s neural-network learning rate.',
+      cz: '**Rychlost učení (α)** — jak moc každá nová zkušenost upraví tabulku.\nQ-učení posune buňku směrem k tomu, co právě pozorovalo; α je velikost tohoto posunu. Vyšší → učí se rychle, ale trhaně (zašuměné odhady). Nižší → plynule, ale pomalu. Jde o krok *tabulky*, takže je mnohem větší než rychlost učení neuronové sítě u PPO.',
+    },
+    recommended: {
+      en: '0.1 — a steady default. On the deterministic (no-slip) maps you can go higher (0.2–0.5) to learn faster; on slippery FrozenLake keep it moderate so noise does not destabilise the estimates.',
+      cz: '0.1 — stabilní výchozí hodnota. Na deterministických (neklouzavých) mapách můžete jít výš (0,2–0,5) pro rychlejší učení; na kluzkém FrozenLake ji držte umírněnou, aby šum nerozhodil odhady.',
+    },
+    range: '0.01 – 1.0',
+  },
+
+  epsilon_start: {
+    general: {
+      en: '**Starting exploration (ε).** Q-learning is ε-greedy: with probability ε it tries a *random* action instead of the current best one. ε starts high so the agent explores widely before it knows anything.\n1.0 = "act completely at random at first".',
+      cz: '**Počáteční zkoumání (ε).** Q-učení je ε-hladové: s pravděpodobností ε zkusí *náhodnou* akci místo aktuálně nejlepší. ε začíná vysoko, aby agent zpočátku hodně zkoumal, než cokoli ví.\n1.0 = „na začátku jednej zcela náhodně“.',
+    },
+    recommended: {
+      en: '1.0 — start fully exploratory. The table is empty at the start, so there is nothing to exploit yet; explore everything first.',
+      cz: '1.0 — začněte plně průzkumně. Tabulka je na začátku prázdná, takže není co využívat; nejdřív vše prozkoumejte.',
+    },
+    range: '0.1 – 1.0',
+  },
+
+  epsilon_end: {
+    general: {
+      en: '**Final exploration (ε).** As the table fills in, the agent should rely more on what it has learned and explore less. ε anneals down to this floor and then holds.\nA small non-zero value keeps a little exploration so the agent can still discover a better route.',
+      cz: '**Konečné zkoumání (ε).** Jak se tabulka plní, agent by se měl víc spoléhat na to, co se naučil, a méně zkoumat. ε klesá k této spodní hranici a tam zůstane.\nMalá nenulová hodnota zachová trochu zkoumání, aby agent ještě mohl objevit lepší cestu.',
+    },
+    recommended: {
+      en: '0.05 — mostly exploit the learned table, but keep a 5% trickle of exploration.',
+      cz: '0.05 — převážně využívej naučenou tabulku, ale ponech 5% pramínek zkoumání.',
+    },
+    range: '0.0 – 0.5',
+  },
+
+  epsilon_decay: {
+    general: {
+      en: '**Exploration schedule** — over what fraction of the episode budget ε falls from its start value to its end value (then holds).\n0.5 = "spend the first half of training annealing exploration, then stay greedy". Smaller = settle down sooner; larger = keep exploring for longer.',
+      cz: '**Plán zkoumání** — přes jakou část rozpočtu epizod klesne ε z počáteční hodnoty na konečnou (a tam zůstane).\n0.5 = „první polovinu tréninku utlumuj zkoumání, pak zůstaň hladový“. Menší = usadí se dřív; větší = zkoumá déle.',
+    },
+    recommended: {
+      en: '0.5 — anneal over the first half of training. Raise it for hard, slippery maps that need to keep exploring; lower it for easy deterministic ones that can settle quickly.',
+      cz: '0.5 — utlumuj přes první polovinu tréninku. Zvyšte ji u těžkých, kluzkých map, které musí dál zkoumat; snižte u snadných deterministických, které se mohou rychle usadit.',
+    },
+    range: '0.1 – 1.0',
+  },
+
+  episodes: {
+    general: {
+      en: '**Training budget** — how many full games (episodes) Q-learning plays to fill in its table.\nMore episodes mean a more complete, better-refined table, up to the point the game is mastered. This is Q-learning\'s equivalent of PPO\'s Total Steps.',
+      cz: '**Tréninkový rozpočet** — kolik celých her (epizod) Q-učení odehraje, aby naplnilo tabulku.\nVíce epizod znamená úplnější, lépe vyladěnou tabulku, dokud hru nezvládne. Je to obdoba PPO „Celkem kroků“ pro Q-učení.',
+    },
+    recommended: {
+      en: 'The ★ default is tuned per game (a small deterministic maze needs a few thousand; Taxi\'s 500 states want far more). Watch the Filled % and the reward curve — if they are still climbing, add episodes.',
+      cz: 'Výchozí ★ je laděná pro každou hru (malé deterministické bludiště potřebuje pár tisíc; 500 stavů Taxi mnohem víc). Sledujte Zaplněno % a křivku odměny — pokud stále stoupají, přidejte epizody.',
+    },
+    range: '500 – 50000  (depends on the game)',
+  },
+
+  qtable: {
+    general: {
+      en: 'This panel is the **Q-table** itself — Q-learning\'s entire brain, shown live.\nEach **row is a state** (a grid cell / a Taxi situation) and each **column is an action** (the arrows; Taxi adds Pickup/Drop-off). A cell\'s colour is its learned value: **green = good**, **red = bad**, **blank = not learned yet** — so you watch the table light up as training explores. The **outlined cell** in each row is the action the agent would currently take there (its policy).\n**Episode** = games played / budget. **ε** = current exploration rate (falls over training). **Filled** = fraction of the table touched so far. **Score** = recent mean return.',
+      cz: 'Tento panel je samotná **Q-tabulka** — celý „mozek“ Q-učení, živě.\nKaždý **řádek je stav** (buňka mřížky / situace Taxíku) a každý **sloupec je akce** (šipky; Taxi přidává Naber/Vysaď). Barva buňky je její naučená hodnota: **zelená = dobrá**, **červená = špatná**, **prázdná = zatím nenaučená** — takže sledujete, jak se tabulka rozsvěcí, jak trénink zkoumá. **Orámovaná buňka** v každém řádku je akce, kterou by tam agent právě zvolil (jeho strategie).\n**Epizoda** = odehrané hry / rozpočet. **ε** = aktuální míra zkoumání (klesá během tréninku). **Zaplněno** = podíl dosud dotčené tabulky. **Skóre** = nedávná průměrná odměna.',
     },
   },
 

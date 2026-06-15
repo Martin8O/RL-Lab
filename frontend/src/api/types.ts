@@ -41,6 +41,9 @@ export interface EnvSpec {
    *  (floor grows with steps); false for shaped/terminal-reward envs like LunarLander (a crash ends
    *  early and doesn't scale), so their floor stays put and a crash isn't rated as a near-success. */
   floor_scales_with_steps: boolean
+  /** Sparse 0/1 reward (FrozenLake): the running play score is 0 until the goal, so the play skill
+   *  meter shows "measuring…" until the episode ends (the partial score isn't a valid reading). */
+  sparse_reward: boolean
   /** Grid-worlds the human plays turn-based (one move per key press) instead of in real time. */
   turn_based: boolean
   human_playable: boolean
@@ -52,7 +55,7 @@ export interface EnvSpec {
 // --- Training (B2) ---------------------------------------------------------
 // Mirrors backend/app/schemas/training.py — keep both sides in sync.
 
-export type Algo = 'ppo' | 'neuroevolution'
+export type Algo = 'ppo' | 'neuroevolution' | 'q_learning'
 export type TrainState =
   | 'idle'
   | 'running'
@@ -83,14 +86,27 @@ export interface EvolutionHyperparams {
   episodes: number
 }
 
+export interface QLearningHyperparams {
+  learning_rate: number
+  gamma: number
+  epsilon_start: number
+  epsilon_end: number
+  /** Fraction of the episode budget to anneal ε over (start→end), then hold at end. */
+  epsilon_decay: number
+  /** The episode budget — Q-learning's "Total Steps". */
+  episodes: number
+}
+
 export interface TrainConfig {
   env_id: string
   algo: Algo
   seed: number
   total_timesteps: number
   hyperparams: PPOHyperparams
-  /** Present only for neuroevolution runs; null/omitted for PPO. */
+  /** Present only for neuroevolution runs; null/omitted otherwise. */
   evolution?: EvolutionHyperparams | null
+  /** Present only for tabular Q-learning runs; null/omitted otherwise. */
+  q_learning?: QLearningHyperparams | null
 }
 
 /** WS frame: {type:"metrics", ...} pushed once per PPO rollout. */
@@ -147,6 +163,37 @@ export interface EvolutionMetrics {
   mutation_dist: MutationDist
   timesteps: number
   elapsed: number
+}
+
+/** WS frame: {type:"q_learning", ...} pushed periodically during a tabular Q-learning run.
+ *  Episodic, so its chart x-unit is `episode`; `ep_rew_mean` is the headline learning curve
+ *  (for FrozenLake this is literally the success rate). The table rides in QTableFrame. */
+export interface QLearningMetrics {
+  type: 'q_learning'
+  iteration: number
+  episode: number
+  total_episodes: number
+  epsilon: number
+  ep_rew_mean: number | null
+  ep_len_mean: number | null
+  timesteps: number
+  elapsed: number
+}
+
+/** The learned action-value table for the heatmap — row-major [n_states][n_actions]. */
+export interface QTable {
+  n_states: number
+  n_actions: number
+  values: number[][]
+}
+
+/** WS frame: {type:"qtable", ...} — the current Q-table snapshot for the live heatmap.
+ *  Decoupled from QLearningMetrics (and never logged) so it can stream at its own cadence. */
+export interface QTableFrame {
+  type: 'qtable'
+  episode: number
+  total_episodes: number
+  table: QTable
 }
 
 // --- High scores (C2) ------------------------------------------------------
@@ -223,7 +270,7 @@ export interface RunMeta {
 export interface RunDetail {
   meta: RunMeta
   config: TrainConfig
-  metrics: (TrainingMetrics | EvolutionMetrics)[]
+  metrics: (TrainingMetrics | EvolutionMetrics | QLearningMetrics)[]
 }
 
 /** Lifecycle snapshot: returned by /api/train/* and pushed as {type:"status", ...}. */
@@ -240,6 +287,10 @@ export interface TrainStatus {
   /** Latest neuroevolution frame, retained so a late-joining client can repopulate the
    *  leaderboard / Evolution Stats / Fitness chart on reconnect. null for PPO runs. */
   last_evolution: EvolutionMetrics | null
+  /** Latest tabular Q-learning frame + Q-table snapshot, retained so a late-joining client can
+   *  repopulate the chart / stats / heatmap on reconnect. null for PPO / neuroevolution runs. */
+  last_q_learning: QLearningMetrics | null
+  last_qtable: QTableFrame | null
   error: string | null
 }
 
@@ -442,6 +493,8 @@ export type TrainWsFrame =
   | TrainingMetrics
   | TrainingProgress
   | EvolutionMetrics
+  | QLearningMetrics
+  | QTableFrame
   | TrainStatus
   | PreviewState
   | PreviewFrame

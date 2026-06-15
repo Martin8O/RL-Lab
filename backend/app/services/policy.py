@@ -35,6 +35,8 @@ def predict_from_checkpoint(loaded: LoadedCheckpoint) -> PredictFn:
     try:
         if loaded.config.algo == "ppo":
             return _ppo_predict(loaded.blob)
+        if loaded.config.algo == "q_learning":
+            return _q_learning_predict(loaded.blob)
         return _evolution_predict(loaded.blob)
     except PolicyLoadError:
         raise
@@ -82,5 +84,20 @@ def _evolution_predict(blob: bytes) -> PredictFn:
 
     def predict(obs: object) -> Any:
         return champion.act(np.asarray(obs, dtype=np.float64))
+
+    return predict
+
+
+def _q_learning_predict(blob: bytes) -> PredictFn:
+    import numpy as np
+
+    data = np.load(BytesIO(blob))
+    table = np.asarray(data["qtable"], dtype=np.float64)
+
+    def predict(obs: object) -> Any:
+        # The play env one-hot-wraps the discrete obs (shared factory), so decode the integer
+        # state with arg-max, then act greedily — the row's best action.
+        state = int(np.argmax(np.asarray(obs)))
+        return int(np.argmax(table[state]))
 
     return predict

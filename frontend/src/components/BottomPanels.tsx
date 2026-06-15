@@ -1,7 +1,8 @@
-import { type CSSProperties } from 'react'
+import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAppStore } from '../store/useAppStore'
 import { skillScaleFor } from '../content/skill'
+import { qActionsFor } from '../content/qTableActions'
 import { useShowEvoLeaderboard } from '../hooks/useShowEvoLeaderboard'
 import ParamInfo from './ParamInfo'
 import PlayLeaderboards from './PlayLeaderboards'
@@ -226,6 +227,191 @@ function EvolutionStats() {
   )
 }
 
+// ── Q-table heatmap (G2b) ───────────────────────────────────────────────────────
+// Tabular Q-learning's "watch the table fill in" view: a [states × actions] heatmap where each
+// cell is colour-coded by its Q-value (blank = never learned, green = good, red = bad) and the
+// greedy action per state is outlined. Shown ONLY for the q_learning algorithm — it takes over the
+// Evolution Stats slot AND the bottom-right blank slot (the user's ask) so a big table (Taxi's 500
+// states) has room.
+//
+// Rendered to a single <canvas>, NOT to per-cell DOM nodes: a 500×6 table is 3 000 cells streamed
+// several times a second, and reconciling that many React elements froze the UI on a CPU laptop
+// (which also blocked the Pause/Stop clicks). One canvas redraw is cheap, so the dashboard stays
+// responsive and the whole table is always visible (cells auto-size to fit — no scrollbar).
+
+// Diverging Q-value colour on a symmetric [-maxAbs, +maxAbs] scale: positive → green, negative →
+// red, ~0 → null (unlearned cells stay blank so you see the table light up). Canvas fill strings.
+function qCellColor(v: number, maxAbs: number): string | null {
+  if (maxAbs <= 0) return null
+  const t = Math.max(-1, Math.min(1, v / maxAbs))
+  if (Math.abs(t) < 0.001) return null
+  return t > 0 ? `rgba(63, 174, 79, ${t.toFixed(3)})` : `rgba(226, 69, 60, ${(-t).toFixed(3)})`
+}
+
+// Draw the whole table into the canvas, auto-sizing square cells so every state fits the box (no
+// scroll). States flow top-to-bottom within a column-block, blocks wrap left-to-right; the block
+// grid is centred. The greedy action per state gets a bright outline.
+function drawQTable(
+  canvas: HTMLCanvasElement, table: { n_states: number; n_actions: number; values: number[][] },
+  actions: string[], w: number, h: number, gridColor: string, greedyColor: string,
+): void {
+  const { n_states: S, n_actions: A, values } = table
+  const dpr = window.devicePixelRatio || 1
+  canvas.width = Math.max(1, Math.round(w * dpr))
+  canvas.height = Math.max(1, Math.round(h * dpr))
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+  ctx.clearRect(0, 0, w, h)
+
+  let maxAbs = 0
+  const best = new Array<number>(S)
+  const learned = new Array<boolean>(S)  // any non-zero cell ⇒ this state has been visited
+  for (let s = 0; s < S; s++) {
+    const row = values[s]
+    let bi = 0
+    let any = false
+    for (let a = 0; a < A; a++) {
+      const ab = Math.abs(row[a])
+      if (ab > maxAbs) maxAbs = ab
+      if (ab !== 0) any = true
+      if (row[a] > row[bi]) bi = a
+    }
+    best[s] = bi
+    learned[s] = any
+  }
+
+  const gap = 8
+  const showGlyphs = S <= 64
+  // Largest square cell for which all column-blocks fit the box (search big→small).
+  let cell = 0, rowsPerCol = S, nCols = 1, headerH = 0
+  for (let c = 20; c >= 2; c--) {
+    const hh = showGlyphs && c >= 11 ? c : 0
+    const rpc = Math.max(1, Math.floor((h - hh) / c))
+    const nc = Math.ceil(S / rpc)
+    const totalW = nc * A * c + (nc - 1) * gap
+    if (totalW <= w) { cell = c; rowsPerCol = rpc; nCols = nc; headerH = hh; break }
+  }
+  if (cell === 0) { cell = 2; rowsPerCol = Math.max(1, Math.floor(h / cell)); nCols = Math.ceil(S / rowsPerCol) }
+
+  const blockW = A * cell
+  const totalW = nCols * blockW + (nCols - 1) * gap
+  const offsetX = Math.max(0, (w - totalW) / 2)
+  ctx.font = `${Math.min(cell - 1, 11)}px ui-monospace, monospace`
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+
+  for (let s = 0; s < S; s++) {
+    const col = Math.floor(s / rowsPerCol)
+    const rip = s % rowsPerCol
+    const bx = offsetX + col * (blockW + gap)
+    const by = rip * cell + headerH
+    if (headerH > 0 && rip === 0) {
+      ctx.fillStyle = 'rgba(150,150,160,0.85)'
+      for (let a = 0; a < A; a++) ctx.fillText(actions[a] ?? '', bx + a * cell + cell / 2, headerH / 2)
+    }
+    const row = values[s]
+    for (let a = 0; a < A; a++) {
+      const x = bx + a * cell
+      const fill = qCellColor(row[a], maxAbs)
+      if (fill) { ctx.fillStyle = fill; ctx.fillRect(x, by, cell - 1, cell - 1) }
+      // Outline the greedy action for any *visited* state (learned[s]) — even if that action's own
+      // Q stayed 0 (optimistic-init pick among negatives), so the heatmap shows the real policy.
+      const isBest = a === best[s] && learned[s]
+      ctx.strokeStyle = isBest ? greedyColor : gridColor
+      ctx.lineWidth = isBest ? 1.4 : 0.5
+      ctx.strokeRect(x + 0.5, by + 0.5, cell - 2, cell - 2)
+    }
+  }
+}
+
+function QTablePanel() {
+  const { t } = useTranslation()
+  const qtable = useAppStore((s) => s.lastQTable)
+  const ql     = useAppStore((s) => s.lastQLearning)
+  const envId  = useAppStore((s) => s.selectedEnvId)
+
+  const wrapRef   = useRef<HTMLDivElement>(null)
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const [size, setSize] = useState({ w: 0, h: 0 })
+
+  const hasTable = qtable !== null
+  // Attach the observer once the canvas wrapper exists (it only mounts once a table arrives).
+  useEffect(() => {
+    const el = wrapRef.current
+    if (!el) return
+    const measure = () => setSize({ w: el.clientWidth, h: el.clientHeight })
+    measure()
+    const obs = new ResizeObserver(measure)
+    obs.observe(el)
+    return () => obs.disconnect()
+  }, [hasTable])
+
+  // Redraw whenever the table or the box size changes. Reads two theme colours so it tracks dark/light.
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas || !qtable || size.w < 4 || size.h < 4) return
+    const css = getComputedStyle(document.documentElement)
+    const grid = css.getPropertyValue('--border-default').trim() || 'rgba(128,128,128,0.3)'
+    const greedy = css.getPropertyValue('--text-strong').trim() || '#fff'
+    drawQTable(canvas, qtable.table, qActionsFor(envId, qtable.table.n_actions), size.w, size.h, grid, greedy)
+  }, [qtable, size, envId])
+
+  // Derived stats for the strip.
+  let fillPct = 0
+  if (qtable) {
+    let filled = 0
+    for (const r of qtable.table.values) for (const v of r) if (v !== 0) filled++
+    const tot = qtable.table.n_states * qtable.table.n_actions
+    fillPct = tot > 0 ? (filled / tot) * 100 : 0
+  }
+
+  return (
+    <PanelShell
+      title={t('qtable.title')}
+      right={<ParamInfo paramId="qtable" label={t('qtable.title')} />}
+      borderRight={false}
+      center
+    >
+      {!qtable ? (
+        <Empty text={t('qtable.hint')} />
+      ) : (
+        <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', padding: '6px 12px', gap: 6 }}>
+          {/* Stats + legends — centred above the table. */}
+          <div style={{ display: 'flex', gap: 16, flexShrink: 0, justifyContent: 'center', alignItems: 'center', flexWrap: 'wrap' }}>
+            <StatCell label={t('qtable.episode')} value={ql ? `${ql.episode}/${ql.total_episodes}` : `—/${qtable.total_episodes}`} />
+            <StatCell label={t('qtable.epsilon')} value={ql ? ql.epsilon.toFixed(2) : '—'} />
+            <StatCell label={t('qtable.filled')} value={`${Math.round(fillPct)}%`} color="var(--accent-h)" />
+            <StatCell label={t('qtable.score')} value={ql?.ep_rew_mean != null ? ql.ep_rew_mean.toFixed(2) : '—'} color="var(--ok)" />
+            {/* Value colour legend */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 9, color: 'var(--text-muted)' }}>
+              <span>{t('qtable.legend_low')}</span>
+              <span style={{ width: 54, height: 8, borderRadius: 2, background: 'linear-gradient(to right, rgba(226,69,60,0.9), var(--surface-2), rgba(63,174,79,0.9))' }} />
+              <span>{t('qtable.legend_high')}</span>
+            </div>
+            {/* Greedy-outline legend (what the white box means) */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 9, color: 'var(--text-muted)' }}>
+              <span style={{ width: 10, height: 10, border: '1.4px solid var(--text-strong)', borderRadius: 1, display: 'inline-block' }} />
+              {t('qtable.legend_best')}
+            </div>
+            {/* Action-column key — the heatmap's columns left→right (so Taxi's tiny cells are legible). */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 9, color: 'var(--text-muted)' }}>
+              <span>{t('qtable.actions')}:</span>
+              <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-default)', letterSpacing: '0.12em' }}>
+                {qActionsFor(envId, qtable.table.n_actions).join(' ')}
+              </span>
+            </div>
+          </div>
+          {/* Canvas heatmap — fills the box; the whole table is always visible (no scroll). */}
+          <div ref={wrapRef} style={{ flex: 1, minHeight: 0, position: 'relative' }}>
+            <canvas ref={canvasRef} style={{ width: '100%', height: '100%', display: 'block' }} />
+          </div>
+        </div>
+      )}
+    </PanelShell>
+  )
+}
+
 // ── Blank panel ───────────────────────────────────────────────────────────────
 // Reserved, intentionally empty space (growth potential) — the old Save / Load panel (moved to the
 // sidebar) and the slot freed by narrowing the high-score board, both kept blank for future games.
@@ -243,6 +429,27 @@ function BlankPanel({ flex = 1, borderRight = true }: { flex?: number; borderRig
 
 export default function BottomPanels() {
   const showEvoLeaderboard = useShowEvoLeaderboard()
+  const isQ = useAppStore((s) => s.algo === 'q_learning')
+
+  // Q-learning mode: the Q-table heatmap takes over the Evolution Stats slot AND the bottom-right
+  // blank slot (the user's ask), so a big table has room. The leaderboard slot keeps its width.
+  if (isQ) {
+    return (
+      <div style={{
+        height: 200, flexShrink: 0, display: 'flex',
+        borderTop: '2px solid var(--border-default)',
+      }}>
+        {/* Leaderboard slot keeps the same ~22% width (2/5 of the old 55% left group). */}
+        <div style={{ flex: '0 0 22%', minWidth: 0, display: 'flex', overflow: 'hidden', borderRight: '2px solid var(--border-default)' }}>
+          <PlayLeaderboards />
+        </div>
+        {/* Q-table spans the old Evolution-Stats + blank area (the remaining 78%). */}
+        <div style={{ flex: 1, minWidth: 0, display: 'flex', overflow: 'hidden' }}>
+          <QTablePanel />
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div style={{
