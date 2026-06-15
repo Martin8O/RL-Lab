@@ -1,7 +1,8 @@
 # Adding an environment
 
 > Living document (seeded in Phase F4). The fastest path is data-only; this guide shows that path and
-> the five seams where a game needs real code. See also [`architecture.md`](architecture.md).
+> the five seams where a game needs real code. See also [`architecture.md`](architecture.md) and, for a
+> new learning method, [`adding-an-algorithm.md`](adding-an-algorithm.md).
 
 ## TL;DR
 

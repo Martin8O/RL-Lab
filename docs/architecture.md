@@ -104,3 +104,11 @@ typed seams need real code — see [`adding-an-environment.md`](adding-an-enviro
 3. **Action space** — discrete `int` vs continuous `box` (done for classic-control continuous; image-box next).
 4. **Competitive play** — a `side` selector + a 2-agent env (Pong).
 5. **Board games** — a parallel turn-based/self-play subsystem (OpenSpiel), not a registry row.
+
+## Related documentation
+
+- [`adding-an-environment.md`](adding-an-environment.md) — the data-only path + the five seams.
+- [`adding-an-algorithm.md`](adding-an-algorithm.md) — the peer-trainer contract.
+- [`api.md`](api.md) — REST endpoints + the WebSocket frame union.
+- [`reproducibility.md`](reproducibility.md) — seeds, recorded config, the run archive.
+- [`adr.md`](adr.md) — the architecture-decision index (full text in [`dev_history.md`](../dev_history.md)).

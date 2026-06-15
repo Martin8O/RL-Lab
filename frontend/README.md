@@ -1,73 +1,47 @@
-# React + TypeScript + Vite
+# Frontend — RL All-in-One Dashboard
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+The React + TypeScript + Vite UI for the [RL All-in-One Dashboard](../README.md). It renders the
+controls, the live reward/fitness chart, the client-side environment preview, and the play-vs-AI
+experience, talking to the FastAPI backend over REST + a WebSocket.
 
-Currently, two official plugins are available:
+## Stack
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- **React + TypeScript + Vite** · **Tailwind** for layout (components use inline styles referencing the
+  *Laboratory* design tokens in `src/index.css`)
+- **zustand** — app state · **react-i18next** — CZ/EN bilingual UI
 
-## React Compiler
+## Layout (`src/`)
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+| Folder | What it holds |
+|---|---|
+| `components/` | UI — Sidebar, RewardChart, EnvPreview/EnvStages, Play controls, SkillMeter, modals |
+| `api/` | `client.ts` (REST + WS) and `types.ts` (the contracts, mirroring `backend/app/schemas/`) |
+| `store/` | the zustand store |
+| `i18n/` | `en.json` / `cz.json` (parity enforced by the i18n checker) |
+| `content/` | data-driven copy — parameter popups, play guides, keymaps, env categories |
 
-## Expanding the ESLint configuration
+## Develop
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+Run from the **repo root** via `tasks.ps1` (preferred — it wires the backend too):
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```powershell
+.\tasks.ps1 dev-frontend    # Vite dev server on http://localhost:5173
+.\tasks.ps1 lint            # eslint (+ backend ruff/mypy)
+.\tasks.ps1 test            # vitest (+ backend pytest)
+.\tasks.ps1 i18n            # en/cz key parity
+.\tasks.ps1 build           # tsc + vite production build
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+Or directly in this folder: `npm install`, then `npm run dev` / `npm run lint` / `npm run test` /
+`npm run i18n:check` / `npm run build`.
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+## Conventions
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+- **No hard-coded user-facing strings** — add keys to both `i18n/en.json` and `i18n/cz.json` (including
+  `aria-label`/`title`); interactive controls need an accessible name.
+- **Use the semantic design tokens** (`--surface-*`, `--text-*`, `--accent`, `--viz-*`, …), not raw
+  values; both dark and light must look correct. Render numerics in the mono font with tabular figures.
+- **The frontend is hand-formatted** — Prettier is installed but **not** in the gate; never run it over
+  the existing tree.
+
+See [`../CLAUDE.md`](../CLAUDE.md) and [`../docs/`](../docs) for the full conventions and architecture.
