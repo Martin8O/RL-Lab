@@ -28,8 +28,10 @@ deepest score a flailing/random agent can reach (ADR-026). For a step-penalty en
 the clock doing nothing" ≈ `−1 × max_episode_steps` (e.g. CliffWalking/Taxi = −200), so an idle/stuck agent
 reads ~0% and only real progress lifts the meter; worse runs simply clamp to 0%. A too-deep floor (set from
 random returns) makes a do-nothing run read as near-mastery — the bug ADR-026 fixes. For a shaped env
-(LunarLander) it's where a non-progressing agent sits (≈ −200). If `reward_threshold` is `None`, pick and
-**document** a sensible "solved" value.
+(LunarLander) it's where a non-progressing agent sits (≈ −200) — and if such a shaped/terminal env also sets
+`play_step_scale>1`, set **`floor_scales_with_steps=False`** so the longer play episode doesn't widen that
+floor (a crash ends early; its score doesn't scale with the cap — ADR-027). If `reward_threshold` is `None`,
+pick and **document** a sensible "solved" value.
 
 ## 2. Register the env (data) — `backend/app/envs/registry.py`
 

@@ -57,10 +57,15 @@ class EnvSpec(BaseModel):
     # dropdown as a ladder around this value (×0.2 … ×4) and the store seeds it on env switch.
     default_total_timesteps: int
     # PLAY sessions (human + AI) multiply the env's max_episode_steps by this so a person has time
-    # to actually play short envs; training keeps the standard length. The skill meter's 0% floor
-    # (min_score) is scaled by the same factor for play, because a step-penalty env's failure floor
-    # (≈ −1 × max_steps) grows with the episode length while a *success* score does not. 1 = no change.
+    # to actually play short envs; training keeps the standard length. 1 = no change.
     play_step_scale: int = 1
+    # Whether the skill meter's 0% floor (min_score) is widened by play_step_scale for play. True for
+    # STEP-PENALTY envs whose failure floor (≈ −1 × max_steps) genuinely grows with episode length
+    # (MountainCar/Acrobot −1/step, Pendulum per-step cost). False for shaped/terminal-reward envs
+    # whose failure score does NOT scale with steps (LunarLander: a crash ends the episode early at
+    # ≈ −100 regardless of the cap) — widening their floor would inflate the displayed skill (a crash
+    # reading as "above average"). Decouples "longer play episode" from "deeper failure floor".
+    floor_scales_with_steps: bool = True
     human_playable: bool
     competitive: bool
     difficulty: Literal["beginner", "intermediate", "advanced"]
@@ -217,6 +222,7 @@ register(
         human_playable=True,
         competitive=False,
         play_step_scale=3,  # Box2D landing takes a while by hand — give a human ~3× the episode length
+        floor_scales_with_steps=False,  # shaped/terminal reward: a crash ends early ≈-100, doesn't scale with the 3× cap
         difficulty="intermediate",
         hw_requirement="cpu",
     )

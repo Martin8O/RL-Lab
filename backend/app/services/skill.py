@@ -33,16 +33,22 @@ def env_skill(env_id: str, min_scale: float = 1.0) -> EnvSkill | None:
     the red (LunarLander, ``min_score=-100``) gets bands that climb through the negatives
     instead of all bunching at 0.
 
-    ``min_scale`` widens the floor for longer **play** episodes: an env played at
+    ``min_scale`` widens the floor for longer **play** episodes: a step-penalty env played at
     ``play_step_scale=3`` runs 3× the steps, so its failure floor (≈ −1 × max_steps) is ~3×
     deeper while a *success* score is unchanged — pass the play scale so the meter/rating span
-    matches the longer episode (default 1.0 = the standard training span).
+    matches the longer episode (default 1.0 = the standard training span). The widening applies
+    ONLY when ``spec.floor_scales_with_steps`` (False for shaped/terminal-reward envs like
+    LunarLander, whose failure score does not grow with the step cap — see EnvSpec).
     """
     spec = get_env(env_id)
     if spec is None:
         return None
     max_score = spec.solved_score
-    min_score = spec.min_score * min_scale
+    # Widen the floor only for envs whose failure score actually grows with episode length
+    # (step-penalty). Shaped/terminal-reward envs (LunarLander) keep the unscaled floor — see
+    # EnvSpec.floor_scales_with_steps — so a crash isn't rated as a near-success.
+    effective_scale = min_scale if spec.floor_scales_with_steps else 1.0
+    min_score = spec.min_score * effective_scale
     span = max_score - min_score
     bands = [
         SkillBand(id=band_id, min_score=round(min_score + frac * span, 4))

@@ -81,9 +81,12 @@ export default function SkillMeter({ slot, overlay = false }: {
       ? scaleFromEnvSkill(envSkill)
       : scaleFromEnvSpec(envs.find((e) => e.id === envId)) ?? skillScaleFor(envId)
   // While playing, widen the floor for envs whose play episode runs longer than training
-  // (play_step_scale) so the meter span matches the longer episode (mirrors the backend rating).
-  const playStepScale = envs.find((e) => e.id === envId)?.play_step_scale ?? 1
-  const scale = playVisible ? scaleForPlay(baseScale, playStepScale) : baseScale
+  // (play_step_scale) so the meter span matches the longer episode (mirrors the backend rating) —
+  // but ONLY for step-penalty envs (floor_scales_with_steps). A shaped/terminal env like
+  // LunarLander keeps its floor so a crash isn't rated as a near-success.
+  const selectedEnv = envs.find((e) => e.id === envId)
+  const playFactor = (selectedEnv?.floor_scales_with_steps ?? true) ? selectedEnv?.play_step_scale ?? 1 : 1
+  const scale = playVisible ? scaleForPlay(baseScale, playFactor) : baseScale
 
   const hasScore = score !== null
   const value = score ?? 0

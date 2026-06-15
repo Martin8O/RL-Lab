@@ -81,6 +81,18 @@ def test_min_scale_widens_the_floor_for_longer_play_episodes() -> None:
     assert longer is not None and longer.band in {"below_average", "average"} and longer.ratio > 0.0
 
 
+def test_floor_widening_gated_to_step_penalty_envs() -> None:
+    """LunarLander is shaped/terminal (a crash ends the episode early ≈ −100), so floor_scales_with_steps
+    is False — its play floor must NOT widen with play_step_scale, or a crash rates as a near-success."""
+    base = env_skill("lunarlander")
+    played = env_skill("lunarlander", min_scale=3.0)
+    assert base is not None and played is not None
+    assert base.min_score == played.min_score == -200.0  # floor unchanged despite play_step_scale=3
+    # a typical crash (≈ −100) stays in a low band, not above_average (which the un-gated −600 floor gave)
+    crash = rate("lunarlander", -100.0, min_scale=3.0)
+    assert crash is not None and crash.band in {"child", "below_average"}
+
+
 def test_rate_ratio_clamped_to_unit_interval() -> None:
     # below 0 → child, ratio floored at 0; above max → superhuman, ratio capped at 1
     low = rate("cartpole", -10.0)

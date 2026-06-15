@@ -35,9 +35,12 @@ export interface EnvSpec {
   min_score: number
   /** Recommended PPO training budget (the ★ default); the sidebar builds its step ladder from it. */
   default_total_timesteps: number
-  /** Play episodes run this many times longer than training (so a person has time to play); the
-   *  play skill meter's 0% floor is widened by the same factor. 1 = same length as training. */
+  /** Play episodes run this many times longer than training (so a person has time to play). 1 = same. */
   play_step_scale: number
+  /** Whether the play skill-meter floor is widened by play_step_scale. True for step-penalty envs
+   *  (floor grows with steps); false for shaped/terminal-reward envs like LunarLander (a crash ends
+   *  early and doesn't scale), so their floor stays put and a crash isn't rated as a near-success. */
+  floor_scales_with_steps: boolean
   /** Grid-worlds the human plays turn-based (one move per key press) instead of in real time. */
   turn_based: boolean
   human_playable: boolean
