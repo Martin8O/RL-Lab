@@ -51,7 +51,8 @@
     "stop": "Zastavit",
     "pause": "Pozastavit",
     "resume": "Pokračovat",
-    "stopping": "Zastavuji…"
+    "stopping": "Zastavuji…",
+    "train_needs_gpu": "Trénink této hry vyžaduje GPU (k dispozici na stolním PC). Zatím si ji můžete zahrát ručně — použijte tlačítko Hrát níže."
   },
   "stats": {
     "progress": "Postup",
@@ -90,7 +91,9 @@
     "speed": "Rychlost",
     "visual_on_hint": "Živý náhled — vypněte pro rychlejší trénink",
     "visual_off_hint": "Vizualizace vypnuta — trénink běží naplno",
-    "idle_hint": "Spusťte trénink a sledujte agenta"
+    "idle_hint": "Spusťte trénink a sledujte agenta",
+    "fullscreen": "Celá obrazovka (Esc ukončí)",
+    "fullscreen_exit": "Ukončit celou obrazovku (Esc)"
   },
   "play": {
     "start": "Hrát proti AI",

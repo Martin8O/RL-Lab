@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import { useAppStore } from '../store/useAppStore'
 import { submitPlayScore } from '../api/client'
@@ -69,6 +70,10 @@ function NameModal({ score, steps, onDone }: { score: number; steps: number; onD
   const [name, setName] = useState(storedName)
   const [saving, setSaving] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
+  // Render into the fullscreen element when one is active (the env stage), so the prompt is visible
+  // while playing fullscreen — a modal at document.body would be hidden behind the fullscreen layer.
+  // Captured at mount (the episode just ended), which is when the target matters.
+  const [portalTarget] = useState<HTMLElement>(() => (document.fullscreenElement as HTMLElement | null) ?? document.body)
 
   useEffect(() => {
     inputRef.current?.focus()
@@ -92,7 +97,7 @@ function NameModal({ score, steps, onDone }: { score: number; steps: number; onD
     onDone()
   }
 
-  return (
+  return createPortal(
     <div
       onClick={onDone}
       style={{
@@ -157,6 +162,7 @@ function NameModal({ score, steps, onDone }: { score: number; steps: number; onD
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    portalTarget,
   )
 }

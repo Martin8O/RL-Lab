@@ -8,6 +8,7 @@ import {
   fetchEnvSkill,
   fetchHighScores,
   fetchPlayScores,
+  fetchSystem,
 } from './api/client'
 import TopBar from './components/TopBar'
 import Sidebar from './components/Sidebar'
@@ -21,6 +22,7 @@ export default function App() {
   const selectedEnvId = useAppStore((s) => s.selectedEnvId)
   const setEnvSkill   = useAppStore((s) => s.setEnvSkill)
   const setPlayScores = useAppStore((s) => s.setPlayScores)
+  const setGpuAvailable = useAppStore((s) => s.setGpuAvailable)
   const { i18n } = useTranslation()
 
   useEffect(() => {
@@ -48,6 +50,12 @@ export default function App() {
     if (backendStatus !== 'online') return
     void fetchHighScores().then(setHighScores).catch(() => {})
   }, [backendStatus, setHighScores])
+
+  // Detect GPU availability once backend is up — gates GPU-only training (Atari) in the UI (G4a).
+  useEffect(() => {
+    if (backendStatus !== 'online') return
+    void fetchSystem().then((s) => setGpuAvailable(s.gpu_available)).catch(() => {})
+  }, [backendStatus, setGpuAvailable])
 
   // Skill-band thresholds for the selected env (single source for the skill meter + play rating).
   useEffect(() => {

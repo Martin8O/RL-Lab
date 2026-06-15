@@ -609,3 +609,396 @@ register(
         hw_requirement="cpu",
     )
 )
+
+
+# ---------------------------------------------------------------------------
+# Atari family (ALE) — G4a "install + human-play on CPU now" batch.
+#
+# These are the first **image-observation** envs: the observation is a 210×160×3
+# RGB frame, not a vector/discrete state. That breaks two CartPole-shaped
+# assumptions the rest of the registry never hit, so the family is *data-rows +
+# gating*, not free like Toy Text:
+#   * obs_type="image" → a future trainer needs a CnnPolicy + a GPU (the
+#     trainer_ppo._build_model seam). So training is **gated**: hw_requirement="gpu"
+#     and the UI disables Run while no CUDA device is present (see /api/system). Atari
+#     trains in G4b on the desktop; until then these are **human-playable now** — human
+#     play needs no neural net, only env stepping + the JPEG render path, both of which
+#     already exist (client_render returns None for an image obs → server JPEG).
+#   * the numpy neuroevolution genome + tabular Q-learning can't consume an image, so
+#     supported_algos=["ppo"] (PPO-only) as data — the same opt-out pattern CarRacing uses.
+#
+# Every Atari env is built with full_action_space=True (make_kwargs) so all 18 ALE
+# actions sit at fixed indices across *every* game — a single shared keyboard map
+# (content/playKeymaps.ts ATARI_KEYMAP) plays them all, instead of each game's
+# game-specific minimal action set landing at different indices.
+#
+# Per-game skill bands come from [min_score, solved_score] like every other env (no
+# bespoke band table needed): symmetric games (Pong −21…21, Boxing/Tennis ±) get a
+# negative floor; one-directional arcade scores fill 0 → a "really good" target. The
+# whole batch was venv-verified (create + reset + step + render) per the new-env checklist.
+# Adding more of the 100+ ALE titles later is a one-row-per-game data change here.
+# ---------------------------------------------------------------------------
+
+
+def _atari_spec(
+    env_id: str,
+    display: str,
+    game: str,
+    difficulty: Literal["beginner", "intermediate", "advanced"],
+    min_score: float,
+    solved_score: float,
+    desc_en: str,
+    desc_cz: str,
+) -> EnvSpec:
+    """Build one Atari EnvSpec from a data row (the family is otherwise identical)."""
+    return EnvSpec(
+        id=env_id,
+        gym_id=f"ALE/{game}-v5",
+        display_name=Bilingual(en=display, cz=display),  # arcade titles are proper nouns
+        description=Bilingual(en=desc_en, cz=desc_cz),
+        family="atari",
+        obs_type="image",
+        action_space="discrete",
+        supported_algos=["ppo"],  # image obs → CnnPolicy/GPU only; evo+Q-learning can't consume pixels
+        hyperparams=_standard_hyperparams(),
+        # All 18 ALE actions at fixed indices → one shared keyboard map across the whole family.
+        make_kwargs={"full_action_space": True},
+        solved_score=solved_score,
+        min_score=min_score,
+        default_total_timesteps=10_000_000,  # a realistic Atari PPO budget (gated to the GPU desktop)
+        play_step_scale=1,  # real-time arcade play; episodes end on game-over, the speed slider paces it
+        human_playable=True,
+        competitive=False,
+        difficulty=difficulty,
+        hw_requirement="gpu",  # training needs a GPU; the UI gates Run, human play stays available now
+    )
+
+
+# id, display, ALE game, difficulty, min_score, solved_score, description EN, description CZ
+_ATARI_GAMES: list[
+    tuple[str, str, str, Literal["beginner", "intermediate", "advanced"], float, float, str, str]
+] = [
+    ("pong", "Pong", "Pong", "beginner", -21.0, 21.0,
+     "The original video game: bounce the ball past the built-in opponent's paddle while defending "
+     "your own side. First to 21 wins; your score is your points minus the opponent's (−21 to +21).",
+     "Úplně první videohra: odrážejte míček za pálku vestavěného soupeře a zároveň braňte svou stranu. "
+     "Kdo první nasbírá 21 bodů, vyhrává; skóre je vaše body mínus soupeřovy (−21 až +21)."),
+    ("breakout", "Breakout", "Breakout", "beginner", 0.0, 120.0,
+     "Bounce a ball off a paddle to smash every brick in the wall above. Don't let the ball fall past "
+     "the paddle — each brick destroyed scores points, and clearing the wall is the goal.",
+     "Odrážejte míček pálkou a rozbijte všechny cihly ve zdi nahoře. Nenechte míček propadnout pod "
+     "pálku — každá rozbitá cihla přidá body a cílem je smést celou zeď."),
+    ("spaceinvaders", "Space Invaders", "SpaceInvaders", "beginner", 0.0, 2000.0,
+     "Move your laser cannon left and right and shoot down descending rows of alien invaders before "
+     "they reach the ground, using the shields for cover. Each alien hit scores points.",
+     "Posouvejte laserové dělo doleva a doprava a sestřelujte klesající řady mimozemšťanů dřív, než "
+     "dosednou na zem; kryjte se za štíty. Každý zásah přidá body."),
+    ("mspacman", "Ms. Pac-Man", "MsPacman", "beginner", 0.0, 6000.0,
+     "Steer Ms. Pac-Man around the maze eating all the dots while dodging four ghosts. Grab a power "
+     "pellet to turn the tables and eat the ghosts for bonus points.",
+     "Veďte Ms. Pac-Man bludištěm, snězte všechny tečky a vyhýbejte se čtyřem duchům. Sebráním "
+     "speciální kuličky se karta obrátí a duchy můžete za body sníst."),
+    ("qbert", "Q*bert", "Qbert", "intermediate", 0.0, 15000.0,
+     "Hop Q*bert across a pyramid of cubes to change every cube to the target colour, while avoiding "
+     "enemies that chase you off the edge. Change all cubes to clear the stage.",
+     "Skákejte s Q*bertem po pyramidě kostek a přebarvěte každou na cílovou barvu; vyhýbejte se "
+     "nepřátelům, kteří vás shazují z okraje. Přebarvením všech kostek postoupíte dál."),
+    ("seaquest", "Seaquest", "Seaquest", "intermediate", 0.0, 20000.0,
+     "Pilot a submarine to shoot enemy sharks and subs while rescuing divers. Watch your oxygen — "
+     "surface in time or you drown. Rescues and kills both score points.",
+     "Řiďte ponorku, střílejte nepřátelské žraloky a ponorky a zachraňujte potápěče. Hlídejte kyslík — "
+     "vynořte se včas, jinak se utopíte. Záchrany i zásahy přidávají body."),
+    ("enduro", "Enduro", "Enduro", "intermediate", 0.0, 700.0,
+     "An endurance race: pass as many cars as you can over day-and-night cycles without crashing. Your "
+     "score is the number of cars you overtake — keep the throttle down and weave through traffic.",
+     "Vytrvalostní závod: předjeďte co nejvíc aut během střídání dne a noci, aniž byste havarovali. "
+     "Skóre je počet předjetých aut — držte plyn a kličkujte mezi vozy."),
+    ("beamrider", "Beam Rider", "BeamRider", "intermediate", 0.0, 8000.0,
+     "Defend a grid of laser beams: shoot waves of enemy ships sweeping across the lanes and dodge "
+     "their fire. Survive each sector's wave to advance. Every enemy destroyed scores points.",
+     "Braňte mřížku laserových paprsků: střílejte vlny nepřátelských lodí klouzajících po drahách a "
+     "uhýbejte jejich palbě. Přežijte vlnu v každém sektoru. Každý zničený nepřítel přidá body."),
+    ("asteroids", "Asteroids", "Asteroids", "intermediate", 0.0, 10000.0,
+     "Fly a ship in open space, blasting drifting asteroids into smaller pieces and dodging the "
+     "fragments and flying saucers. Clear the field to advance; each rock destroyed scores points.",
+     "Pilotujte loď v otevřeném prostoru, rozstřelujte plující asteroidy na menší kusy a uhýbejte "
+     "úlomkům a létajícím talířům. Vyčištěním pole postoupíte; každý kámen přidá body."),
+    ("asterix", "Asterix", "Asterix", "beginner", 0.0, 8000.0,
+     "Collect helpful objects while dodging the deadly ones that move across the rows. Grab the good "
+     "items for points and avoid being hit — survive and collect as much as you can.",
+     "Sbírejte užitečné předměty a vyhýbejte se smrtícím, které se pohybují po řadách. Dobré předměty "
+     "dávají body; nenechte se zasáhnout — přežijte a posbírejte co nejvíc."),
+    ("alien", "Alien", "Alien", "intermediate", 0.0, 7000.0,
+     "Trapped in a spaceship's corridors, destroy the alien eggs while three aliens hunt you. Use your "
+     "flamethrower and a power-up to fight back. Destroying eggs and aliens scores points.",
+     "Uvězněni v chodbách kosmické lodi ničte vejce vetřelců, zatímco vás pronásledují tři vetřelci. "
+     "Použijte plamenomet a posilu k obraně. Ničení vajec a vetřelců přidává body."),
+    ("amidar", "Amidar", "Amidar", "intermediate", 0.0, 1700.0,
+     "Move along a grid painting its lines while avoiding roaming enemies. Outline a box to fill it for "
+     "points; clear the board without being caught.",
+     "Pohybujte se po mřížce a vybarvujte její čáry, zatímco se vyhýbáte bloudícím nepřátelům. Obkroužení "
+     "obdélníku ho vyplní za body; vyčistěte plochu, aniž vás chytí."),
+    ("assault", "Assault", "Assault", "beginner", 0.0, 2500.0,
+     "Defend against a mothership raining down enemy ships from above. Move your cannon and shoot them "
+     "before they overwhelm you, watching your gun's heat. Every enemy destroyed scores points.",
+     "Braňte se mateřské lodi, která shora chrlí nepřátelské stíhače. Posouvejte dělo a sestřelujte je, "
+     "než vás zahltí; hlídejte přehřátí zbraně. Každý zničený nepřítel přidá body."),
+    ("atlantis", "Atlantis", "Atlantis", "beginner", 0.0, 30000.0,
+     "Defend the underwater city of Atlantis with three gun emplacements, shooting down waves of enemy "
+     "ships before they destroy your installations. Every ship shot down scores points.",
+     "Braňte podmořské město Atlantis třemi dělostřeleckými pozicemi a sestřelujte vlny nepřátelských "
+     "lodí dřív, než zničí vaše stavby. Každá sestřelená loď přidá body."),
+    ("bankheist", "Bank Heist", "BankHeist", "intermediate", 0.0, 1000.0,
+     "Drive through a maze of city streets robbing banks while dodging police cars. Drop dynamite to "
+     "block pursuers and manage your fuel. Each bank robbed scores points.",
+     "Projíždějte bludištěm městských ulic, vykrádejte banky a unikejte policejním autům. Dynamitem "
+     "blokujte pronásledovatele a hlídejte palivo. Každá vyloupená banka přidá body."),
+    ("battlezone", "Battle Zone", "BattleZone", "intermediate", 0.0, 35000.0,
+     "A first-person tank battle on a wireframe battlefield: hunt and destroy enemy tanks and missiles "
+     "from your cockpit while avoiding their fire. Each enemy destroyed scores points.",
+     "Tanková bitva z pohledu první osoby na drátěném bojišti: z kokpitu hledejte a ničte nepřátelské "
+     "tanky a rakety a vyhýbejte se jejich palbě. Každý zničený nepřítel přidá body."),
+    ("berzerk", "Berzerk", "Berzerk", "intermediate", 0.0, 1600.0,
+     "Escape a maze of rooms full of robots, shooting them down while avoiding the walls (which are "
+     "deadly) and the relentless Evil Otto. Each robot destroyed scores points.",
+     "Unikejte bludištěm místností plných robotů, sestřelujte je a vyhýbejte se stěnám (jsou smrtící) i "
+     "neúnavnému Evil Ottovi. Každý zničený robot přidá body."),
+    ("bowling", "Bowling", "Bowling", "beginner", 0.0, 160.0,
+     "Ten-pin bowling: time your throw and curve the ball to knock down as many pins as possible across "
+     "ten frames. A perfect game is 300; a good score is around 160.",
+     "Bowling: načasujte hod a zatočte míčem, abyste v deseti kolech srazili co nejvíc kuželek. Dokonalá "
+     "hra je 300; dobré skóre je kolem 160."),
+    ("boxing", "Boxing", "Boxing", "beginner", -100.0, 100.0,
+     "A top-down boxing match: land more punches than the opponent before time runs out. Your score is "
+     "your hits minus theirs (−100 to +100); a knockout ends it early.",
+     "Box z ptačí perspektivy: zasaďte víc úderů než soupeř, než vyprší čas. Skóre je vaše zásahy mínus "
+     "soupeřovy (−100 až +100); knokaut zápas ukončí dřív."),
+    ("carnival", "Carnival", "Carnival", "beginner", 0.0, 5000.0,
+     "A shooting gallery: blast the targets, ducks and bonus items moving across the rows, but don't run "
+     "out of bullets. Each target hit scores points.",
+     "Pouťová střelnice: sestřelujte terče, kachny a bonusové předměty pohybující se po řadách, ale "
+     "nevyčerpejte náboje. Každý zásah přidá body."),
+    ("centipede", "Centipede", "Centipede", "intermediate", 0.0, 12000.0,
+     "Blast a centipede winding down through a field of mushrooms before it reaches you, while fending "
+     "off spiders and fleas. Every segment and creature shot scores points.",
+     "Sestřelte stonožku klikatící se dolů polem hub dřív, než vás dostihne, a odrážejte pavouky a "
+     "blechy. Každý zasažený článek i tvor přidá body."),
+    ("choppercommand", "Chopper Command", "ChopperCommand", "intermediate", 0.0, 10000.0,
+     "Fly a helicopter to protect a convoy of trucks, shooting down enemy planes and choppers in the "
+     "desert. Each enemy aircraft destroyed scores points.",
+     "Pilotujte vrtulník chránící konvoj náklaďáků a sestřelujte nepřátelská letadla a vrtulníky v "
+     "poušti. Každý zničený stroj přidá body."),
+    ("crazyclimber", "Crazy Climber", "CrazyClimber", "intermediate", 0.0, 35000.0,
+     "Climb a skyscraper hand over hand, opening and closing windows, while dodging falling objects and "
+     "obstacles. The higher you climb, the more points you score.",
+     "Šplhejte po mrakodrapu rukama nahoru, otvírejte a zavírejte okna a uhýbejte padajícím předmětům a "
+     "překážkám. Čím výš vyšplháte, tím víc bodů."),
+    ("demonattack", "Demon Attack", "DemonAttack", "beginner", 0.0, 4000.0,
+     "Defend an icy planet from waves of diving demons that split and swoop. Move your cannon and shoot "
+     "them before they reach you. Each demon destroyed scores points.",
+     "Braňte ledovou planetu před vlnami střemhlav útočících démonů, kteří se dělí a klesají. Posouvejte "
+     "dělo a sestřelujte je, než vás dostihnou. Každý démon přidá body."),
+    ("doubledunk", "Double Dunk", "DoubleDunk", "intermediate", -24.0, 24.0,
+     "Two-on-two basketball: pick a play, then pass, shoot and dunk to outscore the built-in opponent. "
+     "Your score is your baskets minus theirs.",
+     "Basketbal dva na dva: zvolte rozehru a pak přihrávejte, střílejte a smečujte, abyste přestříleli "
+     "vestavěného soupeře. Skóre je vaše koše mínus soupeřovy."),
+    ("elevatoraction", "Elevator Action", "ElevatorAction", "intermediate", 0.0, 10000.0,
+     "A secret agent rides elevators down a building, shooting enemy agents and collecting documents "
+     "behind red doors before escaping at the bottom. Kills and documents score points.",
+     "Tajný agent sjíždí výtahy dolů budovou, střílí nepřátelské agenty a sbírá dokumenty za červenými "
+     "dveřmi, než dole unikne. Zásahy i dokumenty přidávají body."),
+    ("fishingderby", "Fishing Derby", "FishingDerby", "intermediate", -99.0, 50.0,
+     "A fishing contest against the built-in angler: drop your line, hook fish and reel them in before "
+     "your rival — and watch for the shark. Your score is your catch minus theirs.",
+     "Rybářský závod proti vestavěnému rybáři: spusťte vlasec, zasekněte ryby a vytáhněte je dřív než "
+     "soupeř — a pozor na žraloka. Skóre je váš úlovek mínus soupeřův."),
+    ("freeway", "Freeway", "Freeway", "beginner", 0.0, 32.0,
+     "Guide a chicken across a busy ten-lane highway without being hit by traffic. Each successful "
+     "crossing scores a point; reach the top as many times as you can before time runs out.",
+     "Proveďte slepici přes rušnou desetiproudou dálnici, aniž ji srazí auto. Každé úspěšné přejití dá "
+     "bod; dostaňte se nahoru co nejvíckrát, než vyprší čas."),
+    ("frostbite", "Frostbite", "Frostbite", "intermediate", 0.0, 4500.0,
+     "Hop across drifting ice floes to build an igloo, collecting fish and avoiding the freezing water, "
+     "birds and bears. Then enter the igloo to clear the level. Each safe jump and fish scores points.",
+     "Skákejte po plovoucích krách a stavte iglú; sbírejte ryby a vyhýbejte se mrazivé vodě, ptákům a "
+     "medvědům. Vstupem do iglú postoupíte. Každý bezpečný skok a ryba přidá body."),
+    ("gopher", "Gopher", "Gopher", "beginner", 0.0, 8000.0,
+     "Protect three carrots from a burrowing gopher: whack it with your shovel as it pops out of holes "
+     "and fill the tunnels before it steals the crop. Each hit scores points.",
+     "Chraňte tři mrkve před hrabajícím se sysel: praštěte ho lopatou, jakmile vykoukne z díry, a "
+     "zasypávejte tunely dřív, než úrodu ukradne. Každý zásah přidá body."),
+    ("gravitar", "Gravitar", "Gravitar", "advanced", 0.0, 3000.0,
+     "Pilot a ship against real gravity, flying into planets to shoot bunkers and tractor-beam fuel "
+     "while fighting inertia. A hard one — careful thrust is everything. Destroying targets scores points.",
+     "Pilotujte loď proti skutečné gravitaci, nalétávejte na planety, ničte bunkry a vlečným paprskem "
+     "sbírejte palivo, zatímco bojujete se setrvačností. Těžká hra — vše je o jemném tahu. Cíle dávají body."),
+    ("hero", "H.E.R.O.", "Hero", "intermediate", 0.0, 25000.0,
+     "Fly into collapsing mine shafts with a backpack rotor to rescue trapped miners, blasting walls and "
+     "enemies with your laser and dynamite while managing power. Rescues and progress score points.",
+     "Vlétněte se zádovým rotorem do hroutících se důlních šachet a zachraňujte uvězněné horníky; laserem "
+     "a dynamitem ničte stěny a nepřátele a hlídejte energii. Záchrany a postup přidávají body."),
+    ("icehockey", "Ice Hockey", "IceHockey", "intermediate", -20.0, 20.0,
+     "Two-on-two ice hockey: pass, check and shoot to score more goals than the built-in team. Your "
+     "score is your goals minus theirs.",
+     "Lední hokej dva na dva: přihrávejte, napadejte a střílejte, abyste dali víc gólů než vestavěný "
+     "tým. Skóre je vaše góly mínus soupeřovy."),
+    ("jamesbond", "James Bond 007", "Jamesbond", "intermediate", 0.0, 1000.0,
+     "Drive a multi-purpose vehicle through scrolling missions, shooting enemies and obstacles, jumping "
+     "gaps and dodging fire across famous Bond scenes. Targets destroyed score points.",
+     "Řiďte víceúčelové vozidlo posouvajícími se misemi, střílejte nepřátele a překážky, přeskakujte "
+     "propasti a uhýbejte palbě ve slavných bondovských scénách. Zničené cíle dávají body."),
+    ("kangaroo", "Kangaroo", "Kangaroo", "intermediate", 0.0, 8000.0,
+     "A mother kangaroo climbs ladders and platforms to rescue her joey, punching monkeys and dodging "
+     "thrown apples on the way up. Hits and fruit collected score points.",
+     "Maminka klokanice šplhá po žebřících a plošinách za svým mládětem, cestou boxuje opice a uhýbá "
+     "házeným jablkům. Zásahy a sebrané ovoce dávají body."),
+    ("krull", "Krull", "Krull", "intermediate", 0.0, 8000.0,
+     "Based on the film: cross several action screens — fighting through a web, hurling the Glaive and "
+     "battling the Beast's slayers — to win. Defeating enemies scores points.",
+     "Podle filmu: projděte několik akčních obrazovek — probojujte se pavučinou, vrhejte Glaive a "
+     "bojujte s Bestiinými vrahy — abyste zvítězili. Porážení nepřátel dává body."),
+    ("kungfumaster", "Kung-Fu Master", "KungFuMaster", "intermediate", 0.0, 23000.0,
+     "Fight your way up a multi-floor temple with punches and kicks, beating waves of henchmen and a "
+     "boss on each floor to rescue the captive. Each enemy defeated scores points.",
+     "Probojujte se údery a kopy vzhůru vícepatrovým chrámem, na každém patře poražte vlny poskoků a "
+     "bosse a zachraňte zajatkyni. Každý poražený nepřítel přidá body."),
+    ("montezumarevenge", "Montezuma's Revenge", "MontezumaRevenge", "advanced", 0.0, 4000.0,
+     "A notoriously hard exploration platformer: navigate a pyramid of rooms collecting keys to open "
+     "doors, dodging skulls, snakes and traps. Treasures and progress score points.",
+     "Pověstně těžká průzkumná plošinovka: procházejte pyramidou místností, sbírejte klíče k otevření "
+     "dveří a vyhýbejte se lebkám, hadům a pastem. Poklady a postup přidávají body."),
+    ("namethisgame", "Name This Game", "NameThisGame", "intermediate", 0.0, 8000.0,
+     "An underwater shooter: defend your air hose from a giant octopus and a shark while collecting "
+     "oxygen, blasting threats with your diver. Each hit scores points.",
+     "Podmořská střílečka: braňte svou vzduchovou hadici před obří chobotnicí a žralokem a sbírejte "
+     "kyslík; potápěčem ničte hrozby. Každý zásah přidá body."),
+    ("phoenix", "Phoenix", "Phoenix", "intermediate", 0.0, 8000.0,
+     "A vertical shooter through waves of alien birds up to a mothership boss you must crack open with a "
+     "shield to beat. Move, shoot and shield. Each enemy destroyed scores points.",
+     "Vertikální střílečka skrz vlny mimozemských ptáků až k mateřské lodi, kterou musíte přes její štít "
+     "rozbít. Pohybujte se, střílejte a kryjte se. Každý zničený nepřítel přidá body."),
+    ("pitfall", "Pitfall!", "Pitfall", "advanced", -300.0, 5000.0,
+     "Guide Pitfall Harry through a jungle, swinging on vines and leaping over logs, crocodiles and tar "
+     "pits to collect treasure against the clock. Treasures score points; hazards cost them.",
+     "Veďte Pitfall Harryho džunglí, houpejte se na lianách a přeskakujte klády, krokodýly a dehtové "
+     "jámy, abyste o závod s časem nasbírali poklady. Poklady dávají body, nástrahy je berou."),
+    ("pooyan", "Pooyan", "Pooyan", "beginner", 0.0, 5000.0,
+     "A mother pig rides a basket up and down a cliff, shooting arrows at wolves floating down on "
+     "balloons before they reach the ground. Each wolf popped scores points.",
+     "Maminka prasnice jezdí v koši nahoru a dolů po útesu a střílí šípy po vlcích snášejících se na "
+     "balonech dřív, než dosednou. Každý sestřelený vlk přidá body."),
+    ("privateeye", "Private Eye", "PrivateEye", "advanced", 0.0, 70000.0,
+     "Drive a detective's car across the city collecting clues and stolen items to solve a case and "
+     "catch the culprit before time runs out. Clues and arrests score points.",
+     "Projíždějte detektivovým autem městem, sbírejte stopy a ukradené předměty, vyřešte případ a "
+     "dopadněte pachatele dřív, než vyprší čas. Stopy a zatčení dávají body."),
+    ("riverraid", "River Raid", "Riverraid", "intermediate", 0.0, 14000.0,
+     "Fly a jet up a winding river, shooting ships, helicopters and bridges while refuelling over fuel "
+     "depots — run dry and you crash. Each target destroyed scores points.",
+     "Leťte tryskáčem proti proudu klikaté řeky, ničte lodě, vrtulníky a mosty a doplňujte palivo nad "
+     "sklady — bez paliva havarujete. Každý zničený cíl přidá body."),
+    ("roadrunner", "Road Runner", "RoadRunner", "beginner", 0.0, 30000.0,
+     "Run as the Road Runner down the highway eating birdseed and outsmarting Wile E. Coyote, dodging "
+     "trucks and traps. Seed eaten and the Coyote foiled score points.",
+     "Běžte jako Uličník po dálnici, zobejte zrní a přelstěte kojota Wila E.; uhýbejte náklaďákům a "
+     "pastem. Snězené zrní a přechytračený kojot dávají body."),
+    ("robotank", "Robotank", "Robotank", "intermediate", 0.0, 50.0,
+     "Command a tank in first-person night-and-fog combat, hunting enemy tanks squadron by squadron "
+     "while damage knocks out your sensors. Your score is enemy tanks destroyed.",
+     "Velte tanku v boji z první osoby za noci a mlhy a likvidujte nepřátelské tanky letku po letce, "
+     "zatímco poškození vyřazuje vaše senzory. Skóre je počet zničených tanků."),
+    ("skiing", "Skiing", "Skiing", "advanced", -30000.0, -5000.0,
+     "Race downhill through the slalom gates as fast as you can. Your score is your time (lower is "
+     "better, shown here as a large negative number) — missing gates adds a penalty.",
+     "Sjíždějte co nejrychleji slalomovými brankami. Skóre je váš čas (čím nižší, tím lepší, zde jako "
+     "velké záporné číslo) — vynechané branky přidávají penalizaci."),
+    ("solaris", "Solaris", "Solaris", "advanced", 0.0, 12000.0,
+     "A deep-space combat-and-navigation epic: jump between quadrants on a galactic map, dogfight enemy "
+     "fleets and defend planets to find Solaris. Battles and rescues score points.",
+     "Vesmírná epopej o boji a navigaci: skákejte mezi kvadranty na galaktické mapě, svádějte souboje s "
+     "nepřátelskými flotilami a braňte planety, abyste našli Solaris. Boje a záchrany dávají body."),
+    ("stargunner", "Star Gunner", "StarGunner", "intermediate", 0.0, 12000.0,
+     "A fast side-scrolling shooter: skim over a planet's surface blasting waves of enemy craft and "
+     "dodging their fire. Each enemy destroyed scores points.",
+     "Rychlá horizontální střílečka: klouzejte nad povrchem planety, ničte vlny nepřátelských strojů a "
+     "uhýbejte jejich palbě. Každý zničený nepřítel přidá body."),
+    ("tennis", "Tennis", "Tennis", "intermediate", -24.0, 24.0,
+     "A game of tennis against the built-in player: position yourself and time your swing to win rallies "
+     "and games. Your score is your games won minus your opponent's.",
+     "Tenis proti vestavěnému hráči: zaujměte pozici a načasujte úder, abyste vyhrávali výměny a hry. "
+     "Skóre je vaše vyhrané hry mínus soupeřovy."),
+    ("timepilot", "Time Pilot", "TimePilot", "intermediate", 0.0, 10000.0,
+     "Dogfight through eras of history, shooting down enemy aircraft from biplanes to spaceships in an "
+     "open, free-scrolling sky and beating each era's boss. Each kill scores points.",
+     "Svádějte letecké souboje napříč epochami dějin, sestřelujte stroje od dvojplošníků po kosmické "
+     "lodě na volně se posouvající obloze a porazte bosse každé éry. Každý sestřel přidá body."),
+    ("tutankham", "Tutankham", "Tutankham", "intermediate", 0.0, 250.0,
+     "Explore an Egyptian tomb maze as an archaeologist, shooting creatures, grabbing treasure and "
+     "finding keys to unlock the exit. Treasure and kills score points.",
+     "Prozkoumávejte jako archeolog bludiště egyptské hrobky, střílejte tvory, sbírejte poklady a "
+     "hledejte klíče k odemčení východu. Poklady a zásahy dávají body."),
+    ("upndown", "Up'n Down", "UpNDown", "intermediate", 0.0, 15000.0,
+     "Drive a dune buggy along looping tracks, jumping over and onto other cars and collecting flags. "
+     "Land on rivals to knock them out. Flags and takedowns score points.",
+     "Řiďte buginu po klikatých tratích, přeskakujte ostatní vozy i na ně doskakujte a sbírejte vlajky. "
+     "Dopadem na soupeře je vyřadíte. Vlajky a vyřazení dávají body."),
+    ("venture", "Venture", "Venture", "advanced", 0.0, 1500.0,
+     "Explore a dungeon as Winky the smiley adventurer, entering rooms to grab treasure and shoot "
+     "monsters while hall-roaming Hallmonsters chase you. Treasure and kills score points.",
+     "Prozkoumávejte kobku jako usměvavý dobrodruh Winky, vcházejte do místností pro poklady a střílejte "
+     "příšery, zatímco vás v chodbách honí Hallmonsteři. Poklady a zásahy dávají body."),
+    ("videopinball", "Video Pinball", "VideoPinball", "beginner", 0.0, 40000.0,
+     "A classic pinball table: work the flippers to keep the ball alive, hit the bumpers and targets for "
+     "points and rack up a high score without draining.",
+     "Klasický pinball: ovládejte pálky, udržte míček ve hře, trefujte odrazníky a terče pro body a "
+     "nasbírejte co nejvyšší skóre, aniž míček propadne."),
+    ("wizardofwor", "Wizard of Wor", "WizardOfWor", "intermediate", 0.0, 8000.0,
+     "Battle through dungeon mazes shooting monsters that grow more aggressive and turn invisible, "
+     "racing to clear each chamber. Each monster destroyed scores points.",
+     "Probojujte se bludišti kobek a střílejte příšery, které jsou stále agresivnější a stávají se "
+     "neviditelnými; vyčistěte co nejrychleji každou komnatu. Každá zničená příšera přidá body."),
+    ("yarsrevenge", "Yars' Revenge", "YarsRevenge", "intermediate", 0.0, 25000.0,
+     "As an insect-like Yar, nibble or shoot through a barrier to reach the Qotile, then fire the Zorlon "
+     "Cannon to destroy it — all while dodging its destroyer missile. Progress scores points.",
+     "Jako hmyzí Yar prokousejte nebo prostřílejte bariéru k Qotile a pak ho zničte dělem Zorlon — to "
+     "vše za uhýbání jeho ničivé střele. Postup přidává body."),
+    ("zaxxon", "Zaxxon", "Zaxxon", "intermediate", 0.0, 10000.0,
+     "Fly an isometric space fortress run, shooting turrets, fuel tanks and enemy fighters while "
+     "judging your altitude over the walls. Each target destroyed scores points.",
+     "Proleťte v izometrickém pohledu vesmírnou pevností, ničte věže, palivové nádrže a nepřátelské "
+     "stíhače a odhadujte výšku nad zdmi. Každý zničený cíl přidá body."),
+    ("frogger", "Frogger", "Frogger", "beginner", 0.0, 1000.0,
+     "Hop a frog across a busy road and then a river of logs and turtles to reach the safe homes at the "
+     "top, without being run over or falling in. Each frog home reached scores points.",
+     "Skákejte se žábou přes rušnou silnici a pak přes řeku klád a želv k bezpečným domkům nahoře, aniž "
+     "vás přejede auto nebo spadnete do vody. Každý dosažený domek přidá body."),
+    ("galaxian", "Galaxian", "Galaxian", "beginner", 0.0, 6000.0,
+     "Shoot a formation of alien ships that peel off to dive-bomb you. Move and fire, picking them off "
+     "before they hit you. Each alien destroyed scores points (divers are worth more).",
+     "Sestřelujte formaci mimozemských lodí, které se odpojují a střemhlav na vás útočí. Pohybujte se a "
+     "střílejte a sundávejte je dřív, než vás zasáhnou. Každý nepřítel přidá body (útočníci víc)."),
+    ("defender", "Defender", "Defender", "intermediate", 0.0, 20000.0,
+     "Fly a ship over a scrolling planet, shooting alien landers before they abduct the humans below and "
+     "mutate — use the radar and smart bombs. Kills and rescues score points.",
+     "Leťte lodí nad posouvající se planetou a střílejte mimozemské únosce dřív, než unesou lidi dole a "
+     "zmutují — využijte radar a chytré bomby. Zásahy a záchrany dávají body."),
+    ("kaboom", "Kaboom!", "Kaboom", "beginner", 0.0, 1000.0,
+     "Catch the bombs dropped by the Mad Bomber with a stack of buckets, sliding left and right. The "
+     "bombs fall ever faster — miss one and a bucket blows up. Each bomb caught scores points.",
+     "Chytejte bomby, které shazuje Šílený bombarďák, hromádkou kbelíků a klouzejte doleva a doprava. "
+     "Bomby padají stále rychleji — když jednu minete, kbelík vybuchne. Každá chycená bomba přidá body."),
+    ("tetris", "Tetris", "Tetris", "beginner", 0.0, 200.0,
+     "The falling-blocks classic: rotate and slide tetrominoes to complete full horizontal lines, which "
+     "clear for points. The stack rises as you play — don't let it reach the top.",
+     "Klasika s padajícími kostkami: otáčejte a posouvejte tetromina tak, abyste doplnili celé vodorovné "
+     "řady, které za body zmizí. Hromada roste — nenechte ji dosáhnout vrcholu."),
+    ("pacman", "Pac-Man", "Pacman", "beginner", 0.0, 6000.0,
+     "The arcade original: eat every dot in the maze while four ghosts chase you, and grab a power pellet "
+     "to turn the tables and eat them for bonus points.",
+     "Arkádový originál: snězte v bludišti všechny tečky, zatímco vás honí čtyři duchové, a sebráním "
+     "speciální kuličky se karta obrátí — duchy můžete za body sníst."),
+]
+
+for _row in _ATARI_GAMES:
+    register(_atari_spec(*_row))

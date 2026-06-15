@@ -145,6 +145,7 @@ interface AppState {
 
   // ─ ephemeral (not persisted) ───────────────────────────────
   backendStatus:   BackendStatus
+  gpuAvailable:    boolean     // G4a: CUDA present? gates GPU-only training (Atari) in the UI
   envs:            EnvSpec[]
   trainState:      TrainState
   metricsHistory:  TrainingMetrics[]
@@ -173,6 +174,7 @@ interface AppState {
   setLocale:          (l: Locale)                       => void
   setTheme:           (t: Theme)                        => void
   setBackendStatus:   (s: BackendStatus)                => void
+  setGpuAvailable:    (v: boolean)                      => void
   setEnvs:            (envs: EnvSpec[])                 => void
   setSelectedEnvId:   (id: string | null)               => void
   setAlgo:            (a: Algo)                          => void
@@ -233,6 +235,7 @@ export const useAppStore = create<AppState>()(
       playerName:      '',
 
       backendStatus:   'connecting',
+      gpuAvailable:    false,
       envs:            [],
       trainState:      'idle',
       metricsHistory:  [],
@@ -259,6 +262,7 @@ export const useAppStore = create<AppState>()(
       setLocale:         (locale)         => set({ locale }),
       setTheme:          (theme)          => set({ theme }),
       setBackendStatus:  (backendStatus)  => set({ backendStatus }),
+      setGpuAvailable:   (gpuAvailable)   => set({ gpuAvailable }),
       setEnvs:           (envs)           => set({ envs }),
       // Switching game also snaps the sidebar params + step budget to the new env's ★ recommended
       // values (CartPole and LunarLander want very different settings). The env selector is disabled

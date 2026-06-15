@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAppStore } from '../store/useAppStore'
-import { playGuideFor } from '../content/playGuides'
+import { atariPlayGuide, playGuideFor } from '../content/playGuides'
 
 // "How to play" affordance + modal (E2). Same modal chrome as ParamInfo, but the body is the
 // per-env play guide (goal / controls / tips) from content/playGuides.ts. Bilingual + themed.
@@ -47,8 +47,10 @@ function InstructionsModal({ onClose }: { onClose: () => void }) {
   const envs          = useAppStore((s) => s.envs)
   const closeRef      = useRef<HTMLButtonElement>(null)
 
-  const guide   = playGuideFor(selectedEnvId)
-  const envName = envs.find((e) => e.id === selectedEnvId)?.display_name[locale] ?? ''
+  const env     = envs.find((e) => e.id === selectedEnvId)
+  // Atari shares one guide across the family, with the game's own description as the goal (G4a).
+  const guide   = env?.family === 'atari' ? atariPlayGuide(env.description) : playGuideFor(selectedEnvId)
+  const envName = env?.display_name[locale] ?? ''
 
   useEffect(() => {
     closeRef.current?.focus()

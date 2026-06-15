@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAppStore } from '../store/useAppStore'
-import { sendPlayAction, setFrameHandler, setPlayFrameHandler, setPreview } from '../api/client'
+import { sendPlayAction, setFrameHandler, setPlayFrameHandler, setPreview, startPlay, stopPlay } from '../api/client'
 import type { GridLayout, PlayFrame, PreviewFrame } from '../api/types'
 import { keymapFor } from '../content/playKeymaps'
 import { DEFAULT_AGENT, DEFAULT_GRIDS, isGridEnv } from '../content/gridMaps'
@@ -38,6 +38,18 @@ const EyeOff = (
       stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
   </svg>
 )
+const ExpandGlyph = (
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden>
+    <path d="M8 3H5a2 2 0 00-2 2v3M16 3h3a2 2 0 012 2v3M8 21H5a2 2 0 01-2-2v-3M16 21h3a2 2 0 002-2v-3"
+      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+)
+const CompressGlyph = (
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden>
+    <path d="M3 8h3a2 2 0 002-2V3M21 8h-3a2 2 0 01-2-2V3M3 16h3a2 2 0 012 2v3M21 16h-3a2 2 0 00-2 2v3"
+      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+)
 
 export default function EnvPreview() {
   const { t } = useTranslation()
@@ -53,10 +65,15 @@ export default function EnvPreview() {
   const locale        = useAppStore((s) => s.locale)
   const playState     = useAppStore((s) => s.playState)
   const playMode      = useAppStore((s) => s.playMode)
+  const playSpeed     = useAppStore((s) => s.playSpeed)
+  const setPlayMode   = useAppStore((s) => s.setPlayMode)
+  const applyPlayStatus = useAppStore((s) => s.applyPlayStatus)
 
-  const envName = envs.find((e) => e.id === selectedEnvId)?.display_name[locale] ?? t('envpreview.title')
+  const selectedEnv = envs.find((e) => e.id === selectedEnvId)
+  const envName = selectedEnv?.display_name[locale] ?? t('envpreview.title')
 
   const canvasRef     = useRef<HTMLCanvasElement | null>(null)
+  const stageRef      = useRef<HTMLDivElement | null>(null)  // the stage box — target for fullscreen
   const cartGroupRef  = useRef<SVGGElement | null>(null)   // CartPole: horizontal cart travel
   const poleGroupRef  = useRef<SVGGElement | null>(null)   // CartPole: pole angle
   const carRef        = useRef<SVGGElement | null>(null)   // MountainCar: car along the hill
@@ -73,6 +90,8 @@ export default function EnvPreview() {
   // True once a frame has actually arrived this session — lets a finished session linger, but
   // falls back to the idle (centred) cart after a reload that reconciled a finished session.
   const [hasFrame, setHasFrame] = useState(false)
+  // Fullscreen state of the stage box (Esc exits natively); tracked so the toggle's icon flips.
+  const [isFullscreen, setIsFullscreen] = useState(false)
 
   const runLive      = trainState === 'running' || trainState === 'paused' || trainState === 'stopping'
   const playVisible  = playState !== 'idle'
@@ -88,6 +107,10 @@ export default function EnvPreview() {
     : isGridEnv(selectedEnvId) ? 'grid'
     : null
   const clientRender = clientKind !== null
+  // Atari (image obs → server JPEG) gets a one-time, game-agnostic retro/CRT skin (scanlines + glow +
+  // bezel) so all ~60 games read as deliberately retro instead of "tiny ugly pixels". A true vector
+  // re-skin would need per-game object extraction, so this is the family-wide alternative (G4a follow-up).
+  const retroSkin = !clientRender && selectedEnv?.family === 'atari'
   // Toy Text grids re-render declaratively (low-frequency moves), unlike the imperative physics
   // stages: the latest streamed board + agent position live in React state here, tagged with the env
   // it belongs to so a stale board never flashes after an env switch.
@@ -239,7 +262,7 @@ export default function EnvPreview() {
   // with no idle (CartPole), keep the last action.
   useEffect(() => {
     if (!(playState === 'playing' && playMode === 'human')) return
-    const keymap = keymapFor(selectedEnvId)
+    const keymap = keymapFor(selectedEnvId, envs.find((e) => e.id === selectedEnvId)?.family)
     const lookup = new Map<string, number>()
     for (const b of keymap.bindings) for (const k of b.keys) lookup.set(k, b.action)
     const isFormField = (e: KeyboardEvent) => {
@@ -308,7 +331,38 @@ export default function EnvPreview() {
       window.removeEventListener('keydown', onDown)
       window.removeEventListener('keyup', onUp)
     }
-  }, [playState, playMode, selectedEnvId])
+  }, [playState, playMode, selectedEnvId, envs])
+
+  // Fullscreen the stage box on demand; Esc (or the toggle again) exits. Track the actual
+  // fullscreen element so the icon stays correct even when the user exits via Esc.
+  useEffect(() => {
+    const onChange = () => setIsFullscreen(document.fullscreenElement === stageRef.current)
+    document.addEventListener('fullscreenchange', onChange)
+    return () => document.removeEventListener('fullscreenchange', onChange)
+  }, [])
+
+  function toggleFullscreen() {
+    if (document.fullscreenElement) void document.exitFullscreen().catch(() => {})
+    else void stageRef.current?.requestFullscreen().catch(() => {})
+  }
+
+  // Minimal human Play / Stop usable from inside fullscreen, where the PlayControls bar (below the
+  // stage) is hidden — so you can fullscreen first, then start. Mirrors PlayControls.handlePlay('human'):
+  // human play uses a fresh random seed each game and the env's idle action from the keymap.
+  async function startFullscreenPlay() {
+    if (!selectedEnv?.human_playable) return
+    setPlayMode('human')
+    try {
+      applyPlayStatus(await startPlay({
+        env_id: selectedEnv.id, mode: 'human', checkpoint_id: null, seed: null,
+        speed: playSpeed, idle_action: keymapFor(selectedEnv.id, selectedEnv.family).idleAction,
+      }))
+    } catch { /* the PlayControls bar surfaces errors; the overlay stays quiet */ }
+  }
+
+  async function stopFullscreenPlay() {
+    try { applyPlayStatus(await stopPlay()) } catch { /* status reconciles via WS */ }
+  }
 
   function toggleVisual() {
     const next = !visual
@@ -389,8 +443,10 @@ export default function EnvPreview() {
         </div>
       </div>
 
-      {/* Stage: the live SVG cart (CartPole), or a JPEG canvas for image-rendered envs. */}
-      <div style={{
+      {/* Stage: the live SVG cart (CartPole), or a JPEG canvas for image-rendered envs.
+          stageRef is the fullscreen target (Esc exits); it fills the screen with the same flex
+          centring + background, so the game scales up and the skill-meter overlay rides along. */}
+      <div ref={stageRef} className="env-stage" style={{
         position: 'relative',
         flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
         background: 'var(--chart-plot-bg)', overflow: 'hidden', padding: 'var(--space-5)',
@@ -421,18 +477,80 @@ export default function EnvPreview() {
             )}
           </div>
         ) : live ? (
-          <canvas
-            ref={canvasRef}
-            style={{
-              maxWidth: '100%', maxHeight: '100%', objectFit: 'contain',
-              borderRadius: 'var(--radius-md)', boxShadow: 'var(--shadow-md)',
-            }}
-          />
+          // inline-block shrink-wraps the canvas so the CRT scanline overlay (Atari only) covers
+          // exactly the picture, not the letterbox bars around it.
+          <div style={{ position: 'relative', height: '100%', display: 'inline-block' }}>
+            <canvas
+              ref={canvasRef}
+              style={{
+                // Scale the frame UP to fill the stage instead of sitting at its tiny native size
+                // (Atari is 160×210 — unreadably small otherwise). Driving the size by height with
+                // width:auto lets the canvas keep its intrinsic aspect ratio (a plain width/height
+                // 100% collapses to 0 in this centring flex row); maxWidth caps a very wide frame.
+                // `pixelated` upscales the retro pixels crisply rather than blurring them.
+                display: 'block', height: '100%', width: 'auto', maxWidth: '100%',
+                objectFit: 'contain', imageRendering: 'pixelated',
+                borderRadius: 'var(--radius-md)',
+                boxShadow: retroSkin ? '0 0 0 3px var(--surface-3), var(--shadow-md)' : 'var(--shadow-md)',
+              }}
+            />
+            {retroSkin && (
+              // CRT skin: faint scanlines + an inward vignette/glow. pointer-events:none so it never
+              // eats keyboard focus or clicks; opacity kept low so the game stays clearly readable.
+              <div aria-hidden style={{
+                position: 'absolute', inset: 0, pointerEvents: 'none', borderRadius: 'var(--radius-md)',
+                backgroundImage:
+                  'repeating-linear-gradient(to bottom, rgba(0,0,0,0.16) 0px, rgba(0,0,0,0.16) 1px, transparent 1px, transparent 3px)',
+                boxShadow: 'inset 0 0 36px rgba(0,0,0,0.5)',
+                mixBlendMode: 'multiply',
+              }} />
+            )}
+          </div>
         ) : (
           <span style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-sm)', textAlign: 'center', padding: '0 16px' }}>
             {hint}
           </span>
         )}
+        {/* Play / Stop overlay — only in fullscreen, where the PlayControls bar is off-screen. Lets
+            you go fullscreen first, then start, and stop without leaving fullscreen. */}
+        {isFullscreen && selectedEnv?.human_playable && (
+          <button
+            onClick={playState === 'playing' ? stopFullscreenPlay : startFullscreenPlay}
+            style={{
+              position: 'absolute', left: 16, top: '50%', transform: 'translateY(-50%)', zIndex: 3,
+              display: 'inline-flex', alignItems: 'center', gap: 7,
+              height: 'var(--control-md)', padding: '0 16px', borderRadius: 'var(--radius-md)',
+              cursor: 'pointer', fontSize: 'var(--fs-sm)', fontWeight: 'var(--fw-semibold)',
+              border: '1px solid transparent', boxShadow: 'var(--shadow-md)', transition: 'var(--t-colors)',
+              background: playState === 'playing' ? 'var(--danger-surface)' : 'var(--accent)',
+              color: playState === 'playing' ? 'var(--danger)' : 'var(--accent-contrast)',
+            }}
+          >
+            {playState === 'playing'
+              ? <><span aria-hidden>■</span> {t('play.stop')}</>
+              : <><span aria-hidden>▶</span> {t('play.play')}</>}
+          </button>
+        )}
+
+        {/* Fullscreen toggle (top-right) — blow the game up to the whole screen; Esc returns. */}
+        <button
+          onClick={toggleFullscreen}
+          aria-label={isFullscreen ? t('envpreview.fullscreen_exit') : t('envpreview.fullscreen')}
+          title={isFullscreen ? t('envpreview.fullscreen_exit') : t('envpreview.fullscreen')}
+          style={{
+            position: 'absolute', top: 12, right: 12, zIndex: 2,
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+            width: 'var(--control-sm)', height: 'var(--control-sm)', padding: 0, cursor: 'pointer',
+            background: 'var(--surface-3)', border: '1px solid var(--border-default)',
+            borderRadius: 'var(--radius-md)', color: 'var(--text-muted)',
+            boxShadow: 'var(--shadow-sm)', transition: 'var(--t-colors)',
+          }}
+          onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--accent)'; e.currentTarget.style.borderColor = 'var(--accent-border)' }}
+          onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text-muted)'; e.currentTarget.style.borderColor = 'var(--border-default)' }}
+        >
+          {isFullscreen ? CompressGlyph : ExpandGlyph}
+        </button>
+
         {playState === 'playing' && playMode === 'human' && (
           <div style={{
             position: 'absolute', top: 12, left: 12,

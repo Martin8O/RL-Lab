@@ -88,8 +88,8 @@ export default function PlayControls() {
         seed: mode === 'human' ? null : seed,
         speed: playSpeed,
         // Hold the env's "do nothing" until a key is pressed (so MountainCar/Acrobot don't get
-        // shoved by the default action 0). null for CartPole, which has no idle.
-        idle_action: keymapFor(selectedEnvId).idleAction,
+        // shoved by the default action 0). null for CartPole, which has no idle; 0 (NOOP) for Atari.
+        idle_action: keymapFor(selectedEnvId, env?.family).idleAction,
       })
       applyPlayStatus(status)
     } catch (e) {

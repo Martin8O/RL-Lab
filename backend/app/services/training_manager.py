@@ -29,6 +29,7 @@ from app.services.connection_manager import ConnectionManager, manager
 from app.services.highscores import HighScoreStore, highscores, make_meta
 from app.services.preview_streamer import preview_streamer
 from app.services.runs import RunStore, final_score, run_store, should_archive
+from app.services.system_info import gpu_available
 from app.services.train_control import TrainControl
 
 logger = get_logger(__name__)
@@ -109,6 +110,15 @@ class TrainingManager:
         if config.algo not in spec.supported_algos:
             raise InvalidConfigError(
                 f"Environment '{config.env_id}' does not support algo '{config.algo}'"
+            )
+        # GPU-only envs (image obs → CnnPolicy/CUDA, e.g. Atari) can't train without a CUDA device.
+        # Reject the run with a clear message instead of letting the trainer fail deep inside; human
+        # play of these envs needs no GPU and stays available. (gpu_available() is cached; the UI also
+        # disables Run for these, so this is a defensive backstop — see /api/system, G4a.)
+        if spec.hw_requirement == "gpu" and not gpu_available():
+            raise InvalidConfigError(
+                f"Training '{config.env_id}' needs a CUDA GPU, which isn't available on this "
+                f"machine. You can still play it by hand now; GPU training runs on a CUDA desktop."
             )
         return self._launch(config, spec.gym_id, resume=None)
 

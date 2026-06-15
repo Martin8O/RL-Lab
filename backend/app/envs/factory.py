@@ -84,15 +84,21 @@ def make_env(
     a direct trainer call with an off-registry env); registered envs ignore it and use the spec.
     """
     spec = get_env(env_id)
+    gid = spec.gym_id if spec is not None else (gym_id or env_id)
+
+    # Atari (ALE) envs are not in gymnasium's default registry — importing ale_py registers the
+    # "ALE/*" namespace as a side effect (no explicit register_envs needed). Done lazily here, before
+    # any gym.spec()/gym.make() touches the id, so the ALE import cost is paid only when an Atari env
+    # is actually built (G4a; image obs → CnnPolicy/GPU).
+    if gid.startswith("ALE/"):
+        import ale_py  # noqa: F401 — import side effect registers the ALE namespace
+
     kwargs: dict[str, Any] = {}
     if spec is not None:
-        gid = spec.gym_id
         kwargs.update(spec.make_kwargs)
         limit = _episode_limit(spec, play_scale)
         if limit is not None:
             kwargs["max_episode_steps"] = limit
-    else:
-        gid = gym_id or env_id
     if render_mode is not None:
         kwargs["render_mode"] = render_mode
 

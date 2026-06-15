@@ -307,7 +307,7 @@ export default function Sidebar() {
   const totalTimesteps  = useAppStore((s) => s.totalTimesteps)
   const setTotalTimesteps = useAppStore((s) => s.setTotalTimesteps)
 
-  const { handleRun, handlePause, handleResume, handleStop, isRunning, isPaused, isStopping, isActive, canRun } =
+  const { handleRun, handlePause, handleResume, handleStop, isRunning, isPaused, isStopping, isActive, canRun, trainGated } =
     useRunControls()
 
   const selectedEnv = envs.find((e) => e.id === selectedEnvId)
@@ -610,6 +610,16 @@ export default function Sidebar() {
           </div>
         )}
       </div>
+
+      {/* GPU-gated note (G4a): the game needs a GPU to train, but is still human-playable now. */}
+      {trainGated && !isActive && (
+        <div style={{
+          padding: '0 var(--space-5)', flexShrink: 0,
+          fontSize: 'var(--fs-meta)', lineHeight: 1.45, color: 'var(--text-muted)',
+        }}>
+          {t('sidebar.train_needs_gpu')}
+        </div>
+      )}
 
       {/* Run controls — outer div is always the flex row so flex:1 works in every branch */}
       <div style={{

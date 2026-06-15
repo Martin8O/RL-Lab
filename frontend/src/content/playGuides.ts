@@ -319,6 +319,34 @@ export const PLAY_GUIDES: Record<string, PlayGuide> = {
 
 export const DEFAULT_PLAY_GUIDE: PlayGuide = PLAY_GUIDES.cartpole
 
+// ── Atari (ALE) — one shared guide for the whole family (G4a) ──────────────────────────────────
+// The 60+ Atari games share the exact same keyboard (full_action_space=True → fixed action indices,
+// see content/playKeymaps.ts ATARI_KEYMAP) and the same arcade tips, so controls + tips are shared.
+// The per-game *objective* is the env's own description (written once in the backend registry), so
+// `atariPlayGuide(description)` slots it in as the goal — no per-game text duplicated on the client.
+const ATARI_CONTROLS: PlayControl[] = [
+  { keys: '↑ ↓ ← →', action: { en: 'Move (also WASD)', cz: 'Pohyb (také WASD)' } },
+  { keys: 'Space', action: { en: 'Fire / action button', cz: 'Palba / akční tlačítko' } },
+  { keys: '(release)', action: { en: 'Do nothing', cz: 'Nedělat nic' } },
+]
+
+const ATARI_TIPS: Bilingual = {
+  en: 'These are real-time arcade games — if it feels too fast, lower the play speed (down to 0.1×) '
+    + 'so you have time to react. Not every game uses Fire, and holding a direction together with '
+    + 'Space combines them. The episode ends on game-over (lives lost, time up, or a win). Switch to '
+    + '"Watch AI" once a model has been trained for this game on a GPU.',
+  cz: 'Tohle jsou arkádové hry v reálném čase — pokud je to moc rychlé, snižte rychlost hraní (až na '
+    + '0,1×), ať máte čas reagovat. Ne každá hra používá palbu a podržení směru spolu s mezerníkem je '
+    + 'zkombinuje. Epizoda končí při „game over“ (ztráta životů, vypršení času nebo výhra). Až bude pro '
+    + 'tuto hru natrénovaný model na GPU, přepněte na „Sledovat AI“.',
+}
+
+/** Build the play guide for an Atari env: its registry description is the goal; controls + tips are
+ *  shared across the whole family. Keeps per-game prose in one place (the backend) instead of here. */
+export function atariPlayGuide(description: Bilingual): PlayGuide {
+  return { goal: description, controls: ATARI_CONTROLS, tips: ATARI_TIPS }
+}
+
 export function playGuideFor(envId: string | null): PlayGuide {
   return (envId !== null && PLAY_GUIDES[envId]) || DEFAULT_PLAY_GUIDE
 }

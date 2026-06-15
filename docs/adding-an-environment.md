@@ -9,9 +9,12 @@
 A **vector-observation + discrete-action** Gymnasium env (CartPole, LunarLander, MountainCar, Acrobot …)
 is added as **data**: one row in the registry plus bilingual content. A **continuous (`box`) action** env
 reuses the now-built continuous seam, and a **discrete (single-integer) observation** env (Toy Text:
-FrozenLake / Taxi / CliffWalking) reuses the now-built one-hot seam — both are also data + content. Anything
-with **image observations, a 2-agent / competitive setup, or turn-based self-play** needs code at one of the
-five seams (bottom of this page).
+FrozenLake / Taxi / CliffWalking) reuses the now-built one-hot seam — both are also data + content.
+An **image-observation** env (Atari / ALE — `obs_type="image"`) is **human-playable as data too**: it
+reuses the existing server-JPEG render + play loop, so a registry row + `hw_requirement="gpu"` +
+`supported_algos=["ppo"]` + a shared keymap is enough to play it now (G4a). Its *training* still needs the
+`CnnPolicy`+CUDA seam, so Run is gated off until a GPU is present (`/api/system` `gpu_available`). A
+**2-agent / competitive setup or turn-based self-play** needs code at one of the five seams (bottom of this page).
 
 ## 1. Verify the env's truths in the venv — never guess
 

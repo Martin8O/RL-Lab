@@ -36,6 +36,24 @@ export interface PlayKeymap {
   turnBased?: boolean
 }
 
+// Atari (ALE) — ONE shared keymap for the whole family (G4a). Every Atari env is registered with
+// full_action_space=True, so the 18 ALE actions sit at fixed indices in every game:
+//   0 NOOP · 1 FIRE · 2 UP · 3 RIGHT · 4 LEFT · 5 DOWN (+ 6–17 = diagonals / fire combos).
+// We bind the four directions + FIRE; releasing all keys sends NOOP (0). The combo actions
+// (UPFIRE…) aren't bound directly — holding e.g. ↑ and Space makes the EnvPreview handler alternate
+// UP and FIRE, which approximates them well enough to play every game by hand. Real-time, not
+// turn-based; the play speed slider (down to 0.1×) paces these fast arcade games for a human.
+const ATARI_KEYMAP: PlayKeymap = {
+  bindings: [
+    { keys: [' ', 'Spacebar'], action: 1 }, // FIRE
+    { keys: ['ArrowUp', 'w', 'W'], action: 2 }, // UP
+    { keys: ['ArrowRight', 'd', 'D'], action: 3 }, // RIGHT
+    { keys: ['ArrowLeft', 'a', 'A'], action: 4 }, // LEFT
+    { keys: ['ArrowDown', 's', 'S'], action: 5 }, // DOWN
+  ],
+  idleAction: 0, // NOOP — releasing all keys does nothing (the game keeps running)
+}
+
 // FrozenLake (4×4 / 4×4 no-slip / 8×8 share one keymap). Actions verified in the venv:
 // 0 = Left, 1 = Down, 2 = Right, 3 = Up. Turn-based — one move per key press.
 const FROZENLAKE_KEYMAP: PlayKeymap = {
@@ -137,6 +155,10 @@ export const PLAY_KEYMAPS: Record<string, PlayKeymap> = {
 
 export const DEFAULT_KEYMAP: PlayKeymap = PLAY_KEYMAPS.cartpole
 
-export function keymapFor(envId: string | null): PlayKeymap {
-  return (envId !== null && PLAY_KEYMAPS[envId]) || DEFAULT_KEYMAP
+// Atari is family-driven (one shared keymap for ~60 games), so the lookup takes the env's `family`:
+// an explicit per-id entry wins, else the whole Atari family maps to ATARI_KEYMAP, else the default.
+export function keymapFor(envId: string | null, family?: string): PlayKeymap {
+  if (envId !== null && PLAY_KEYMAPS[envId]) return PLAY_KEYMAPS[envId]
+  if (family === 'atari') return ATARI_KEYMAP
+  return DEFAULT_KEYMAP
 }

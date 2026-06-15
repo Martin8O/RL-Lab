@@ -15,6 +15,9 @@ export interface RunControls {
   isStopping: boolean
   isActive: boolean
   canRun: boolean
+  /** True when the selected env needs a GPU that isn't present (G4a) — training is disabled but the
+   *  game is still human-playable. The Sidebar shows an explanatory note in this case. */
+  trainGated: boolean
 }
 
 export function useRunControls(): RunControls {
@@ -27,13 +30,18 @@ export function useRunControls(): RunControls {
   const evolutionParams = useAppStore((s) => s.evolutionParams)
   const qLearningParams = useAppStore((s) => s.qLearningParams)
   const trainState      = useAppStore((s) => s.trainState)
+  const gpuAvailable    = useAppStore((s) => s.gpuAvailable)
   const clearMetrics    = useAppStore((s) => s.clearMetrics)
 
   const isRunning  = trainState === 'running'
   const isPaused   = trainState === 'paused'
   const isStopping = trainState === 'stopping'
   const isActive   = isRunning || isPaused || isStopping
-  const canRun     = !!selectedEnvId && envs.length > 0
+  // GPU-only envs (Atari + other image-obs games) can't train without a CUDA device — gate Run, but
+  // keep them human-playable. On a GPU machine gpuAvailable is true, so nothing is gated (G4a).
+  const selectedEnv = envs.find((e) => e.id === selectedEnvId)
+  const trainGated  = !!selectedEnv && selectedEnv.hw_requirement === 'gpu' && !gpuAvailable
+  const canRun      = !!selectedEnvId && envs.length > 0 && !trainGated
 
   async function handleRun() {
     if (!canRun) return
@@ -58,5 +66,5 @@ export function useRunControls(): RunControls {
   async function handleResume() { try { await resumeTraining() } catch { /* ignore */ } }
   async function handleStop()   { try { await stopTraining()   } catch { /* ignore */ } }
 
-  return { handleRun, handlePause, handleResume, handleStop, isRunning, isPaused, isStopping, isActive, canRun }
+  return { handleRun, handlePause, handleResume, handleStop, isRunning, isPaused, isStopping, isActive, canRun, trainGated }
 }

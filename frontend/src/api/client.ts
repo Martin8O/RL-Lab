@@ -16,6 +16,7 @@ import type {
   PreviewState,
   RunDetail,
   RunMeta,
+  SystemInfo,
   TrainConfig,
   TrainStatus,
   TrainWsFrame,
@@ -29,6 +30,14 @@ export async function fetchHealth(): Promise<{ status: string; version: string }
   const res = await fetch(`${API_BASE}/api/health`)
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
   return res.json() as Promise<{ status: string; version: string }>
+}
+
+/** Runtime hardware capabilities (G4a) — whether GPU-only training (Atari) can run here.
+ *  Fetched once on connect; used to gate the Run button for GPU envs on a CPU-only machine. */
+export async function fetchSystem(): Promise<SystemInfo> {
+  const res = await fetch(`${API_BASE}/api/system`)
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  return res.json() as Promise<SystemInfo>
 }
 
 export function useHealthPoll(intervalMs = 5000): void {

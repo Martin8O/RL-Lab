@@ -51,7 +51,8 @@
     "stop": "Stop",
     "pause": "Pause",
     "resume": "Resume",
-    "stopping": "Stopping…"
+    "stopping": "Stopping…",
+    "train_needs_gpu": "Training this game needs a GPU (available on the desktop). You can still play it by hand now — use the Play button below."
   },
   "stats": {
     "progress": "Progress",
@@ -90,7 +91,9 @@
     "speed": "Speed",
     "visual_on_hint": "Live preview — turn off for faster training",
     "visual_off_hint": "Visual off — training runs at full speed",
-    "idle_hint": "Start training to watch the agent play"
+    "idle_hint": "Start training to watch the agent play",
+    "fullscreen": "Fullscreen (Esc to exit)",
+    "fullscreen_exit": "Exit fullscreen (Esc)"
   },
   "play": {
     "start": "Play vs AI",

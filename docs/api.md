@@ -17,6 +17,11 @@ Base URL in dev: `http://127.0.0.1:8000`. CORS allows the Vite origin (`CORS_ORI
 | Method | Path | Returns |
 |---|---|---|
 | GET | `/api/health` | `{status, version}` |
+| GET | `/api/system` | `SystemInfo` — `{gpu_available}` (cached `torch.cuda` probe) |
+
+`gpu_available` gates **GPU-only training**: image-observation envs (Atari) declare `hw_requirement="gpu"`,
+so the UI disables Run for them on a CPU-only machine and `POST /api/train/start` rejects such a run with
+`400`. Human play of those envs needs no GPU and stays available. On a CUDA machine nothing is gated.
 
 ### Environments
 | Method | Path | Returns |
