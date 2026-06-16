@@ -1,7 +1,7 @@
 # Adding an environment
 
 > Living document (seeded in Phase F4). The fastest path is data-only; this guide shows that path and
-> the five seams where a game needs real code. See also [`architecture.md`](architecture.md) and, for a
+> the typed seams where a game needs real code. See also [`architecture.md`](architecture.md) and, for a
 > new learning method, [`adding-an-algorithm.md`](adding-an-algorithm.md).
 
 ## TL;DR
@@ -17,8 +17,9 @@ reuses the existing server-JPEG render + play loop, so a registry row + `hw_requ
 **dict-observation** env (MiniGrid — a 7×7×3 view + `direction` + a `mission` string) is **data too**:
 `make_env` applies `FlatObsWrapper` for `family=="minigrid"`, flattening it to a vector so the same
 `MlpPolicy`/genome train (on CPU) with no engine change, while the colourful grid still renders server-side
-as a JPEG and play is turn-based (G2c). A
-**2-agent / competitive setup or turn-based self-play** needs code at one of the five seams (bottom of this page).
+as a JPEG and play is turn-based (G2c). A **multi-agent** env (PettingZoo — N agents in one shared world) rides the now-built multi-agent seam: data
+plus the `ma_env` adapter, trained with parameter-sharing PPO and drawn as a "swarm" (G7a; see below). A
+**2-agent / competitive setup or turn-based self-play** needs code at one of the seams (bottom of this page).
 
 ## 1. Verify the env's truths in the venv — never guess
 
@@ -85,6 +86,21 @@ is **server-side** (the family isn't in `client_render`, so `client_state` retur
 → JPEG, like Atari but no retro skin), and play is `turn_based=True`. These envs have **no native `TimeLimit`**
 but self-truncate at their internal `max_steps`, so no `episode_step_limit` is needed (G2c).
 
+### Multi-agent (PettingZoo) — the swarm seam
+
+If the env has **N agents in one shared world** (PettingZoo's *parallel* API — each agent its own
+obs/action/reward), it is **not** a single-agent `make_env` row: it rides the multi-agent seam (ADR-038).
+Set `family="petting_zoo"`, `obs_type="vector"` (the per-agent obs), `supported_algos=["ppo"]` (no
+neuroevolution / Q-learning path), `human_playable=False` (a swarm has no single human driver — watch + train
+only), and put the PettingZoo constructor kwargs in `make_kwargs` (`{"N": 3, "max_cycles": 25, ...}`); the
+spec's `gym_id` is the scenario module name (e.g. `"simple_spread_v3"`). The adapter `app/services/ma_env.py`
+builds the raw parallel env (preview/render) and the SuperSuit **parameter-sharing** vec env (one shared
+`MlpPolicy` over all homogeneous agents); `trainer_ppo` and the preview streamer branch on `is_multi_agent`.
+Rendering is a **client-side "swarm" canvas** drawn from the additive `agents`/`world` frame fields (per-agent
++ landmark world positions extracted by `ma_env.agent_sprites`/`world_entities`). **Homogeneous agents only**
+(simple_spread); heterogeneous species (simple_tag) need per-species policies (G7b). MA reproducibility is
+policy-level (the SuperSuit vec env can't be seeded by SB3; the trainer seeds numpy/torch/python instead).
+
 The registry is the source of truth: the sidebar, skill bands, step ladder, compare filter, and the algo
 dropdown all read from it. `supported_algos` is how a game opts out of an algorithm (e.g. an image env can be
 PPO-only); the store snaps to a valid algo when you switch games.
@@ -137,7 +153,7 @@ confirm **every shown number** reflects this env's `[min_score, solved_score]` a
 episode: skill-meter scale/zones/needle/%, the live chart, idle action (no shove), live speed, the per-env
 popups, record-stars, and the start/idle pose. Then `.\tasks.ps1 all` must be green.
 
-## The five seams (when it's not data-only)
+## The seams (when it's not data-only)
 
 | Seam | Trigger | Where |
 |---|---|---|
@@ -146,3 +162,4 @@ popups, record-stars, and the start/idle pose. Then `.\tasks.ps1 all` must be gr
 | Action space | continuous `box` (done for classic control); image-box (CarRacing) next | `play_session`, `policy`, `trainer_*`, preview, keymaps |
 | Competitive | 2-agent / `side` selector (Pong) | `play_session` + a 2-agent env |
 | Board games | turn-based self-play (OpenSpiel) | a parallel subsystem, not a registry row |
+| Multi-agent (**done G7a**) | N agents in one shared world (PettingZoo) | `ma_env` adapter + `trainer_ppo`/preview branches; `agents`/`world` frame |

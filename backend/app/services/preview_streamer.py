@@ -151,6 +151,15 @@ class PreviewStreamer:
             self._thread.start()
 
     def _run(self, env_id: str) -> None:
+        from app.envs.registry import get_env
+        from app.services.ma_env import is_multi_agent
+
+        # Multi-agent (PettingZoo) envs are a different shape — N agents in one shared world — so they
+        # run their own parallel rollout loop + swarm-frame emit (the 5th seam, ADR-038).
+        if is_multi_agent(get_env(env_id)):
+            self._run_ma(env_id)
+            return
+
         from app.envs.factory import make_env  # lazy: keep gym out of startup
 
         try:
@@ -191,6 +200,84 @@ class PreviewStreamer:
                     time.sleep(base_dt / self._current_speed())
         finally:
             env.close()
+
+    def _run_ma(self, env_id: str) -> None:
+        """Preview loop for a multi-agent (PettingZoo) env — the 5th seam (ADR-038).
+
+        Steps the *parallel* env with the shared decoupled policy applied to **every** agent
+        (parameter sharing), and broadcasts a swarm frame (per-agent + landmark world positions)
+        the client draws on a canvas. Like the single-agent loop it reads the policy *snapshot* the
+        trainer publishes (numpy forward), never the live SB3 model (ADR-019).
+        """
+        from app.services.ma_env import make_parallel_env
+
+        try:
+            env = make_parallel_env(env_id)
+        except Exception:  # noqa: BLE001 — a bad MA env must not crash anything
+            logger.exception("Preview MA env creation failed for %s", env_id)
+            return
+
+        meta = getattr(env, "metadata", {}) or {}
+        render_fps = float(meta.get("render_fps", _DEFAULT_RENDER_FPS)) or _DEFAULT_RENDER_FPS
+        base_dt = 1.0 / render_fps
+        send_interval = 1.0 / _SEND_FPS_CAP
+        episode = 0
+        last_sent = 0.0
+        try:
+            while self._active_and_visual():
+                episode += 1
+                obs, _ = env.reset()
+                ep_reward = 0.0
+                step = 0
+                while env.agents and self._active_and_visual():
+                    if self._is_paused():  # training paused → freeze the last frame
+                        time.sleep(0.05)
+                        continue
+                    actions = self._choose_ma_actions(env, obs)
+                    obs, rewards, _, _, _ = env.step(actions)
+                    ep_reward += float(np.mean(list(rewards.values()))) if rewards else 0.0
+                    step += 1
+
+                    now = time.monotonic()
+                    if now - last_sent >= send_interval or not env.agents:
+                        last_sent = now
+                        self._emit_ma_frame(env, episode, step, ep_reward)
+                    time.sleep(base_dt / self._current_speed())
+        finally:
+            env.close()
+
+    def _choose_ma_actions(self, env: Any, obs: dict[str, Any]) -> dict[str, Any]:
+        """One action per live agent: the shared policy applied to each agent's obs (random until
+        the trainer publishes a policy). A flaky predict falls back to a random action per-agent."""
+        with self._lock:
+            predict = self._predict
+        actions: dict[str, Any] = {}
+        for agent in env.agents:
+            if predict is None:
+                actions[agent] = env.action_space(agent).sample()
+                continue
+            try:
+                actions[agent] = predict(obs[agent])
+            except Exception:  # noqa: BLE001 — never let inference contention disturb the run
+                logger.debug("Preview MA predict failed; using random action", exc_info=True)
+                actions[agent] = env.action_space(agent).sample()
+        return actions
+
+    def _emit_ma_frame(self, env: Any, episode: int, step: int, reward: float) -> None:
+        from app.services.ma_env import agent_sprites, world_entities
+
+        # Matches schemas.preview.FrameMessage (agents/world fields); built by hand to avoid
+        # per-frame validation, like the single-agent emit above.
+        self._broadcast(
+            {
+                "type": "frame",
+                "episode": episode,
+                "step": step,
+                "reward": reward,
+                "agents": agent_sprites(env),
+                "world": world_entities(env),
+            }
+        )
 
     def _emit_frame(self, env: Any, episode: int, step: int, reward: float, obs: Any, action: Any) -> None:
         # Client-rendered envs draw from raw state — skip rgb render + JPEG. ``action`` (the discrete

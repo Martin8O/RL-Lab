@@ -4,7 +4,7 @@
 // the CartPole cart/pole. The geometry both files need lives in ./envGeometry. Keep the env set +
 // state layout in sync with the backend's client_state.
 
-import type { RefObject } from 'react'
+import type { CSSProperties, RefObject } from 'react'
 import type { GridLayout } from '../api/types'
 import {
   MC_GOAL, MC_GROUND_PATH, MC_SURFACE_PATH, mcX, mcY,
@@ -215,6 +215,51 @@ function TaxiPieces({ agent, cx, cy }: {
         {passLoc === 4 && <circle cx="0" cy="-2" r="4.5" fill="var(--viz-1)" />}
       </g>
     </g>
+  )
+}
+
+// ── Multi-agent "swarm" (PettingZoo / MPE) ───────────────────────────────────────────────────
+// Unlike the SVG physics stages, the swarm is drawn to a <canvas> (ADR-029's precedent for live,
+// many-element scenes — and it scales to a desktop GPU swarm of many agents). EnvPreview owns the
+// canvas ref and redraws it imperatively from each frame's per-agent + landmark world positions
+// (the `agents`/`world` frame fields). This component is just the canvas + a colour legend.
+export const SWARM_CANVAS_PX = 680  // square logical resolution; CSS scales it to fit the stage
+
+export function SwarmStage({ envName, canvasRef, agentsLabel, targetsLabel }: {
+  envName: string
+  canvasRef: RefObject<HTMLCanvasElement | null>
+  agentsLabel: string
+  targetsLabel: string
+}) {
+  const dot = (color: string): CSSProperties => ({
+    display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: color,
+  })
+  const ring: CSSProperties = {
+    display: 'inline-block', width: 10, height: 10, borderRadius: '50%',
+    border: '2px solid var(--text-muted)', boxSizing: 'border-box',
+  }
+  return (
+    <div style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
+      <canvas
+        ref={canvasRef}
+        width={SWARM_CANVAS_PX}
+        height={SWARM_CANVAS_PX}
+        role="img"
+        aria-label={envName}
+        style={{ width: '100%', maxWidth: 480, maxHeight: '100%', display: 'block' }}
+      />
+      <div style={{
+        display: 'flex', gap: 18, fontSize: 'var(--fs-label)', color: 'var(--text-muted)',
+        alignItems: 'center',
+      }}>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+          <span style={dot('var(--accent)')} /> {agentsLabel}
+        </span>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+          <span style={ring} /> {targetsLabel}
+        </span>
+      </div>
+    </div>
   )
 }
 

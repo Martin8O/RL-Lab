@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAppStore } from '../store/useAppStore'
 import { sendPlayAction, setFrameHandler, setPlayFrameHandler, setPreview, startPlay, stopPlay } from '../api/client'
-import type { GridLayout, PlayFrame, PreviewFrame } from '../api/types'
+import type { AgentSprite, GridLayout, PlayFrame, PreviewFrame, WorldEntity } from '../api/types'
 import { keymapFor } from '../content/playKeymaps'
 import { DEFAULT_AGENT, DEFAULT_GRIDS, isGridEnv } from '../content/gridMaps'
 import PlayControls from './PlayControls'
@@ -13,7 +13,7 @@ import {
   LL_START, llLanderTransform, llTerrainPaths, LL_DEFAULT_TERRAIN, llX, llY,
 } from './envGeometry'
 import {
-  CartPoleStage, MountainCarStage, PendulumStage, AcrobotStage, LunarLanderStage, GridStage,
+  CartPoleStage, MountainCarStage, PendulumStage, AcrobotStage, LunarLanderStage, GridStage, SwarmStage,
 } from './EnvStages'
 
 const MIN_SPEED = 1
@@ -86,6 +86,7 @@ export default function EnvPreview() {
   const llRightRef    = useRef<SVGGElement | null>(null)   // LunarLander: right-engine puff
   const llGroundRef   = useRef<SVGPathElement | null>(null) // LunarLander: filled moon ground
   const llSurfaceRef  = useRef<SVGPathElement | null>(null) // LunarLander: moon surface stroke
+  const swarmCanvasRef = useRef<HTMLCanvasElement | null>(null) // multi-agent (MPE): the swarm canvas
   const llTerrainObs  = useRef<readonly (readonly number[])[] | null>(null) // last moon surface (obs pts)
   // True once a frame has actually arrived this session — lets a finished session linger, but
   // falls back to the idle (centred) cart after a reload that reconciled a finished session.
@@ -98,12 +99,13 @@ export default function EnvPreview() {
   // "live" = frames are (or just were) flowing for this env.
   const live         = (visual && runLive) || playState === 'playing' || (playVisible && hasFrame)
   // Which client-side renderer to use (else a server JPEG on the canvas).
-  const clientKind: 'cartpole' | 'mountaincar' | 'pendulum' | 'acrobot' | 'lunarlander' | 'grid' | null =
+  const clientKind: 'cartpole' | 'mountaincar' | 'pendulum' | 'acrobot' | 'lunarlander' | 'grid' | 'mpe' | null =
     selectedEnvId === 'cartpole' ? 'cartpole'
     : selectedEnvId === 'mountaincar' || selectedEnvId === 'mountaincarcontinuous' ? 'mountaincar'
     : selectedEnvId === 'pendulum' ? 'pendulum'
     : selectedEnvId === 'acrobot' ? 'acrobot'
     : selectedEnvId === 'lunarlander' ? 'lunarlander'
+    : selectedEnv?.family === 'petting_zoo' ? 'mpe'  // multi-agent swarm canvas (G7a)
     : isGridEnv(selectedEnvId) ? 'grid'
     : null
   const clientRender = clientKind !== null
@@ -198,7 +200,61 @@ export default function EnvPreview() {
       llLeftRef.current?.setAttribute('opacity', action === 3 ? '1' : '0')
       llRightRef.current?.setAttribute('opacity', action === 1 ? '1' : '0')
     }
+    // Multi-agent "swarm" (MPE): draw the per-agent + landmark world positions onto the canvas.
+    // A fixed world half-range keeps the view stable when one agent drifts far (it clamps to the
+    // arena edge instead of zooming everything out). Colours read from the live theme tokens.
+    const SWARM_WORLD = 1.8
+    const drawSwarm = (agents: AgentSprite[], world: WorldEntity[]) => {
+      const canvas = swarmCanvasRef.current
+      const ctx = canvas?.getContext('2d')
+      if (!canvas || !ctx) return
+      const S = canvas.width
+      const pad = 30
+      const scale = (S / 2 - pad) / SWARM_WORLD
+      const mid = S / 2
+      const clamp = (v: number) => Math.max(-SWARM_WORLD, Math.min(SWARM_WORLD, v))
+      const toX = (x: number) => mid + clamp(x) * scale
+      const toY = (y: number) => mid - clamp(y) * scale  // world +y is up → canvas -y
+      const css = getComputedStyle(canvas)
+      const col = (name: string, fb: string) => css.getPropertyValue(name).trim() || fb
+      ctx.clearRect(0, 0, S, S)
+      // arena frame
+      ctx.strokeStyle = col('--border-default', '#444'); ctx.lineWidth = 1.5
+      ctx.strokeRect(pad / 2, pad / 2, S - pad, S - pad)
+      // landmarks: targets as open rings, obstacles as solid discs
+      const targetCol = col('--text-muted', '#888')
+      for (const e of world) {
+        const r = Math.max(6, e.size * scale)
+        ctx.beginPath(); ctx.arc(toX(e.x), toY(e.y), r, 0, Math.PI * 2)
+        if (e.kind === 'obstacle') {
+          ctx.fillStyle = col('--surface-3', '#555'); ctx.fill()
+          ctx.strokeStyle = col('--border-strong', '#777'); ctx.lineWidth = 1.5; ctx.stroke()
+        } else {
+          ctx.strokeStyle = targetCol; ctx.lineWidth = 2.5; ctx.stroke()
+          ctx.beginPath(); ctx.arc(toX(e.x), toY(e.y), 2.5, 0, Math.PI * 2)
+          ctx.fillStyle = targetCol; ctx.fill()
+        }
+      }
+      // agents: filled discs (cooperative = accent, adversary = danger), thin edge for contrast
+      const agentCol = col('--accent', '#3b82f6')
+      const advCol = col('--danger', '#e2453c')
+      const edge = col('--surface-1', '#0c0c0c')
+      for (const a of agents) {
+        const r = Math.max(7, a.size * scale)
+        ctx.beginPath(); ctx.arc(toX(a.x), toY(a.y), r, 0, Math.PI * 2)
+        ctx.fillStyle = a.role === 'adversary' ? advCol : agentCol; ctx.fill()
+        ctx.strokeStyle = edge; ctx.lineWidth = 2; ctx.stroke()
+      }
+    }
     const onFrame = (frame: PreviewFrame | PlayFrame) => {
+      // Multi-agent swarm (MPE): draw all agents + landmarks to the canvas from the streamed state.
+      if (clientKind === 'mpe') {
+        if (frame.agents) {
+          setHasFrame(true)
+          drawSwarm(frame.agents, frame.world ?? [])
+        }
+        return
+      }
       // Toy Text grids: declarative re-render from the streamed board + agent (low-frequency moves).
       if (clientKind === 'grid') {
         if (frame.state) {
@@ -251,6 +307,9 @@ export default function EnvPreview() {
       const { ground, surface } = llTerrainPaths(LL_DEFAULT_TERRAIN)
       llGroundRef.current?.setAttribute('d', ground)
       llSurfaceRef.current?.setAttribute('d', surface)
+      // Multi-agent swarm: wipe the canvas back to an empty arena when nothing is live.
+      const sc = swarmCanvasRef.current
+      sc?.getContext('2d')?.clearRect(0, 0, sc.width, sc.height)
     }
   }, [live, clientKind])
 
@@ -509,6 +568,11 @@ export default function EnvPreview() {
               <AcrobotStage envName={envName} link1Ref={acroLink1Ref} link2Ref={acroLink2Ref} />
             ) : clientKind === 'grid' ? (
               <GridStage envName={envName} grid={gridBoard} agent={gridAgent} />
+            ) : clientKind === 'mpe' ? (
+              <SwarmStage
+                envName={envName} canvasRef={swarmCanvasRef}
+                agentsLabel={t('envpreview.swarm_agents')} targetsLabel={t('envpreview.swarm_targets')}
+              />
             ) : (
               <LunarLanderStage
                 envName={envName} landerRef={landerRef}
@@ -614,8 +678,10 @@ export default function EnvPreview() {
         <SkillMeter slot="play" overlay />
       </div>
 
-      {/* Play vs AI (E2): controls. The skill meter is the single overlay inside the stage above. */}
-      <PlayControls />
+      {/* Play vs AI (E2): controls. The skill meter is the single overlay inside the stage above.
+          Hidden for multi-agent envs — the single-agent play session can't drive a swarm (G7a);
+          you watch the swarm via the live training preview instead. */}
+      {clientKind !== 'mpe' && <PlayControls />}
     </section>
   )
 }

@@ -1206,3 +1206,97 @@ _MINIGRID_GAMES: list[
 
 for _mg_row in _MINIGRID_GAMES:
     register(_minigrid_spec(*_mg_row))
+
+
+# ---------------------------------------------------------------------------
+# Multi-agent family (PettingZoo / MPE) — G7a "the 5th seam".
+#
+# The first **multi-agent** envs: N agents act in one shared world, each with its own
+# observation / action / reward (PettingZoo's *parallel* API). That doesn't fit the
+# single-agent Gymnasium ``step()`` loop the whole registry has assumed, so it is NOT a
+# plain registry row — it rides a dedicated adapter (``app.services.ma_env``) and trainer/
+# preview branches (ADR-038). The rows here still describe the env as data; the seam is the
+# code those rows route to.
+#
+# These are **Simple Spread** (cooperative coverage): the agents must spread out to cover all
+# the landmark targets while avoiding collisions, sharing a global reward. The agents are
+# **homogeneous** (identical obs/action spaces), which is exactly what SuperSuit's
+# parameter-sharing bridge needs — one shared ``MlpPolicy`` trained over all N agents at once.
+# Per-agent obs is a vector (Box) and the action is ``Discrete(5)`` (stay / ±x / ±y), so the
+# SAME CPU ``MlpPolicy`` PPO path used for CartPole applies once the SuperSuit bridge stacks the
+# agents — hence ``obs_type="vector"``, ``hw_requirement="cpu"`` (trains on CPU now; the RTX 5070
+# desktop just *scales* it in G7b). ``supported_algos=["ppo"]`` — neuroevolution / tabular
+# Q-learning have no multi-agent path. Rendered client-side as a "swarm" canvas from streamed
+# per-agent positions (``client_state`` is bypassed; the frame carries ``agents``/``world``).
+#
+# Heterogeneous species (simple_tag predators vs. prey — different obs/action spaces) need
+# per-species policies and are deferred to G7b. Scores were venv-measured per the new-env
+# checklist: a random policy averages ≈ −26 (N=3) / −38 (N=6) per agent, so ``min_score`` is the
+# scattered/no-coverage floor and ``solved_score`` a genuinely good cooperative coverage return.
+# These envs are watch-and-train only (``human_playable=False``) — a single human can't drive a
+# whole swarm; competitive/cooperative human play arrives with the 2-player envs in G7c.
+# ---------------------------------------------------------------------------
+
+
+def _mpe_spread_spec(
+    env_id: str,
+    n_agents: int,
+    display: str,
+    difficulty: Literal["beginner", "intermediate", "advanced"],
+    min_score: float,
+    solved_score: float,
+    default_total_timesteps: int,
+    desc_en: str,
+    desc_cz: str,
+) -> EnvSpec:
+    """Build one Simple Spread EnvSpec from a data row (the variants differ only by agent count)."""
+    return EnvSpec(
+        id=env_id,
+        gym_id="simple_spread_v3",  # the mpe2 scenario module name (resolved by app.services.ma_env)
+        display_name=Bilingual(en=display, cz=display),
+        description=Bilingual(en=desc_en, cz=desc_cz),
+        family="petting_zoo",
+        obs_type="vector",  # per-agent vector obs, stacked across agents by the SuperSuit bridge
+        action_space="discrete",  # Discrete(5): stay / left / right / down / up
+        supported_algos=["ppo"],  # parameter-sharing PPO only; evo / Q-learning have no MA path
+        hyperparams=_standard_hyperparams(),
+        # PettingZoo parallel_env kwargs (consumed by ma_env.make_parallel_env / make_vec_env).
+        make_kwargs={"N": n_agents, "max_cycles": 25, "continuous_actions": False},
+        solved_score=solved_score,  # a genuinely good cooperative coverage return (negative)
+        min_score=min_score,  # scattered / no-coverage floor (random ≈ −26…−38 per agent)
+        default_total_timesteps=default_total_timesteps,  # ★ budget; the GPU desktop scales it (G7b)
+        play_step_scale=1,
+        floor_scales_with_steps=False,  # shaped per-step reward; the floor doesn't scale with the cap
+        human_playable=False,  # a swarm has no single human driver — watch + train only (G7a)
+        competitive=False,
+        difficulty=difficulty,
+        hw_requirement="cpu",  # parameter-sharing PPO trains on CPU now (not GPU-gated)
+    )
+
+
+# id, agents, display, difficulty, min_score, solved_score, default_total_timesteps, desc EN, desc CZ
+_MPE_GAMES: list[
+    tuple[str, int, str, Literal["beginner", "intermediate", "advanced"], float, float, int, str, str]
+] = [
+    ("mpe_spread", 3, "Simple Spread (3 agents)", "intermediate", -50.0, -15.0, 500_000,
+     "Three agents must spread out to cover three landmark targets in a shared 2-D world, "
+     "cooperating so each target ends up occupied while avoiding collisions with each other. "
+     "Every agent shares one global reward (closer coverage scores higher, bumps cost a little), "
+     "and they all learn from a single shared brain — the gentlest introduction to multi-agent RL "
+     "and emergent teamwork.",
+     "Tři agenti se musí rozprostřít a pokrýt tři cílové značky ve sdíleném 2-D světě; "
+     "spolupracují tak, aby každý cíl někdo obsadil, a přitom se vyhýbají vzájemným srážkám. "
+     "Všichni agenti sdílejí jednu společnou odměnu (lepší pokrytí dává víc, srážky trochu stojí) "
+     "a učí se z jediného sdíleného „mozku“ — nejmírnější úvod do více­agentního RL a vznikající "
+     "týmové spolupráce."),
+    ("mpe_spread_swarm", 6, "Simple Spread (6 agents)", "advanced", -60.0, -25.0, 1_000_000,
+     "The same cooperative coverage task scaled up to a six-agent swarm with six targets — far more "
+     "coordination, more potential collisions and a harder credit-assignment problem, but still one "
+     "shared policy driving every agent. A vivid showcase of parameter-sharing at swarm scale.",
+     "Stejná kooperativní úloha pokrytí, ale zvětšená na roj šesti agentů se šesti cíli — mnohem víc "
+     "koordinace, víc možných srážek a těžší přiřazení zásluh, ale stále jedna sdílená strategie "
+     "řídící každého agenta. Názorná ukázka sdílení parametrů v měřítku roje."),
+]
+
+for _mpe_row in _MPE_GAMES:
+    register(_mpe_spread_spec(*_mpe_row))

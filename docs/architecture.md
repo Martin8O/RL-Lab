@@ -96,9 +96,9 @@ Every WS frame and REST body is a **pydantic model** in `backend/app/schemas/` a
 `frontend/src/api/types.ts`. The WS stream is a tagged union on `type` (`metrics`, `progress`, `evolution`,
 `status`, `frame`, `preview`, `play_status`, `play_frame`, `play_result`, plus the inbound `{type:"action"}`).
 
-## The five extensibility seams
+## The extensibility seams
 
-Adding a *vector-obs + discrete-action* game is data-only (a registry row + content). Beyond that, five
+Adding a *vector-obs + discrete-action* game is data-only (a registry row + content). Beyond that, a set of
 typed seams need real code — see [`adding-an-environment.md`](adding-an-environment.md) and `CLAUDE.md`:
 
 1. **Policy/device** — `trainer_ppo._build_model` (image obs → `CnnPolicy`+CUDA vs `MlpPolicy`+CPU).
@@ -106,6 +106,12 @@ typed seams need real code — see [`adding-an-environment.md`](adding-an-enviro
 3. **Action space** — discrete `int` vs continuous `box` (done for classic-control continuous; image-box next).
 4. **Competitive play** — a `side` selector + a 2-agent env (Pong).
 5. **Board games** — a parallel turn-based/self-play subsystem (OpenSpiel), not a registry row.
+6. **Multi-agent** (PettingZoo, **landed G7a / ADR-038**) — N agents in one shared world (the parallel API),
+   so *not* the single-agent `make_env` factory. A dedicated adapter (`app/services/ma_env.py`) builds the
+   raw parallel env (preview/render) and the SuperSuit parameter-sharing **vec env** (one shared `MlpPolicy`
+   over all homogeneous agents); `trainer_ppo` + the preview streamer branch on `family=="petting_zoo"`. The
+   `frame` WS type carries additive `agents`/`world` positions for a client-rendered "swarm" canvas. Homogeneous
+   agents only (simple_spread); heterogeneous species (simple_tag) and 2-agent competitive play come later (G7b/c).
 
 ## Standalone packaging (F5)
 

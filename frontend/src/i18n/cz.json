@@ -93,7 +93,9 @@
     "visual_off_hint": "Vizualizace vypnuta — trénink běží naplno",
     "idle_hint": "Spusťte trénink a sledujte agenta",
     "fullscreen": "Celá obrazovka (Esc ukončí)",
-    "fullscreen_exit": "Ukončit celou obrazovku (Esc)"
+    "fullscreen_exit": "Ukončit celou obrazovku (Esc)",
+    "swarm_agents": "Agenti",
+    "swarm_targets": "Cíle"
   },
   "play": {
     "start": "Hrát proti AI",

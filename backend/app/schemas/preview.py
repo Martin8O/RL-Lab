@@ -10,6 +10,30 @@ from typing import Literal
 from pydantic import BaseModel
 
 
+class AgentSprite(BaseModel):
+    """One agent's render state for the multi-agent "swarm" canvas (PettingZoo, G7a/ADR-038).
+
+    Positions are world-space ``[x, y]`` (roughly centred on the origin); the client autoscales the
+    whole scene to fit. ``role`` is ``"agent"`` (cooperative) or ``"adversary"`` (predator) and
+    drives the colour; ``size`` is the entity's collision radius in the same world units.
+    """
+
+    x: float
+    y: float
+    role: str
+    size: float
+
+
+class WorldEntity(BaseModel):
+    """A landmark for the swarm canvas — a coverage ``"target"`` (simple_spread) or an ``"obstacle"``
+    (a collidable landmark). Same world-space coordinates + ``size`` as :class:`AgentSprite`."""
+
+    x: float
+    y: float
+    kind: str
+    size: float
+
+
 class GridLayout(BaseModel):
     """Static board layout for a client-rendered grid-world (Toy Text), streamed with each frame.
 
@@ -48,6 +72,10 @@ class FrameMessage(BaseModel):
     terrain: list[list[float]] | None = None
     # Static board layout for a grid-world (Toy Text), so the client can draw the board (None elsewhere).
     grid: GridLayout | None = None
+    # Multi-agent (PettingZoo) render state: per-agent sprites + landmark entities for the swarm
+    # canvas (None for every single-agent env). Streamed each frame so a late joiner always has it.
+    agents: list[AgentSprite] | None = None
+    world: list[WorldEntity] | None = None
 
 
 class PreviewState(BaseModel):

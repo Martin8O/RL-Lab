@@ -104,6 +104,14 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
         en: 'Realistically PPO only. This hierarchical task (find the key behind a door, then unlock the ball\'s room) is hard even for PPO and needs a large budget; neuroevolution\'s small genome on a 2835-dim obs rarely makes progress — it is here for comparison, but expect it to stay near 0.',
         cz: 'Realisticky jen PPO. Tato hierarchická úloha (najít klíč za dveřmi a pak odemknout místnost s míčkem) je těžká i pro PPO a potřebuje velký rozpočet; malý genom neuroevoluce na obs o 2835 rozměrech jen zřídka udělá pokrok — je tu pro srovnání, ale čekejte, že zůstane poblíž 0.',
       },
+      mpe_spread: {
+        en: 'PPO is the only option here, with a twist: this is a *multi-agent* world, so PPO trains one shared "brain" that drives all the agents at once (parameter sharing). Neuroevolution and Q-learning have no multi-agent path, so they are turned off. Watch the agents spread out to cover the targets as the shared policy improves.',
+        cz: 'Tady je jedinou volbou PPO, ale s vychytávkou: jde o *více­agentní* svět, takže PPO trénuje jeden sdílený „mozek“, který řídí všechny agenty najednou (sdílení parametrů). Neuroevoluce ani Q-učení nemají více­agentní cestu, takže jsou vypnuté. Sledujte, jak se agenti rozprostírají a pokrývají cíle, jak se sdílená strategie zlepšuje.',
+      },
+      mpe_spread_swarm: {
+        en: 'PPO only, same as the 3-agent version — one shared policy now drives a six-agent swarm. The bigger the swarm, the more there is to coordinate, but it is still the single shared brain learning for everyone.',
+        cz: 'Jen PPO, stejně jako u verze se třemi agenty — jedna sdílená strategie teď řídí roj šesti agentů. Čím větší roj, tím víc koordinace, ale stále se učí jeden sdílený mozek za všechny.',
+      },
     },
   },
 
@@ -629,6 +637,14 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
       minigrid_keycorridor: {
         en: 'The hardest of these — choose the largest budget (★ 500k) and expect a long flat start. It may still not fully solve at this budget; more steps and Entropy help.',
         cz: 'Nejtěžší z nich — zvolte největší rozpočet (★ 500k) a počítejte s dlouhým rovným začátkem. I tak nemusí při tomto rozpočtu plně vyřešit; pomohou další kroky a entropie.',
+      },
+      mpe_spread: {
+        en: 'Cooperative coverage is slow to master — the ★ 500k gives a visible improvement on this CPU, but genuinely tidy coverage needs more (1–2M), which is what the GPU desktop is for. Here the step counter measures agent-steps summed across all agents, so it climbs fast; watch the reward trend rather than the raw count.',
+        cz: 'Kooperativní pokrytí se zvládá pomalu — ★ 500k dá na tomto CPU viditelné zlepšení, ale opravdu úhledné pokrytí chce víc (1–2M), na což je určen stroj s GPU. Počítadlo kroků tu měří kroky agentů sečtené přes všechny agenty, takže roste rychle; sledujte spíš trend odměny než holé číslo.',
+      },
+      mpe_spread_swarm: {
+        en: 'Six agents and six targets is much harder to coordinate, so it needs the larger ★ 1M budget — and even then expect only partial coverage on a CPU. This row is really a showcase of the swarm at scale; the heavy training belongs on the GPU desktop (G7b).',
+        cz: 'Šest agentů a šest cílů se koordinuje mnohem hůř, takže potřebuje větší rozpočet ★ 1M — a i tak čekejte na CPU jen částečné pokrytí. Tento řádek je hlavně ukázka roje ve větším měřítku; náročný trénink patří na stroj s GPU (G7b).',
       },
     },
   },

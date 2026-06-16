@@ -93,7 +93,9 @@
     "visual_off_hint": "Visual off — training runs at full speed",
     "idle_hint": "Start training to watch the agent play",
     "fullscreen": "Fullscreen (Esc to exit)",
-    "fullscreen_exit": "Exit fullscreen (Esc)"
+    "fullscreen_exit": "Exit fullscreen (Esc)",
+    "swarm_agents": "Agents",
+    "swarm_targets": "Targets"
   },
   "play": {
     "start": "Play vs AI",

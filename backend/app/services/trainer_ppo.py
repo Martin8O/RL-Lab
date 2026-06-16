@@ -17,6 +17,7 @@ from stable_baselines3.common.callbacks import BaseCallback
 from torch import nn
 
 from app.envs.factory import make_env
+from app.envs.registry import get_env
 from app.schemas.training import (
     TrainConfig,
     TrainingMetrics,
@@ -24,6 +25,7 @@ from app.schemas.training import (
     TrainState,
 )
 from app.services.checkpoints import CheckpointArtifact
+from app.services.ma_env import is_multi_agent, make_vec_env
 from app.services.train_control import TrainControl
 
 _ACTIVATIONS: dict[str, type[nn.Module]] = {"tanh": nn.Tanh, "relu": nn.ReLU}
@@ -234,21 +236,39 @@ def _progress_ticker(
         last_t, last_steps = now, steps
 
 
+def _make_train_env(config: TrainConfig, gym_id: str) -> tuple[Any, int | None]:
+    """Build the training env + the seed to hand SB3 — single-agent or multi-agent (the 5th seam).
+
+    Single-agent envs go through the shared factory (variant kwargs + the discrete-obs one-hot
+    wrapper) and let SB3 seed python/numpy/torch + the env from ``config.seed``. **Multi-agent**
+    (PettingZoo) envs go through the SuperSuit parameter-sharing bridge (``ma_env.make_vec_env``):
+    its ``ConcatVecEnv`` exposes no ``seed()``, so we seed the policy globally here and pass
+    ``seed=None`` to PPO (otherwise SB3 calls ``env.seed()`` and crashes). MA reproducibility is
+    therefore policy-level (network init + action sampling); per-episode scene RNG is best-effort.
+    """
+    if is_multi_agent(get_env(config.env_id)):
+        from stable_baselines3.common.utils import set_random_seed
+
+        set_random_seed(config.seed)  # seed numpy/torch/python (the SuperSuit vec env can't be seeded)
+        return make_vec_env(config.env_id), None
+    return make_env(config.env_id, gym_id), config.seed
+
+
 def _build_model(config: TrainConfig, gym_id: str) -> PPO:
     hp = config.hyperparams
     policy_kwargs = {
         "net_arch": [hp.neurons_per_layer] * hp.n_hidden_layers,
         "activation_fn": _ACTIVATIONS[hp.activation],
     }
-    # Build the env through the shared factory (it applies the registry's variant kwargs + the
-    # discrete-obs one-hot wrapper), then hand the env to SB3 — so a Toy Text env presents a vector
-    # observation and trains on the exact same MlpPolicy as CartPole. Passing seed= makes SB3 seed
-    # python/numpy/torch + the env, so the same seed reproduces the early metrics on CPU.
-    env = make_env(config.env_id, gym_id)
+    # One MlpPolicy serves both seams: a single-agent factory env, or the multi-agent SuperSuit
+    # vec env where the same policy is shared across all N homogeneous agents (parameter sharing,
+    # ADR-038). Either way SB3 sees a standard vector-obs env, so the rest of the trainer (callback,
+    # ticker, numpy-predict snapshot) is unchanged.
+    env, seed = _make_train_env(config, gym_id)
     return PPO(
         "MlpPolicy",
         env,
-        seed=config.seed,
+        seed=seed,
         learning_rate=hp.learning_rate,
         gamma=hp.gamma,
         clip_range=hp.clip_range,
@@ -264,12 +284,12 @@ def _build_model(config: TrainConfig, gym_id: str) -> PPO:
 def _load_model(config: TrainConfig, gym_id: str, resume_blob: bytes) -> PPO:
     """Rebuild a PPO model from a saved ``model.zip`` and attach a fresh env.
 
-    The env is built through the shared factory (same wrappers as training), so ``PPO.load``'s
-    ``check_for_correct_spaces`` matches; loading a checkpoint whose observation/action space no
-    longer fits the env raises (surfaced as a clear error by the manager). ``num_timesteps`` is
-    restored, so ``reset_num_timesteps=False`` continues the global step counter.
+    The env is built through the shared factory — or the multi-agent SuperSuit bridge — exactly as
+    in training, so ``PPO.load``'s ``check_for_correct_spaces`` matches; loading a checkpoint whose
+    observation/action space no longer fits the env raises (surfaced as a clear error by the
+    manager). ``num_timesteps`` is restored, so ``reset_num_timesteps=False`` continues the counter.
     """
-    env = make_env(config.env_id, gym_id)
+    env, _ = _make_train_env(config, gym_id)
     return PPO.load(io.BytesIO(resume_blob), env=env, device="cpu")
 
 

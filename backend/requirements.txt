@@ -90,3 +90,16 @@ tqdm==4.68.2
 typing_extensions==4.15.0
 tzdata==2026.2
 Werkzeug==3.1.8
+
+# --- Multi-agent stack (G7a, PettingZoo / MPE — ADR-038) ---
+# The 5th seam: N agents in one shared world. SB3 has no native multi-agent path, so SuperSuit bridges a
+# PettingZoo parallel env to an SB3 vec env with parameter sharing (one shared policy over homogeneous
+# agents). MPE lives in the split-out `mpe2` package, which depends on **pygame-ce** (NOT plain pygame) —
+# so this installs cleanly on Windows/py3.11 with no compiler and no pygame-ce corruption. CPU-trainable
+# now (the laptop); the RTX 5070 desktop just scales it (G7b). scipy + tinyscaler are transitive deps
+# (mpe2 / SuperSuit) pinned here for a reproducible freeze.
+mpe2==1.1.0
+pettingzoo==1.26.1
+scipy==1.17.1
+SuperSuit==3.11.0
+tinyscaler==1.2.8

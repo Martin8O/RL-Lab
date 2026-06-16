@@ -325,6 +325,25 @@ export interface GridLayout {
   cells: string[]
 }
 
+/** One agent's render state for the multi-agent "swarm" canvas (PettingZoo, G7a). World-space
+ *  [x, y] (the client autoscales the scene); `role` ("agent" | "adversary") drives the colour,
+ *  `size` is the entity's radius in the same world units. */
+export interface AgentSprite {
+  x: number
+  y: number
+  role: string
+  size: number
+}
+
+/** A landmark for the swarm canvas — a coverage "target" (simple_spread) or an "obstacle"
+ *  (a collidable landmark). Same world-space coordinates + size as AgentSprite. */
+export interface WorldEntity {
+  x: number
+  y: number
+  kind: string
+  size: number
+}
+
 /** WS frame: {type:"frame", ...} — a rendered env image OR client-render state. */
 export interface PreviewFrame {
   type: 'frame'
@@ -343,6 +362,10 @@ export interface PreviewFrame {
   terrain?: number[][] | null
   /** Static board layout for a grid-world (Toy Text); the client draws the board under the agent. */
   grid?: GridLayout | null
+  /** Multi-agent (PettingZoo) render state: per-agent sprites + landmark entities for the swarm
+   *  canvas (G7a). Present instead of image/state for the multi-agent family. */
+  agents?: AgentSprite[] | null
+  world?: WorldEntity[] | null
 }
 
 /** Partial preview update for POST /api/preview. */
@@ -444,6 +467,10 @@ export interface PlayFrame {
   terrain?: number[][] | null
   /** Static board layout for a grid-world (Toy Text); the client draws the board under the agent. */
   grid?: GridLayout | null
+  /** Multi-agent swarm state — never set on a play frame today (the play session is single-agent);
+   *  declared so the shared frame handler can read it off the PreviewFrame|PlayFrame union. */
+  agents?: AgentSprite[] | null
+  world?: WorldEntity[] | null
 }
 
 /** Outbound human input over WS: {type:"action", action:<number|number[]>}. A discrete action id
