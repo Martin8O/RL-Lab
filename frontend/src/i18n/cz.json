@@ -120,6 +120,12 @@
     "controls": "Ovládání",
     "tips": "Tipy"
   },
+  "watch": {
+    "about": "Na co se dívám?",
+    "title": "O prostředí {{env}}",
+    "what_is_this": "Co to je?",
+    "what_to_look_for": "Čeho si všímat"
+  },
   "playscore": {
     "title": "Nejlepší skóre",
     "human_title": "Lidé",

@@ -85,6 +85,45 @@ def test_train_ppo_stop_aborts_early() -> None:
     assert len(seen) == 1
 
 
+def test_interruptible_ppo_matches_stock_ppo() -> None:
+    """The epoch-sliced _InterruptiblePPO must train *bit-identically* to stock SB3 PPO at the same
+    seed — the between-epochs stop hook must not perturb the trajectory (ADR-038 follow-up: the fix
+    for the multi-agent 'Stopping' hang slices the hookless update into single epochs)."""
+    import numpy as np
+    from app.envs.factory import make_env
+    from app.services.trainer_ppo import _InterruptiblePPO
+    from stable_baselines3 import PPO
+    from stable_baselines3.common.utils import set_random_seed
+
+    def run(cls: type[PPO]) -> list[np.ndarray]:
+        set_random_seed(0)
+        model = cls(
+            "MlpPolicy", make_env("cartpole", "CartPole-v1"),
+            seed=0, n_steps=128, batch_size=64, device="cpu", verbose=0,
+        )
+        model.learn(total_timesteps=128 * 2)
+        return [p.detach().cpu().numpy().copy() for p in model.policy.parameters()]
+
+    stock, interruptible = run(PPO), run(_InterruptiblePPO)
+    assert all(np.array_equal(a, b) for a, b in zip(stock, interruptible, strict=True))
+
+
+def test_interruptible_ppo_bails_between_epochs() -> None:
+    """A Stop requested during PPO's (callback-less) update phase ends it after the current epoch,
+    not the whole n_epochs pass — keeping Stop responsive on a heavy multi-agent update."""
+    from app.envs.factory import make_env
+    from app.services.trainer_ppo import _InterruptiblePPO
+
+    model = _InterruptiblePPO(
+        "MlpPolicy", make_env("cartpole", "CartPole-v1"),
+        seed=0, n_steps=128, batch_size=64, n_epochs=10, device="cpu", verbose=0,
+    )
+    model.stop_check = lambda: True  # a Stop is already pending when the update begins
+    model.learn(total_timesteps=128)  # one rollout → one (interrupted) update
+    assert model._n_updates == 1  # bailed after epoch 1 (would be 10 without the hook)
+    assert model.n_epochs == 10  # n_epochs restored, so a resumed run still does full updates
+
+
 # -- manager ----------------------------------------------------------------
 
 

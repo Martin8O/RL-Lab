@@ -110,6 +110,22 @@ const BIPEDAL_KEYMAP: PlayKeymap = {
   idleAction: 0, // all keys released → backend fills a zero-torque vector [0,0,0,0]
 }
 
+// CarRacing (G3c) — continuous Box(3): [steer ∈ [-1,1], gas ∈ [0,1], brake ∈ [0,1]]. Like
+// BipedalWalker each key carries a per-control VECTOR contribution and the EnvPreview handler sums
+// the held keys element-wise into one action vector (backend reshapes + clips). Unlike the walker's
+// independent joints these all drive ONE car, so arrows and WASD are interchangeable aliases for the
+// same three controls. ← / → steer (summing both cancels to centre), ↑ gas, ↓ brake; releasing all
+// keys sends the scalar idle 0 → backend fills a zero vector [0,0,0] (coast, no input). Real-time.
+const CARRACING_KEYMAP: PlayKeymap = {
+  bindings: [
+    { keys: ['ArrowLeft', 'a', 'A'], action: [-1, 0, 0] }, // steer left
+    { keys: ['ArrowRight', 'd', 'D'], action: [1, 0, 0] }, // steer right
+    { keys: ['ArrowUp', 'w', 'W'], action: [0, 1, 0] }, // gas
+    { keys: ['ArrowDown', 's', 'S'], action: [0, 0, 1] }, // brake
+  ],
+  idleAction: 0, // all keys released → backend fills a zero vector [0,0,0] (no steer/gas/brake)
+}
+
 export const PLAY_KEYMAPS: Record<string, PlayKeymap> = {
   // CartPole: 0 = push left, 1 = push right. No idle action — the cart always moves.
   cartpole: {
@@ -168,6 +184,8 @@ export const PLAY_KEYMAPS: Record<string, PlayKeymap> = {
   // BipedalWalker (+ Hardcore) — per-joint vector control (see BIPEDAL_KEYMAP).
   bipedalwalker: BIPEDAL_KEYMAP,
   bipedalwalkerhardcore: BIPEDAL_KEYMAP,
+  // CarRacing — steer / gas / brake vector control (see CARRACING_KEYMAP).
+  carracing: CARRACING_KEYMAP,
   // Toy Text grid-worlds — turn-based: one move per key press (see FROZENLAKE_KEYMAP).
   frozenlake: FROZENLAKE_KEYMAP,
   frozenlake_noslip: FROZENLAKE_KEYMAP,

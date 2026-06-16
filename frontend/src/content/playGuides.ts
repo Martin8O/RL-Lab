@@ -265,6 +265,50 @@ export const PLAY_GUIDES: Record<string, PlayGuide> = {
     tips: BIPEDAL_TIPS,
   },
 
+  carracing: {
+    goal: {
+      en: 'Drive the car around the track from a top-down view, staying on the road and covering every '
+        + 'track tile as fast as you can. Each new tile you visit pays points (+1000 split across the '
+        + 'whole track), every frame costs a little, and driving off into the grass earns nothing and '
+        + 'wastes time — leave the playfield entirely and the run ends with a −100 penalty. A clean lap '
+        + 'scores around +900 (the "solved" mark). The episode runs up to 1000 frames.',
+      cz: 'Řiďte auto po trati z pohledu shora, držte se na silnici a co nejrychleji pokryjte každý dílek '
+        + 'trati. Každý nově projetý dílek dává body (+1000 rozdělených po celé trati), každý snímek '
+        + 'něco stojí a sjíždění do trávy nic nevynáší a jen ztrácí čas — když úplně opustíte hřiště, '
+        + 'běh skončí penalizací −100. Čisté kolo dá kolem +900 (hranice „vyřešeno“). Epizoda trvá až '
+        + '1000 snímků.',
+    },
+    controls: [
+      { keys: '← / → (A / D)', action: { en: 'Steer left / right', cz: 'Zatáčet doleva / doprava' } },
+      { keys: '↑ / W', action: { en: 'Gas (accelerate)', cz: 'Plyn (zrychlit)' } },
+      { keys: '↓ / S', action: { en: 'Brake', cz: 'Brzda' } },
+      { keys: '(release)', action: { en: 'Coast — no steer, gas or brake', cz: 'Setrvačnost — bez řízení, plynu i brzdy' } },
+    ],
+    tips: {
+      en: 'This is the first game played straight from the picture, and it is genuinely twitchy by hand '
+        + '— lower the play speed (down to 0.1×) so you have time to react. The keyboard is all-or-'
+        + 'nothing (full lock / full gas), so the car oversteers easily: feather it with short taps '
+        + 'instead of holding a key, brake and ease off before corners, then accelerate out of them. '
+        + 'The slidey, drifty handling is the real Box2D car model — we use the environment exactly as '
+        + 'it ships, so the long skids are expected; short inputs and early braking keep it in check. '
+        + 'The bars along the bottom are the car\'s dashboard: the tall white bar is your speed, the '
+        + 'four blue bars are the wheels (they jump when a wheel skids or locks under braking), the '
+        + 'green bar is the steering angle and the red bar is how fast the car is spinning — watch them '
+        + 'to catch a skid before you feel it. Switch to "Watch AI" once a model has been trained for '
+        + 'this on a GPU.',
+      cz: 'Tohle je první hra hraná přímo z obrazu a rukama je vážně cuklavá — snižte rychlost hraní (až '
+        + 'na 0,1×), ať máte čas reagovat. Klávesnice je „všechno, nebo nic“ (plné natočení / plný '
+        + 'plyn), takže auto snadno přetáčí: dávkujte krátkými ťuky místo držení klávesy, před zatáčkami '
+        + 'zabrzděte a uberte, pak ze zatáčky zrychlete. Klouzavé, smyklavé chování je skutečný model '
+        + 'auta v Box2D — prostředí používáme přesně tak, jak je, takže dlouhé smyky jsou očekávané; '
+        + 'krátké zásahy a včasné brzdění ho udrží pod kontrolou. Pruhy dole jsou palubní deska auta: '
+        + 'vysoký bílý pruh je rychlost, čtyři modré pruhy jsou kola (vyskočí, když kolo prokluzuje nebo '
+        + 'se při brzdění zablokuje), zelený pruh je natočení volantu a červený pruh ukazuje, jak rychle '
+        + 'se auto otáčí — sledujte je a smyk poznáte dřív, než ho ucítíte. Až bude na to natrénovaný '
+        + 'model na GPU, přepněte na „Sledovat AI“.',
+    },
+  },
+
   // ── Toy Text grid-worlds (turn-based: one move per key press) ───────────────────────────────
   frozenlake: {
     goal: {
@@ -492,4 +536,32 @@ export function atariPlayGuide(description: Bilingual): PlayGuide {
 
 export function playGuideFor(envId: string | null): PlayGuide {
   return (envId !== null && PLAY_GUIDES[envId]) || DEFAULT_PLAY_GUIDE
+}
+
+// ── Watch-only "what am I watching" tips ─────────────────────────────────────────────────────────
+// Some envs are watch-and-train only (human_playable=false) — the multi-agent swarm has no single
+// human driver, so its Play / How-to-play bar is hidden (G7a). The env's own registry description
+// answers "what is this?"; this adds a "what to look for" note while you watch it train, restoring
+// the explanation the hidden play bar used to carry. Bilingual; shared across a family's variants.
+const MPE_SPREAD_WATCH_TIP: Bilingual = {
+  en: 'The moving dots are the agents — every one is driven by a single shared brain (parameter '
+    + 'sharing), so they all learn one strategy together. The open rings are the targets they must '
+    + 'cover. Early on they wander and bunch up; as training improves, watch them fan out so each '
+    + 'target ends up occupied, with fewer collisions. The whole team shares one reward, so good play '
+    + 'looks like smooth, coordinated spreading — not individual agents racing off on their own.',
+  cz: 'Pohybující se tečky jsou agenti — každého řídí jediný sdílený „mozek“ (sdílení parametrů), '
+    + 'takže se všichni učí jednu společnou strategii. Prázdné kroužky jsou cíle, které mají pokrýt. '
+    + 'Zpočátku bloudí a shlukují se; jak se učí, sledujte, jak se rozprostřou tak, aby každý cíl '
+    + 'někdo obsadil a srážek ubývalo. Celý tým sdílí jednu odměnu, takže dobrá hra vypadá jako '
+    + 'plynulé, koordinované rozprostírání — ne jako jednotlivci ujíždějící každý po svém.',
+}
+
+export const WATCH_TIPS: Record<string, Bilingual> = {
+  mpe_spread: MPE_SPREAD_WATCH_TIP,
+  mpe_spread_swarm: MPE_SPREAD_WATCH_TIP,
+}
+
+/** The "what to look for" watch note for a watch-only env, or null if it has none. */
+export function watchTipFor(envId: string | null): Bilingual | null {
+  return (envId !== null && WATCH_TIPS[envId]) || null
 }

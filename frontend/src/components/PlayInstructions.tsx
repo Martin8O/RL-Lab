@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
+import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import { useAppStore } from '../store/useAppStore'
 import { atariPlayGuide, playGuideFor } from '../content/playGuides'
@@ -51,6 +52,12 @@ function InstructionsModal({ onClose }: { onClose: () => void }) {
   // Atari shares one guide across the family, with the game's own description as the goal (G4a).
   const guide   = env?.family === 'atari' ? atariPlayGuide(env.description) : playGuideFor(selectedEnvId)
   const envName = env?.display_name[locale] ?? ''
+  // Portal the modal out of the play bar: the "How to play" button is wrapped in a span with
+  // transform: translateY(-8px) (PlayControls), and a transformed ancestor becomes the containing
+  // block for position:fixed — collapsing the overlay to the span's width (a thin sliver, the bug).
+  // Rendering into the fullscreen element (or body) escapes that ancestor and also keeps the modal
+  // visible while playing fullscreen ([[project_fullscreen_portal]]). Captured at mount.
+  const [portalTarget] = useState<HTMLElement>(() => (document.fullscreenElement as HTMLElement | null) ?? document.body)
 
   useEffect(() => {
     closeRef.current?.focus()
@@ -61,7 +68,7 @@ function InstructionsModal({ onClose }: { onClose: () => void }) {
 
   const title = t('play.instructions_title', { env: envName })
 
-  return (
+  return createPortal(
     <div
       onClick={onClose}
       style={{
@@ -135,7 +142,8 @@ function InstructionsModal({ onClose }: { onClose: () => void }) {
           </Section>
         </div>
       </div>
-    </div>
+    </div>,
+    portalTarget,
   )
 }
 

@@ -6,6 +6,7 @@ import type { AgentSprite, GridLayout, PlayFrame, PreviewFrame, WorldEntity } fr
 import { keymapFor } from '../content/playKeymaps'
 import { DEFAULT_AGENT, DEFAULT_GRIDS, isGridEnv } from '../content/gridMaps'
 import PlayControls from './PlayControls'
+import WatchInfo from './WatchInfo'
 import SkillMeter from './SkillMeter'
 import {
   CART_X_LIMIT, CART_X_SCALE, MC_START, mcCarTransform,
@@ -679,9 +680,10 @@ export default function EnvPreview() {
       </div>
 
       {/* Play vs AI (E2): controls. The skill meter is the single overlay inside the stage above.
-          Hidden for multi-agent envs — the single-agent play session can't drive a swarm (G7a);
-          you watch the swarm via the live training preview instead. */}
-      {clientKind !== 'mpe' && <PlayControls />}
+          Multi-agent envs can't be driven by a single human (G7a), so the play bar is replaced by a
+          watch-only "What am I watching?" affordance — keeping the env explanation the play bar used
+          to carry (its How-to-play guide) instead of leaving the swarm unlabelled. */}
+      {clientKind !== 'mpe' ? <PlayControls /> : <WatchInfo />}
     </section>
   )
 }

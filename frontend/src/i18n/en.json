@@ -120,6 +120,12 @@
     "controls": "Controls",
     "tips": "Tips"
   },
+  "watch": {
+    "about": "What am I watching?",
+    "title": "About {{env}}",
+    "what_is_this": "What is this?",
+    "what_to_look_for": "What to look for"
+  },
   "playscore": {
     "title": "High Scores",
     "human_title": "Human",

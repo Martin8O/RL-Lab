@@ -31,6 +31,46 @@ from app.services.train_control import TrainControl
 _ACTIVATIONS: dict[str, type[nn.Module]] = {"tanh": nn.Tanh, "relu": nn.ReLU}
 _PROGRESS_INTERVAL = 1.0  # seconds between live progress frames
 
+
+class _InterruptiblePPO(PPO):
+    """PPO whose multi-epoch ``train()`` update can be stopped *between epochs*.
+
+    SB3 only invokes the training callback during **rollout collection** (``_on_step``), never
+    during the ``train()`` update — so a Stop pressed mid-update isn't observed until the whole
+    update finishes and the next collection's first step runs. For a **multi-agent** (SuperSuit
+    parameter-sharing) run that update is ``n_epochs`` passes over the N×-bigger shared batch and
+    measured ~24 s on the CPU laptop (6-agent swarm), so Stop looked frozen — the "Zastavuji" hang
+    the user hit (ADR-038 follow-up).
+
+    Fix: run the epochs one at a time (set ``n_epochs=1`` and call the stock ``train()`` repeatedly)
+    and check the stop flag between them. This is **behaviourally identical** to the stock 10-epoch
+    update — each ``super().train()`` call does one full shuffled pass, so the RNG draws (one buffer
+    permutation per epoch), the per-minibatch advantage normalisation, the gradient steps and the
+    ``_n_updates``/loss logging are exactly the same; only ``clip_range``/learning-rate recompute and
+    the metrics ``logger.record`` run once per epoch instead of once per update (same values, the
+    metrics callback reads them only after the full update). Worst-case stop latency drops from a
+    whole update to a single epoch (~2–3 s here). Harmless for single-agent runs (tiny updates), so
+    it's used for every PPO run rather than branched on family.
+    """
+
+    stop_check: Callable[[], bool] | None = None
+
+    def _excluded_save_params(self) -> list[str]:
+        # ``stop_check`` closes over the run's TrainControl (a threading primitive) — unpicklable and
+        # runtime-only — so keep it out of the saved model.zip; it's re-attached on the next run.
+        return [*super()._excluded_save_params(), "stop_check"]
+
+    def train(self) -> None:
+        epochs = self.n_epochs
+        self.n_epochs = 1
+        try:
+            for _ in range(epochs):
+                super().train()
+                if self.stop_check is not None and self.stop_check():
+                    break  # bail out of the update; the next collect_rollouts step ends learn()
+        finally:
+            self.n_epochs = epochs
+
 MetricsSink = Callable[[TrainingMetrics], None]
 ProgressSink = Callable[[TrainingProgress], None]
 SnapshotSink = Callable[[CheckpointArtifact], None]
@@ -254,7 +294,7 @@ def _make_train_env(config: TrainConfig, gym_id: str) -> tuple[Any, int | None]:
     return make_env(config.env_id, gym_id), config.seed
 
 
-def _build_model(config: TrainConfig, gym_id: str) -> PPO:
+def _build_model(config: TrainConfig, gym_id: str) -> _InterruptiblePPO:
     hp = config.hyperparams
     policy_kwargs = {
         "net_arch": [hp.neurons_per_layer] * hp.n_hidden_layers,
@@ -265,7 +305,7 @@ def _build_model(config: TrainConfig, gym_id: str) -> PPO:
     # ADR-038). Either way SB3 sees a standard vector-obs env, so the rest of the trainer (callback,
     # ticker, numpy-predict snapshot) is unchanged.
     env, seed = _make_train_env(config, gym_id)
-    return PPO(
+    return _InterruptiblePPO(
         "MlpPolicy",
         env,
         seed=seed,
@@ -281,16 +321,18 @@ def _build_model(config: TrainConfig, gym_id: str) -> PPO:
     )
 
 
-def _load_model(config: TrainConfig, gym_id: str, resume_blob: bytes) -> PPO:
+def _load_model(config: TrainConfig, gym_id: str, resume_blob: bytes) -> _InterruptiblePPO:
     """Rebuild a PPO model from a saved ``model.zip`` and attach a fresh env.
 
     The env is built through the shared factory — or the multi-agent SuperSuit bridge — exactly as
     in training, so ``PPO.load``'s ``check_for_correct_spaces`` matches; loading a checkpoint whose
     observation/action space no longer fits the env raises (surfaced as a clear error by the
     manager). ``num_timesteps`` is restored, so ``reset_num_timesteps=False`` continues the counter.
+    Loaded into the interruptible subclass (``load`` instantiates ``cls``) so a resumed run's update
+    phase is stoppable too; the subclass adds no persisted state, so the zip stays compatible.
     """
     env, _ = _make_train_env(config, gym_id)
-    return PPO.load(io.BytesIO(resume_blob), env=env, device="cpu")
+    return _InterruptiblePPO.load(io.BytesIO(resume_blob), env=env, device="cpu")
 
 
 def train_ppo(
@@ -322,6 +364,9 @@ def train_ppo(
         if resume_blob is not None
         else _build_model(config, gym_id)
     )
+    # Let the update phase (train()) bail between epochs the moment a Stop is requested, so a heavy
+    # multi-agent update doesn't strand the run in "stopping" for tens of seconds (see _InterruptiblePPO).
+    model.stop_check = lambda: control.stop_requested
     if on_policy is not None:
         on_policy(_build_numpy_predict(model))  # initial preview policy (before the first rollout)
 

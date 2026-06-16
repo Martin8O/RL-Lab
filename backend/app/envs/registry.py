@@ -369,6 +369,75 @@ register(
 
 
 # ---------------------------------------------------------------------------
+# CarRacing-v3  (Box2D family — G3c-play: "install + human-play on CPU now,
+# training GPU-gated"). This is the env the seam roadmap flagged as the LAST
+# int→box case: **image obs (96×96×3) AND a continuous Box(3) action** (steer
+# ∈ [-1,1], gas ∈ [0,1], brake ∈ [0,1]). For *human play* both halves are
+# already solved seams — the image obs rides the existing server-JPEG render
+# path (like Atari/MiniGrid; client_state returns None → env.render() → JPEG),
+# and the box action rides the G1b/G3b continuous-box play path (play_session
+# reshapes the held analog command into the action vector + clips it). Human
+# play sends a *per-joint vector* via the G3b multi-key keymap (←/→ steer, ↑
+# gas, ↓ brake, summed client-side), so this needs NO new engine code — pure
+# data + content, exactly like BipedalWalker.
+#
+# Training is **gated** (hw_requirement="gpu") — but unlike BipedalWalker (a
+# vector env gated only by step count), CarRacing genuinely needs the CnnPolicy
+# seam for its image obs (the laptop's MlpPolicy/CPU trainer can't consume
+# pixels). That seam lands on the desktop (G3c-train); the GPU gate both blocks
+# the impractical CPU run AND stands in for the missing CnnPolicy until then.
+# Human play needs no training and is available now.
+#
+# supported_algos=["ppo"] — PPO-only, evolution opted out as data (the numpy
+# genome is an MLP over a flat vector; it can't take pixels either). Skill:
+# solved_score=900 (the community "solved" mark — visit ~all track tiles at
+# +1000/N while paying −0.1/frame). min_score=-100 is the do-nothing/off-track
+# floor (ADR-026): idle for the full episode costs ≈ −0.1 × 1000 ≈ −100, and
+# leaving the playfield ends the episode with a −100 penalty — so a non-driver
+# reads ~0%. floor_scales_with_steps=False (the −100 off-field penalty is
+# terminal, not a per-step floor that grows with the cap) and play_step_scale=1
+# (1000 steps @ 50 fps ≈ 20 s, and the play-speed slider goes to 0.1× for more
+# real time — extending the episode would only deepen the −0.1/frame penalty).
+# ---------------------------------------------------------------------------
+
+register(
+    EnvSpec(
+        id="carracing",
+        gym_id="CarRacing-v3",
+        display_name=Bilingual(en="CarRacing-v3", cz="CarRacing-v3"),
+        description=Bilingual(
+            en="Drive a race car around a randomly generated track from a top-down view, staying on "
+            "the road and visiting every track tile as fast as you can. A Box2D classic and the "
+            "first pixels-in game you can play here: the state is the 96×96 colour image itself, and "
+            "you steer with a continuous wheel plus gas and brake pedals. Each tile visited pays "
+            "+1000/N, every frame costs a little, and leaving the track is heavily penalised — a "
+            "clean lap scores around +900 (the 'solved' mark).",
+            cz="Řiďte závodní auto po náhodně generované trati z pohledu shora, držte se na silnici a "
+            "co nejrychleji projeďte každý dílek trati. Klasika Box2D a první „hra z pixelů“, kterou "
+            "si tu zahrajete: stavem je přímo barevný obraz 96×96 a řídíte spojitým volantem plus "
+            "plynem a brzdou. Každý projetý dílek vyplatí +1000/N, každý snímek něco stojí a sjetí z "
+            "trati je tvrdě penalizováno — čisté kolo dá kolem +900 (hranice „vyřešeno“).",
+        ),
+        family="box2d",
+        obs_type="image",  # 96×96×3 pixels → server-JPEG render for play; CnnPolicy training is G3c-train
+        action_space="box",  # continuous Box(3): steer [-1,1], gas [0,1], brake [0,1] — the G1b/G3b seam
+        supported_algos=["ppo"],  # PPO-only (evolution opted out as data — a flat-vector genome can't take pixels)
+        hyperparams=_standard_hyperparams(),
+        make_kwargs={"continuous": True},  # the continuous steer/gas/brake variant (vs Discrete(5))
+        solved_score=900.0,  # the community "solved" mark (visit ~all tiles at +1000/N, less frame cost)
+        min_score=-100.0,  # do-nothing/off-track floor (ADR-026): idle ≈ −100, leaving the field penalises −100
+        default_total_timesteps=1_000_000,  # the ★ CnnPolicy PPO budget when GPU training lands (G3c-train)
+        play_step_scale=1,  # 1000 steps @ 50 fps ≈ 20 s; the play-speed slider (to 0.1×) gives more real time
+        floor_scales_with_steps=False,  # the −100 off-field penalty is terminal, not a per-step floor
+        human_playable=True,
+        competitive=False,
+        difficulty="advanced",
+        hw_requirement="gpu",  # image obs needs the CnnPolicy seam (G3c-train, desktop); play available now
+    )
+)
+
+
+# ---------------------------------------------------------------------------
 # Classic Control family — the rest of the discrete/vector envs (G1a). Like
 # CartPole, these reuse the exact MlpPolicy/CPU PPO path and the numpy
 # neuroevolution path with no engine changes (vector obs + discrete actions);

@@ -13,7 +13,10 @@ FrozenLake / Taxi / CliffWalking) reuses the now-built one-hot seam — both are
 An **image-observation** env (Atari / ALE — `obs_type="image"`) is **human-playable as data too**: it
 reuses the existing server-JPEG render + play loop, so a registry row + `hw_requirement="gpu"` +
 `supported_algos=["ppo"]` + a shared keymap is enough to play it now (G4a). Its *training* still needs the
-`CnnPolicy`+CUDA seam, so Run is gated off until a GPU is present (`/api/system` `gpu_available`). A
+`CnnPolicy`+CUDA seam, so Run is gated off until a GPU is present (`/api/system` `gpu_available`). The two
+compose: **CarRacing** (`obs_type="image"` **and** `action_space="box"`, G3c) is human-playable as data by
+reusing *both* the server-JPEG path and the continuous-box play path at once (a steer/gas/brake vector keymap),
+with training the same GPU-gated `CnnPolicy` case — confirming the seams stack without new engine code. A
 **dict-observation** env (MiniGrid — a 7×7×3 view + `direction` + a `mission` string) is **data too**:
 `make_env` applies `FlatObsWrapper` for `family=="minigrid"`, flattening it to a vector so the same
 `MlpPolicy`/genome train (on CPU) with no engine change, while the colourful grid still renders server-side
@@ -159,7 +162,7 @@ popups, record-stars, and the start/idle pose. Then `.\tasks.ps1 all` must be gr
 |---|---|---|
 | Policy + device | image obs → `CnnPolicy` + CUDA | `trainer_ppo._build_model` |
 | Shared frame-stack | Atari (vec-env + `VecFrameStack`) used by trainer **and** both streamers | new shared env path |
-| Action space | continuous `box` (done for classic control); image-box (CarRacing) next | `play_session`, `policy`, `trainer_*`, preview, keymaps |
+| Action space | continuous `box` (done: classic control, multi-joint, **image-box CarRacing for human play, G3c**); only `box` *training* on image obs stays GPU-gated | `play_session`, `policy`, `trainer_*`, preview, keymaps |
 | Competitive | 2-agent / `side` selector (Pong) | `play_session` + a 2-agent env |
 | Board games | turn-based self-play (OpenSpiel) | a parallel subsystem, not a registry row |
 | Multi-agent (**done G7a**) | N agents in one shared world (PettingZoo) | `ma_env` adapter + `trainer_ppo`/preview branches; `agents`/`world` frame |

@@ -68,6 +68,10 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
         en: 'Only PPO, same as the standard course — and the hardcore terrain (ladders, stumps, pits) makes it one of the hardest continuous-control benchmarks, needing the largest budget. Training is GPU-only (Run disabled here); play it by hand now.',
         cz: 'Jen PPO, stejně jako u standardní dráhy — a hardcore terén (žebříky, pařezy, jámy) z ní dělá jeden z nejtěžších benchmarků spojitého řízení, který potřebuje největší rozpočet. Trénink je jen na GPU (Spustit je zde zakázané); rukama si to zahrajete už teď.',
       },
+      carracing: {
+        en: 'Only PPO is offered here, and on a GPU it would train a convolutional network (CnnPolicy) straight from the 96×96 picture — a different policy from the small games\' MLP. Neuroevolution is turned off as data (a flat-vector genome cannot take pixels). Training is reserved for a GPU machine, so Run is disabled here; play it by hand now and watch a trained AI once one exists.',
+        cz: 'Tady je k dispozici jen PPO a na GPU by trénovalo konvoluční síť (CnnPolicy) přímo z obrazu 96×96 — jiná strategie než MLP u malých her. Neuroevoluce je vypnutá jako data (genom z plochého vektoru neumí pixely). Trénink je vyhrazen pro stroj s GPU, takže Spustit je zde zakázané; rukama si to zahrajete už teď a natrénovanou AI uvidíte, jakmile bude existovat.',
+      },
       frozenlake: {
         en: 'Both can solve it. The state is a single grid cell (one-hot–encoded for the network), and the reward is sparse — only reaching the goal pays — so a little exploration matters. Because the ice slips, success is a *rate*: even a good policy scores below 1.0. A nice task to compare PPO and Neuroevolution.',
         cz: 'Vyřešit ho zvládnou obě. Stav je jediná buňka mřížky (pro síť kódovaná jako one-hot) a odměna je řídká — platí jen dosažení cíle — takže záleží na trošce zkoumání. Protože led klouže, je úspěch *míra*: i dobrá strategie skóruje pod 1,0. Pěkná úloha pro porovnání PPO a Neuroevoluce.',
@@ -158,6 +162,10 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
         en: 'Same 3e-4 starting point; the harder terrain is even more prone to instability, so keep the rate moderate and lean on more steps instead.',
         cz: 'Stejný výchozí bod 3e-4; těžší terén je ještě náchylnější k nestabilitě, takže držte rychlost umírněnou a spoléhejte raději na víc kroků.',
       },
+      carracing: {
+        en: 'The default 3e-4 is a fine starting point for CarRacing\'s CnnPolicy too — keep it moderate, as learning from pixels is sensitive and too large a step can destabilise it. (Training is GPU-only, so this applies once you train on the desktop.)',
+        cz: 'Výchozí 3e-4 je dobrý výchozí bod i pro CnnPolicy u CarRacing — držte ji umírněnou, protože učení z pixelů je citlivé a příliš velký krok ho může rozhodit. (Trénink je jen na GPU, takže se to týká až tréninku na desktopu.)',
+      },
       frozenlake: {
         en: 'Default 3e-4 is fine. The bottleneck here is exploration (slippery ice, sparse reward), not step size — if it stalls, raise Entropy or add steps before touching this.',
         cz: 'Výchozí 3e-4 je v pořádku. Překážkou je tu zkoumání (kluzký led, řídká odměna), ne velikost kroku — pokud učení vázne, zvyšte raději entropii nebo přidejte kroky.',
@@ -239,6 +247,10 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
       bipedalwalkerhardcore: {
         en: 'Keep γ high (0.99) — clearing each obstacle pays off only over the steps that follow, so the agent must plan well ahead.',
         cz: 'Nechte γ vysoké (0.99) — překonání každé překážky se vyplatí až v dalších krocích, takže agent musí plánovat hodně dopředu.',
+      },
+      carracing: {
+        en: 'Keep γ high (0.99): a fast lap is a long sequence of turns, so the agent must value the track tiles many steps ahead over the small per-frame cost it pays now.',
+        cz: 'Nechte γ vysoké (0.99): rychlé kolo je dlouhá řada zatáček, takže agent musí cenit dílky trati mnoho kroků dopředu víc než malou cenu za každý snímek teď.',
       },
       frozenlake: {
         en: 'Reaching the goal is a long sequence with no reward along the way, so keep γ high (0.99) — the agent must value the distant goal across many zero-reward steps. Too low and it cannot "see" the goal from far away.',
@@ -322,6 +334,10 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
         en: 'Leave it at 0.2 — on this harder course the safety rail matters even more; tune budget and exploration instead.',
         cz: 'Nechte ji na 0.2 — na této těžší dráze záleží na bezpečnostním zábradlí ještě víc; laďte raději rozpočet a zkoumání.',
       },
+      carracing: {
+        en: 'Leave it at 0.2 — learning from pixels can be unstable, and the clip is what keeps one bad batch from wrecking a working driving policy; tune budget and learning rate first.',
+        cz: 'Nechte ji na 0.2 — učení z pixelů může být nestabilní a ořezávání brání jedné špatné dávce zničit funkční strategii řízení; laďte nejdřív rozpočet a rychlost učení.',
+      },
     },
   },
 
@@ -367,6 +383,10 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
       bipedalwalkerhardcore: {
         en: 'A small bonus (e.g. 0.01) helps it explore the moves needed to get over obstacles, but keep it modest — too much and it flails into a fall.',
         cz: 'Drobný bonus (např. 0,01) pomůže prozkoumat pohyby potřebné k překonání překážek, ale držte ho mírný — při přemíře robot spadne.',
+      },
+      carracing: {
+        en: 'PPO\'s continuous action head already explores with its own noise, so 0 can work; a small bonus (e.g. 0.01) can help it try the gas early instead of crawling. Keep it modest — too much randomness just sends the car off the track.',
+        cz: 'Spojitá akční hlava PPO už zkoumá vlastním šumem, takže 0 může stačit; drobný bonus (např. 0,01) může pomoci zkusit plyn dřív než se plížit. Držte ho mírný — moc náhodnosti auto jen vyveze z trati.',
       },
       frozenlake: {
         en: 'Exploration matters here — only the goal pays, so a small bonus (e.g. 0.01) helps PPO discover a route before settling. At 0 it can stall on the slippery map, never finding the goal.',
@@ -601,6 +621,10 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
       bipedalwalkerhardcore: {
         en: 'The obstacle course is notoriously hard, so it needs an even larger budget (the ★ 10M) — and may still not fully solve. Training is GPU-only.',
         cz: 'Překážková dráha je pověstně těžká, takže potřebuje ještě větší rozpočet (★ 10M) — a i tak nemusí plně vyřešit. Trénink je jen na GPU.',
+      },
+      carracing: {
+        en: 'CarRacing learns from pixels, so it needs a lot of practice — a solid driving policy typically takes around a million steps, hence the large ★ budget. (Training runs on a GPU machine; here Run is disabled until then.)',
+        cz: 'CarRacing se učí z pixelů, takže potřebuje hodně cviku — slušná strategie řízení obvykle zabere kolem milionu kroků, odtud velký ★ rozpočet. (Trénink běží na stroji s GPU; tady je Spustit do té doby zakázané.)',
       },
       frozenlake: {
         en: 'Slippery and sparse, so give it a generous budget (the ★ 200k). A success rate stuck near 0 means it has not found a route yet — raise the Entropy bonus rather than just adding steps.',
