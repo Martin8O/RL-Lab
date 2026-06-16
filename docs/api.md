@@ -19,9 +19,13 @@ Base URL in dev: `http://127.0.0.1:8000`. CORS allows the Vite origin (`CORS_ORI
 | GET | `/api/health` | `{status, version}` |
 | GET | `/api/system` | `SystemInfo` — `{gpu_available}` (cached `torch.cuda` probe) |
 
-`gpu_available` gates **GPU-only training**: image-observation envs (Atari) declare `hw_requirement="gpu"`,
-so the UI disables Run for them on a CPU-only machine and `POST /api/train/start` rejects such a run with
-`400`. Human play of those envs needs no GPU and stays available. On a CUDA machine nothing is gated.
+`gpu_available` gates **GPU-only training** together with two `EnvSpec` fields (ADR-043). `hw_requirement`
+(`"cpu"`/`"gpu"`) declares whether a CUDA device is needed; `train_implemented` (default `true`, `false` for
+the **image-obs** envs Atari + CarRacing) declares whether the env's trainer exists yet. The UI disables Run —
+and `POST /api/train/start` rejects with `400` — when an env needs a GPU that's absent **or** its trainer
+isn't built. The two are independent: on a **CUDA machine** the GPU-gated *vector* heavies (BipedalWalker,
+MuJoCo — `MlpPolicy`) un-gate and train, while the *image* envs stay gated (their `CnnPolicy` seam, G4b/
+G3c-train, isn't built) until `train_implemented` flips. Human play of every gated env stays available.
 
 ### Environments
 | Method | Path | Returns |

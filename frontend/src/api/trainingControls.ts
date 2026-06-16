@@ -15,9 +15,14 @@ export interface RunControls {
   isStopping: boolean
   isActive: boolean
   canRun: boolean
-  /** True when the selected env needs a GPU that isn't present (G4a) — training is disabled but the
-   *  game is still human-playable. The Sidebar shows an explanatory note in this case. */
+  /** True when training the selected env is disabled while the game is still human-playable (G4a). Two
+   *  reasons (see `trainGatedReason`): the env needs a GPU that isn't present, OR its trainer isn't
+   *  built yet (image envs). The Sidebar shows the matching explanatory note. */
   trainGated: boolean
+  /** Why training is gated, so the Sidebar picks the right note. `'no_gpu'` = needs a CUDA device (the
+   *  vector heavies un-gate on a GPU); `'not_implemented'` = image-obs CnnPolicy trainer not built yet
+   *  (stays gated even on a GPU, G4b/G3c-train); `null` = not gated. */
+  trainGatedReason: 'no_gpu' | 'not_implemented' | null
 }
 
 export function useRunControls(): RunControls {
@@ -38,11 +43,18 @@ export function useRunControls(): RunControls {
   const isPaused   = trainState === 'paused'
   const isStopping = trainState === 'stopping'
   const isActive   = isRunning || isPaused || isStopping
-  // GPU-only envs (Atari + other image-obs games) can't train without a CUDA device — gate Run, but
-  // keep them human-playable. On a GPU machine gpuAvailable is true, so nothing is gated (G4a).
-  const selectedEnv = envs.find((e) => e.id === selectedEnvId)
-  const trainGated  = !!selectedEnv && selectedEnv.hw_requirement === 'gpu' && !gpuAvailable
-  const canRun      = !!selectedEnvId && envs.length > 0 && !trainGated
+  // Gate Run while the game stays human-playable. Two reasons, in priority order:
+  //  1. the image-obs envs (Atari, CarRacing) have no trainer yet (CnnPolicy/GPU seam, G4b/G3c-train) →
+  //     gated even on a GPU machine until that lands;
+  //  2. the GPU-gated *vector* heavies (BipedalWalker, MuJoCo) train with the existing MlpPolicy but
+  //     need a CUDA device — gated only while none is present (a GPU machine un-gates them).
+  const selectedEnv     = envs.find((e) => e.id === selectedEnvId)
+  const notImplemented  = !!selectedEnv && selectedEnv.train_implemented === false
+  const needsAbsentGpu  = !!selectedEnv && selectedEnv.hw_requirement === 'gpu' && !gpuAvailable
+  const trainGated      = notImplemented || needsAbsentGpu
+  const trainGatedReason: 'no_gpu' | 'not_implemented' | null =
+    notImplemented ? 'not_implemented' : needsAbsentGpu ? 'no_gpu' : null
+  const canRun          = !!selectedEnvId && envs.length > 0 && !trainGated
 
   // Apply the REST response's state to the store immediately, so the controls flip (Run → Pause/Stop,
   // etc.) without waiting for the WS `status` frame. A heavy first-time env import — notably the
@@ -73,5 +85,5 @@ export function useRunControls(): RunControls {
   async function handleResume() { try { setTrainState((await resumeTraining()).state) } catch { /* ignore */ } }
   async function handleStop()   { try { setTrainState((await stopTraining()).state)   } catch { /* ignore */ } }
 
-  return { handleRun, handlePause, handleResume, handleStop, isRunning, isPaused, isStopping, isActive, canRun, trainGated }
+  return { handleRun, handlePause, handleResume, handleStop, isRunning, isPaused, isStopping, isActive, canRun, trainGated, trainGatedReason }
 }

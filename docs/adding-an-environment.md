@@ -12,8 +12,10 @@ reuses the now-built continuous seam, and a **discrete (single-integer) observat
 FrozenLake / Taxi / CliffWalking) reuses the now-built one-hot seam — both are also data + content.
 An **image-observation** env (Atari / ALE — `obs_type="image"`) is **human-playable as data too**: it
 reuses the existing server-JPEG render + play loop, so a registry row + `hw_requirement="gpu"` +
-`supported_algos=["ppo"]` + a shared keymap is enough to play it now (G4a). Its *training* still needs the
-`CnnPolicy`+CUDA seam, so Run is gated off until a GPU is present (`/api/system` `gpu_available`). The two
+`train_implemented=False` + `supported_algos=["ppo"]` + a shared keymap is enough to play it now (G4a). Its
+*training* still needs the `CnnPolicy`+CUDA seam, so `train_implemented=False` keeps Run gated off **even on a
+GPU** (ADR-043) — distinct from the *vector* GPU heavies (BipedalWalker/MuJoCo, `train_implemented=True`) that
+un-gate the moment a CUDA device is present. The two
 compose: **CarRacing** (`obs_type="image"` **and** `action_space="box"`, G3c) is human-playable as data by
 reusing *both* the server-JPEG path and the continuous-box play path at once (a steer/gas/brake vector keymap),
 with training the same GPU-gated `CnnPolicy` case — confirming the seams stack without new engine code. A

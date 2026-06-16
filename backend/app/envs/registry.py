@@ -85,6 +85,16 @@ class EnvSpec(BaseModel):
     competitive: bool
     difficulty: Literal["beginner", "intermediate", "advanced"]
     hw_requirement: Literal["cpu", "gpu"]
+    # Whether this env's TRAINING code path actually exists yet. True for every env whose obs reaches
+    # the implemented MlpPolicy trainer (all vector/discrete envs — incl. the GPU-gated *vector* heavies
+    # BipedalWalker + MuJoCo, which train correctly with MlpPolicy and are gated only because they need
+    # millions of steps). False for the **image-observation** envs (Atari, CarRacing): their training
+    # needs the CnnPolicy + frame-stack + CUDA seam that is NOT built yet (G4b / G3c-train), so a "Train"
+    # there would build an MlpPolicy on pixels and crash. Decouples "needs a GPU" from "trainer not
+    # implemented": a GPU machine un-gates the vector heavies (hw_requirement="gpu" + gpu present) but
+    # MUST keep image envs gated until the CnnPolicy seam lands. The training-manager start() enforces
+    # this as a backstop and the UI shows a distinct "coming later" note. Flip to True per-env in G4b.
+    train_implemented: bool = True
 
 
 _REGISTRY: dict[str, EnvSpec] = {}
@@ -442,6 +452,7 @@ register(
         competitive=False,
         difficulty="advanced",
         hw_requirement="gpu",  # image obs needs the CnnPolicy seam (G3c-train, desktop); play available now
+        train_implemented=False,  # image obs → CnnPolicy seam not built yet (G3c-train); stays gated even on a GPU
     )
 )
 
@@ -851,6 +862,7 @@ def _atari_spec(
         competitive=False,
         difficulty=difficulty,
         hw_requirement="gpu",  # training needs a GPU; the UI gates Run, human play stays available now
+        train_implemented=False,  # image obs → CnnPolicy/frame-stack seam not built yet (G4b); stays gated even on a GPU
     )
 
 

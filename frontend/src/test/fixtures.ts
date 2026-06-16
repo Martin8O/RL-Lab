@@ -44,6 +44,7 @@ export const cartpoleEnv: EnvSpec = {
   competitive: false,
   difficulty: 'beginner',
   hw_requirement: 'cpu',
+  train_implemented: true,
 }
 
 export const samplePlayScores: PlayScores = {

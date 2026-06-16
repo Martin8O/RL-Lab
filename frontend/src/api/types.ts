@@ -50,6 +50,11 @@ export interface EnvSpec {
   competitive: boolean
   difficulty: Difficulty
   hw_requirement: HwRequirement
+  /** Whether this env's training code path exists yet. True for every vector/discrete env (incl. the
+   *  GPU-gated vector heavies BipedalWalker + MuJoCo, which train with MlpPolicy). False for image envs
+   *  (Atari, CarRacing): their CnnPolicy/GPU trainer isn't built (G4b/G3c-train), so training stays
+   *  gated even on a GPU machine until that seam lands. Decouples "needs a GPU" from "trainer missing". */
+  train_implemented: boolean
 }
 
 // --- System capabilities (G4a) ---------------------------------------------

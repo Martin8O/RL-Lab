@@ -111,10 +111,20 @@ class TrainingManager:
             raise InvalidConfigError(
                 f"Environment '{config.env_id}' does not support algo '{config.algo}'"
             )
-        # GPU-only envs (image obs → CnnPolicy/CUDA, e.g. Atari) can't train without a CUDA device.
-        # Reject the run with a clear message instead of letting the trainer fail deep inside; human
-        # play of these envs needs no GPU and stays available. (gpu_available() is cached; the UI also
-        # disables Run for these, so this is a defensive backstop — see /api/system, G4a.)
+        # Image-observation envs (Atari, CarRacing) have NO training path yet: their PPO needs the
+        # CnnPolicy + frame-stack + CUDA seam that isn't built (G4b / G3c-train). Reject before the
+        # trainer would build an MlpPolicy on pixels and crash. This holds **even on a CUDA machine**,
+        # so it's the backstop that keeps the GPU desktop (and anyone building from source on a GPU)
+        # from un-gating these by the gpu check below. Human play needs no net and stays available.
+        if not spec.train_implemented:
+            raise InvalidConfigError(
+                f"Training '{config.env_id}' isn't available yet — pixel-based games need the GPU "
+                f"(CnnPolicy) trainer that's coming in a later version. You can still play it by hand now."
+            )
+        # GPU-gated *vector* envs (BipedalWalker, MuJoCo) train correctly with the existing MlpPolicy
+        # path — they're gated only because a gait needs millions of steps, too slow on a CPU. Reject
+        # on a machine with no CUDA device; a GPU machine un-gates them (the trainer runs as-is). The UI
+        # also disables Run, so this is a defensive backstop. (gpu_available() is cached — see /api/system.)
         if spec.hw_requirement == "gpu" and not gpu_available():
             raise InvalidConfigError(
                 f"Training '{config.env_id}' needs a CUDA GPU, which isn't available on this "

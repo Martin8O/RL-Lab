@@ -307,7 +307,7 @@ export default function Sidebar() {
   const totalTimesteps  = useAppStore((s) => s.totalTimesteps)
   const setTotalTimesteps = useAppStore((s) => s.setTotalTimesteps)
 
-  const { handleRun, handlePause, handleResume, handleStop, isRunning, isPaused, isStopping, isActive, canRun, trainGated } =
+  const { handleRun, handlePause, handleResume, handleStop, isRunning, isPaused, isStopping, isActive, canRun, trainGated, trainGatedReason } =
     useRunControls()
 
   const selectedEnv = envs.find((e) => e.id === selectedEnvId)
@@ -611,13 +611,14 @@ export default function Sidebar() {
         )}
       </div>
 
-      {/* GPU-gated note (G4a): the game needs a GPU to train, but is still human-playable now. */}
+      {/* Train-gated note: the game can't be trained here yet but is still human-playable. Two reasons —
+          a missing GPU (the vector heavies) or an unbuilt image trainer (Atari/CarRacing). */}
       {trainGated && !isActive && (
         <div style={{
           padding: '0 var(--space-5)', flexShrink: 0,
           fontSize: 'var(--fs-meta)', lineHeight: 1.45, color: 'var(--text-muted)',
         }}>
-          {t('sidebar.train_needs_gpu')}
+          {t(trainGatedReason === 'not_implemented' ? 'sidebar.train_not_implemented' : 'sidebar.train_needs_gpu')}
         </div>
       )}
 

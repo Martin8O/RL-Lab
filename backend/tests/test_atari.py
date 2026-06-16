@@ -114,3 +114,46 @@ def test_atari_skill_bands_span_symmetric_range() -> None:
     assert skill["min_score"] == -21.0 and skill["max_score"] == 21.0
     assert skill["bands"][0]["min_score"] == -21.0  # weakest band starts at the floor
     assert skill["bands"][-1]["id"] == "superhuman"
+
+
+# -- training implemented vs GPU-gated (the capability-aware gate, pre-migration hardening) -----
+
+
+def test_train_implemented_tracks_image_obs() -> None:
+    """`train_implemented` is False exactly for the image-obs envs (Atari, CarRacing) whose CnnPolicy
+    trainer isn't built yet (G4b/G3c-train), and True for every vector/discrete env — including the
+    GPU-gated *vector* heavies (BipedalWalker, MuJoCo) that train with the existing MlpPolicy. This is
+    what lets a GPU machine un-gate the heavies while keeping image training gated."""
+    for spec in list_envs():
+        expected = spec.obs_type != "image"
+        assert spec.train_implemented is expected, (
+            f"{spec.id}: train_implemented={spec.train_implemented} but obs_type={spec.obs_type}"
+        )
+    # Spot-check the two named cases on both sides of the split.
+    assert get_env("pong").train_implemented is False  # type: ignore[union-attr]
+    assert get_env("carracing").train_implemented is False  # type: ignore[union-attr]
+    assert get_env("bipedalwalker").train_implemented is True  # type: ignore[union-attr]
+    assert get_env("hopper").train_implemented is True  # type: ignore[union-attr]
+
+
+def test_image_env_training_gated_even_with_a_gpu(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The key backstop: an image-obs env's training is rejected **even on a CUDA machine**, because
+    its CnnPolicy trainer isn't built. Without this, a GPU desktop (or someone building from source on
+    a GPU) would un-gate Atari/CarRacing via the gpu check and crash inside the MlpPolicy trainer."""
+    monkeypatch.setattr("app.services.training_manager.gpu_available", lambda: True)
+    resp = client.post(
+        "/api/train/start",
+        json={
+            "env_id": "carracing",
+            "algo": "ppo",
+            "seed": 1,
+            "total_timesteps": 1000,
+            "hyperparams": {
+                "learning_rate": 3e-4, "gamma": 0.99, "clip_range": 0.2, "ent_coef": 0.0,
+                "n_steps": 128, "batch_size": 64, "n_hidden_layers": 2,
+                "neurons_per_layer": 64, "activation": "tanh",
+            },
+        },
+    )
+    assert resp.status_code == 400
+    assert "later version" in resp.json()["detail"]  # the "trainer not built yet" message, not "no GPU"
