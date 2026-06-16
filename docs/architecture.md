@@ -107,7 +107,7 @@ typed seams need real code — see [`adding-an-environment.md`](adding-an-enviro
    for Atari in G4b / ADR-044**; the image preview policy is an SB3 `save`/`load` CPU snapshot (ADR-019 holds).
 2. **Shared Atari path** — `app/envs/atari.make_atari` (`AtariWrapper`+frame-stack) feeds the trainer (`n_envs=8`)
    *and* the preview streamer (`n_envs=1`) so obs/action shapes match (**G4b**). CarRacing's image trainer is G3c-train.
-3. **Action space** — discrete `int` vs continuous `box` (done for classic-control + multi-joint; CarRacing image-box play landed, image-box *training* is G3c-train).
+3. **Action space** — discrete `int` vs continuous `box` (done for classic-control + multi-joint; CarRacing image-box *human* play landed; **Atari image AI-play landed in G4c / ADR-046** via `play_session._run_image_ai` over the `make_atari` vec env); image-box *training* is G3c-train.
 4. **Competitive play** — a `side` selector + a 2-agent env (Pong).
 5. **Board games** — a parallel turn-based/self-play subsystem (OpenSpiel), not a registry row.
 6. **Multi-agent** (PettingZoo, **landed G7a / ADR-038**) — N agents in one shared world (the parallel API),

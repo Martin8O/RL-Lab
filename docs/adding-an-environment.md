@@ -170,7 +170,7 @@ popups, record-stars, and the start/idle pose. Then `.\tasks.ps1 all` must be gr
 |---|---|---|
 | Policy + device | image obs → `CnnPolicy` + CUDA | `trainer_ppo._build_model` |
 | Shared frame-stack | Atari (vec-env + `VecFrameStack`) used by trainer **and** both streamers | new shared env path |
-| Action space | continuous `box` (done: classic control, multi-joint, **image-box CarRacing for human play, G3c**); only `box` *training* on image obs stays GPU-gated | `play_session`, `policy`, `trainer_*`, preview, keymaps |
+| Action space | continuous `box` (done: classic control, multi-joint, **image-box CarRacing human play G3c**, **Atari image AI-play G4c / ADR-046** via `play_session._run_image_ai` on the `make_atari` vec env); only `box` *training* on image obs stays GPU-gated | `play_session`, `policy`, `trainer_*`, preview, keymaps |
 | Competitive | 2-agent / `side` selector (Pong) | `play_session` + a 2-agent env |
 | Board games | turn-based self-play (OpenSpiel) | a parallel subsystem, not a registry row |
 | Multi-agent (**done G7a**) | N agents in one shared world (PettingZoo) | `ma_env` adapter + `trainer_ppo`/preview branches; `agents`/`world` frame |

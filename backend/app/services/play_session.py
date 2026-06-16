@@ -234,6 +234,17 @@ class PlaySession:
     # -- worker thread ----------------------------------------------------------
 
     def _run(self, gym_id: str, seed: int | None) -> None:
+        # Image-obs envs (Atari) can't be played by an AI on the raw render env: a CnnPolicy consumes
+        # the 84×84×4 frame stack, not the raw 210×160×3 RGB the env emits, so model.predict on the
+        # raw obs would shape-error. AI mode runs a dedicated loop on the shared AtariWrapper +
+        # frame-stack vec env (G4b's make_atari) so the obs shape matches the checkpoint (G4c). Human
+        # image play needs no policy (the person supplies the action), so it stays on the raw make_env
+        # + JPEG path below — untouched.
+        spec = get_env(self._env_id) if self._env_id else None
+        if self._mode == "ai" and spec is not None and spec.obs_type == "image":
+            self._run_image_ai(spec, seed)
+            return
+
         # Shared factory: applies the registry's variant kwargs, the discrete-obs one-hot wrapper
         # (so a loaded AI policy gets the obs shape it trained on) and the play_step_scale episode
         # extension — only lengthening truncation; early termination (flag/goal/crash) still ends
@@ -310,6 +321,105 @@ class PlaySession:
         finally:
             env.close()
         self._finalize(score, step, completed=completed, error=error)
+
+    def _run_image_ai(self, spec: Any, seed: int | None) -> None:
+        """AI-play loop for an image-obs env (Atari, G4c).
+
+        A CnnPolicy consumes the 84×84×4 frame stack, not the raw 210×160×3 RGB, so AI play builds
+        the **shared** Atari vec env (``make_atari`` at ``n_envs=1`` — the exact AtariWrapper +
+        frame-stack the policy trained on, G4b) and feeds ``obs[0]`` to the checkpoint's predict fn.
+        The JPEG still shows the **raw colour** frame (``WarpFrame`` only rewrites the observation),
+        exactly like human play. One episode, then rate — the same shape as the vector AI path.
+
+        Score = the summed step reward. ``AtariWrapper`` clips reward to its sign, but every
+        symmetric duel game scores ±1 per point (Pong −21…21, Boxing/Tennis/…), so the clipped sum
+        IS the true game score there — and those are the games where a skill reading is meaningful;
+        it matches human play (raw env) and the [min_score, solved_score] meter exactly. (For the
+        high-scoring arcade games the clip means the reading reflects the training-shaped reward; a
+        raw-score eval env for those is out of scope here — true human-vs-net is G7c anyway.)
+        """
+        from app.envs.atari import make_atari
+
+        try:
+            # AI play keeps the configured seed (a reproducible demo); make_atari seeds the vec env.
+            venv = make_atari(spec.gym_id, 1, make_kwargs=spec.make_kwargs, seed=seed)
+        except Exception:  # noqa: BLE001 — a bad env must surface as state, not crash the thread
+            logger.exception("Play image env creation failed for %s", spec.gym_id)
+            self._finalize(0.0, 0, completed=False, error="Could not create play environment")
+            return
+
+        with self._lock:
+            self._n_actions = self._discrete_n(venv)  # getattr-based, mypy-safe (Atari = Discrete(18))
+        # Pace like the preview's image loop: a fixed 30 fps base scaled by the speed slider. The
+        # Atari render_fps + the wrapper's 4-frame skip don't map cleanly onto one sleep, and 30 fps
+        # reads as natural real-time arcade play. AI play isn't frame-rate-capped (that cap is a
+        # human-reaction concern); the speed selector still slows it to 0.1× for a closer look.
+        base_dt = 1.0 / _DEFAULT_RENDER_FPS
+        send_interval = 1.0 / _SEND_FPS_CAP
+
+        score = 0.0
+        step = 0
+        last_sent = 0.0
+        completed = False
+        error: str | None = None
+        try:
+            obs = venv.reset()
+            self._emit_image_frame(venv, step, score)  # show the starting state immediately
+            done = False
+            while not done and not self._stopped():
+                action = self._choose_image_action(venv, obs)
+                obs, reward, dones, _ = venv.step(np.asarray([action]))
+                score += float(reward[0])
+                step += 1
+                done = bool(dones[0])  # the vec env auto-resets, but we end the episode here
+                with self._lock:
+                    self._step = step
+                    self._score = score
+
+                now = time.monotonic()
+                if now - last_sent >= send_interval or done:
+                    last_sent = now
+                    self._emit_image_frame(venv, step, score)
+                time.sleep(base_dt / self._current_speed())
+            completed = done
+        except Exception:  # noqa: BLE001 — never let a step/render fault crash the thread
+            logger.exception("Play image session loop failed")
+            error = "Play session crashed"
+        finally:
+            venv.close()
+        self._finalize(score, step, completed=completed, error=error)
+
+    def _choose_image_action(self, venv: Any, obs: Any) -> int:
+        """The checkpoint's CNN action over the single stacked obs (random fallback if it faults)."""
+        with self._lock:
+            predict = self._predict
+        if predict is None:  # AI mode always loads a policy in start(); stay safe regardless
+            return int(venv.action_space.sample())
+        try:
+            return int(predict(obs[0]))  # obs[0] = the 84×84×4 stack; SB3 predict transposes it
+        except Exception:  # noqa: BLE001 — a flaky predict falls back to a random action
+            logger.debug("AI image predict failed; using random action", exc_info=True)
+            return int(venv.action_space.sample())
+
+    def _emit_image_frame(self, venv: Any, step: int, score: float) -> None:
+        """Broadcast the raw-colour vec-env frame as a play_frame JPEG (the human-play image path)."""
+        try:
+            rgb = np.asarray(venv.render(mode="rgb_array"), dtype=np.uint8)
+            image, width, height = encode_frame(rgb)
+        except Exception:  # noqa: BLE001 — drop a bad frame, keep the loop alive
+            logger.debug("Play image frame render/encode failed", exc_info=True)
+            return
+        # Matches schemas.play.PlayFrame; built by hand to avoid per-frame validation.
+        self._broadcast(
+            {
+                "type": "play_frame",
+                "step": step,
+                "score": score,
+                "width": width,
+                "height": height,
+                "image": image,
+            }
+        )
 
     def _choose_action(self, env: Any, obs: Any) -> Any:
         with self._lock:
