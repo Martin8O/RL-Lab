@@ -109,6 +109,7 @@ other text is echoed back as `{echo: <text>}` (the original A3 contract).
 |---|---|---|
 | `metrics` | `TrainingMetrics` | once per PPO rollout |
 | `progress` | `TrainingProgress` | ~1 Hz, from a decoupled ticker thread |
+| `hwstats` | `HwStatsFrame` | ~1 Hz CPU/GPU telemetry from the manager, for *any* active run (every algorithm) — feeds the HW panel; GPU fields `None` without `pynvml` (G4b) |
 | `evolution` | `EvolutionMetrics` | once per neuroevolution generation (Top-5 + mutation histogram) |
 | `q_learning` | `QLearningMetrics` | periodic tabular-Q report (x = `episode`; `ep_rew_mean` learning curve) |
 | `qtable` | `QTableFrame` | the live `[n_states × n_actions]` Q-table heatmap snapshot (decoupled, unlogged) |

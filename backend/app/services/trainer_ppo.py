@@ -30,6 +30,7 @@ from app.services.train_control import TrainControl
 
 _ACTIVATIONS: dict[str, type[nn.Module]] = {"tanh": nn.Tanh, "relu": nn.ReLU}
 _PROGRESS_INTERVAL = 1.0  # seconds between live progress frames
+_ATARI_N_ENVS = 8  # parallel image envs for the CnnPolicy rollout (the standard Atari setup)
 
 
 class _InterruptiblePPO(PPO):
@@ -117,6 +118,49 @@ def _build_numpy_predict(model: BaseAlgorithm) -> Callable[[object], Any]:
         return int(np.argmax(out))
 
     return predict
+
+
+def _build_cnn_predict(model: BaseAlgorithm) -> Callable[[object], Any]:
+    """A read-only **CPU torch** forward over a snapshot of an image-obs CnnPolicy (G4b).
+
+    The numpy forward above only covers an MLP (``mlp_extractor.policy_net`` + ``action_net``); a
+    CnnPolicy's NatureCNN feature extractor has no such path, so the preview needs a real torch
+    forward. ADR-019 still holds — the preview must never touch the *live* CUDA model: a deepcopy
+    of the policy trips torch's non-leaf-tensor guard, so we round-trip the policy through SB3's own
+    ``save``/``load`` into an **independent CPU policy**. That copy shares no tensor storage with the
+    trainer, so forwarding it cannot perturb training (the same isolation the numpy snapshot gives).
+
+    Built at a rollout boundary (a quiescent point on the trainer thread). Returns ``predict(obs) ->
+    int`` over the stacked 84×84×4 observation the preview's matching vec env yields.
+    """
+    import io
+
+    import torch
+
+    buf = io.BytesIO()
+    # SB3's BaseModel.save/load are typed for a str path but accept a file-like at runtime (the same
+    # in-memory round-trip _snapshot uses for the whole model) — round-trips state_dict + constructor
+    # params (tensors only → picklable), avoiding the non-leaf-tensor deepcopy trap.
+    model.policy.save(buf)  # type: ignore[arg-type]
+    buf.seek(0)
+    policy = model.policy.__class__.load(buf, device="cpu")  # type: ignore[arg-type]  # maps tensors → CPU
+    policy.set_training_mode(False)
+
+    def predict(obs: object) -> Any:
+        with torch.no_grad():
+            action, _ = policy.predict(np.asarray(obs), deterministic=True)
+        return int(np.asarray(action).flatten()[0])
+
+    return predict
+
+
+def _build_preview_predict(model: BaseAlgorithm) -> Callable[[object], Any]:
+    """Dispatch the decoupled preview policy by observation rank: a 3-D obs (H, W, C) is an image
+    (CnnPolicy → CPU torch snapshot); anything else is a vector/one-hot obs (the numpy MLP forward).
+    Either way the result is a self-contained predict fn over copied weights — never the live model."""
+    if len(getattr(model.observation_space, "shape", ()) or ()) == 3:
+        return _build_cnn_predict(model)
+    return _build_numpy_predict(model)
 
 
 def _snapshot(model: BaseAlgorithm, total_timesteps: int, iteration: int) -> CheckpointArtifact:
@@ -215,7 +259,7 @@ class _MetricsCallback(BaseCallback):
         # Refresh the preview's decoupled (numpy) policy with this rollout's weights, so it shows
         # the learning progress without the live model.predict that would perturb training.
         if self._on_policy is not None:
-            self._on_policy(_build_numpy_predict(self.model))
+            self._on_policy(_build_preview_predict(self.model))
 
 
 def _progress_ticker(
@@ -276,37 +320,61 @@ def _progress_ticker(
         last_t, last_steps = now, steps
 
 
-def _make_train_env(config: TrainConfig, gym_id: str) -> tuple[Any, int | None]:
-    """Build the training env + the seed to hand SB3 — single-agent or multi-agent (the 5th seam).
+def _is_image_env(config: TrainConfig) -> bool:
+    """True for an image-observation env (Atari) — the CnnPolicy + CUDA + frame-stack path (G4b)."""
+    spec = get_env(config.env_id)
+    return spec is not None and spec.obs_type == "image"
 
-    Single-agent envs go through the shared factory (variant kwargs + the discrete-obs one-hot
-    wrapper) and let SB3 seed python/numpy/torch + the env from ``config.seed``. **Multi-agent**
-    (PettingZoo) envs go through the SuperSuit parameter-sharing bridge (``ma_env.make_vec_env``):
-    its ``ConcatVecEnv`` exposes no ``seed()``, so we seed the policy globally here and pass
-    ``seed=None`` to PPO (otherwise SB3 calls ``env.seed()`` and crashes). MA reproducibility is
-    therefore policy-level (network init + action sampling); per-episode scene RNG is best-effort.
+
+def _make_train_env(config: TrainConfig, gym_id: str) -> tuple[Any, int | None]:
+    """Build the training env + the seed to hand SB3 — vector, multi-agent (5th seam) or image (G4b).
+
+    Vector single-agent envs go through the shared factory (variant kwargs + the discrete-obs
+    one-hot wrapper) and let SB3 seed python/numpy/torch + the env from ``config.seed``.
+    **Image** envs (Atari) go through the shared ``make_atari`` vec builder (AtariWrapper +
+    frame-stack, ``n_envs=8``) so the CnnPolicy sees the obs shape the preview will match; its
+    DummyVecEnv exposes ``seed()`` so SB3 seeds it normally. **Multi-agent** (PettingZoo) envs go
+    through the SuperSuit parameter-sharing bridge (``ma_env.make_vec_env``): its ``ConcatVecEnv``
+    exposes no ``seed()``, so we seed the policy globally here and pass ``seed=None`` to PPO
+    (otherwise SB3 calls ``env.seed()`` and crashes). MA reproducibility is therefore policy-level.
     """
     if is_multi_agent(get_env(config.env_id)):
         from stable_baselines3.common.utils import set_random_seed
 
         set_random_seed(config.seed)  # seed numpy/torch/python (the SuperSuit vec env can't be seeded)
         return make_vec_env(config.env_id), None
+    if _is_image_env(config):
+        from app.envs.atari import make_atari
+
+        spec = get_env(config.env_id)
+        assert spec is not None  # _is_image_env already established this
+        return make_atari(
+            gym_id, _ATARI_N_ENVS, make_kwargs=spec.make_kwargs, seed=config.seed
+        ), config.seed
     return make_env(config.env_id, gym_id), config.seed
 
 
 def _build_model(config: TrainConfig, gym_id: str) -> _InterruptiblePPO:
     hp = config.hyperparams
-    policy_kwargs = {
-        "net_arch": [hp.neurons_per_layer] * hp.n_hidden_layers,
-        "activation_fn": _ACTIVATIONS[hp.activation],
-    }
-    # One MlpPolicy serves both seams: a single-agent factory env, or the multi-agent SuperSuit
-    # vec env where the same policy is shared across all N homogeneous agents (parameter sharing,
-    # ADR-038). Either way SB3 sees a standard vector-obs env, so the rest of the trainer (callback,
-    # ticker, numpy-predict snapshot) is unchanged.
     env, seed = _make_train_env(config, gym_id)
+    if _is_image_env(config):
+        # Image obs (Atari, G4b): a CnnPolicy on CUDA over the 84×84×4 frame stack. The net_arch /
+        # activation sliders describe an MLP and don't apply to the fixed NatureCNN feature
+        # extractor, so leave policy_kwargs at SB3's default; the lr/γ/clip/ent/n_steps/batch knobs
+        # still tune the run. device="cuda" is gated upstream (training_manager rejects on no GPU).
+        policy, device, policy_kwargs = "CnnPolicy", "cuda", None
+    else:
+        # One MlpPolicy on CPU serves the rest: a single-agent factory env, or the multi-agent
+        # SuperSuit vec env where the same policy is shared across all N homogeneous agents
+        # (parameter sharing, ADR-038). SB3 sees a standard vector-obs env, so the callback, ticker
+        # and numpy-predict snapshot are unchanged.
+        policy, device = "MlpPolicy", "cpu"
+        policy_kwargs = {
+            "net_arch": [hp.neurons_per_layer] * hp.n_hidden_layers,
+            "activation_fn": _ACTIVATIONS[hp.activation],
+        }
     return _InterruptiblePPO(
-        "MlpPolicy",
+        policy,
         env,
         seed=seed,
         learning_rate=hp.learning_rate,
@@ -316,7 +384,7 @@ def _build_model(config: TrainConfig, gym_id: str) -> _InterruptiblePPO:
         n_steps=hp.n_steps,
         batch_size=hp.batch_size,
         policy_kwargs=policy_kwargs,
-        device="cpu",
+        device=device,
         verbose=0,
     )
 
@@ -332,7 +400,8 @@ def _load_model(config: TrainConfig, gym_id: str, resume_blob: bytes) -> _Interr
     phase is stoppable too; the subclass adds no persisted state, so the zip stays compatible.
     """
     env, _ = _make_train_env(config, gym_id)
-    return _InterruptiblePPO.load(io.BytesIO(resume_blob), env=env, device="cpu")
+    device = "cuda" if _is_image_env(config) else "cpu"  # image (CnnPolicy) resumes on the GPU (G4b)
+    return _InterruptiblePPO.load(io.BytesIO(resume_blob), env=env, device=device)
 
 
 def train_ppo(
@@ -368,7 +437,7 @@ def train_ppo(
     # multi-agent update doesn't strand the run in "stopping" for tens of seconds (see _InterruptiblePPO).
     model.stop_check = lambda: control.stop_requested
     if on_policy is not None:
-        on_policy(_build_numpy_predict(model))  # initial preview policy (before the first rollout)
+        on_policy(_build_preview_predict(model))  # initial preview policy (before the first rollout)
 
     started_at = time.monotonic()
     callback = _MetricsCallback(

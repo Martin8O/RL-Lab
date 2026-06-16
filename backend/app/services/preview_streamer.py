@@ -156,8 +156,14 @@ class PreviewStreamer:
 
         # Multi-agent (PettingZoo) envs are a different shape — N agents in one shared world — so they
         # run their own parallel rollout loop + swarm-frame emit (the 5th seam, ADR-038).
-        if is_multi_agent(get_env(env_id)):
+        spec = get_env(env_id)
+        if is_multi_agent(spec):
             self._run_ma(env_id)
+            return
+        # Image-obs envs (Atari, G4b) need the shared AtariWrapper + frame-stack vec env so the obs
+        # shape matches the CnnPolicy snapshot — a different env API + a raw-colour render path.
+        if spec is not None and spec.obs_type == "image":
+            self._run_image(env_id, spec)
             return
 
         from app.envs.factory import make_env  # lazy: keep gym out of startup
@@ -276,6 +282,87 @@ class PreviewStreamer:
                 "reward": reward,
                 "agents": agent_sprites(env),
                 "world": world_entities(env),
+            }
+        )
+
+    def _run_image(self, env_id: str, spec: Any) -> None:
+        """Preview loop for an image-obs env (Atari, G4b).
+
+        Drives the **shared** Atari vec env at ``n_envs=1`` — the exact AtariWrapper + frame-stack the
+        CnnPolicy trained on — so the decoupled snapshot's obs shape always matches. The snapshot is a
+        read-only CPU torch forward the trainer publishes (ADR-019), never the live CUDA model; until
+        it arrives the loop uses random actions. The JPEG shows the **raw colour** frame (``WarpFrame``
+        only rewrites the observation), not the 84×84 grayscale the policy consumes. A SB3 vec env
+        auto-resets on ``done``, so the loop just counts episodes instead of calling ``reset`` itself.
+        """
+        from app.envs.atari import make_atari
+
+        try:
+            venv = make_atari(spec.gym_id, 1, make_kwargs=spec.make_kwargs)
+        except Exception:  # noqa: BLE001 — a bad render env must not crash anything
+            logger.exception("Preview image env creation failed for %s", env_id)
+            return
+
+        base_dt = 1.0 / _DEFAULT_RENDER_FPS
+        send_interval = 1.0 / _SEND_FPS_CAP
+        episode = 1
+        last_sent = 0.0
+        try:
+            obs = venv.reset()
+            ep_reward = 0.0
+            step = 0
+            while self._active_and_visual():
+                if self._is_paused():  # training paused → freeze the last frame
+                    time.sleep(0.05)
+                    continue
+                action = self._choose_image_action(venv, obs)
+                obs, reward, dones, _ = venv.step(np.asarray([action]))
+                ep_reward += float(reward[0])
+                step += 1
+                done = bool(dones[0])  # vec env has already auto-reset obs into the next episode
+
+                now = time.monotonic()
+                if now - last_sent >= send_interval or done:
+                    last_sent = now
+                    self._emit_image_frame(venv, episode, step, ep_reward)
+
+                if done:
+                    episode += 1
+                    ep_reward = 0.0
+                    step = 0
+                time.sleep(base_dt / self._current_speed())
+        finally:
+            venv.close()
+
+    def _choose_image_action(self, venv: Any, obs: Any) -> int:
+        """The CNN snapshot's action over the single stacked obs (random until it's published)."""
+        with self._lock:
+            predict = self._predict
+        if predict is None:
+            return int(venv.action_space.sample())
+        try:
+            return int(predict(obs[0]))
+        except Exception:  # noqa: BLE001 — never let inference contention disturb the run
+            logger.debug("Preview image predict failed; using random action", exc_info=True)
+            return int(venv.action_space.sample())
+
+    def _emit_image_frame(self, venv: Any, episode: int, step: int, reward: float) -> None:
+        try:
+            rgb = np.asarray(venv.render(mode="rgb_array"), dtype=np.uint8)
+            image, width, height = encode_frame(rgb)
+        except Exception:  # noqa: BLE001 — drop a bad frame, keep the loop alive
+            logger.debug("Preview image frame render/encode failed", exc_info=True)
+            return
+        # Matches schemas.preview.FrameMessage; built by hand to avoid per-frame validation.
+        self._broadcast(
+            {
+                "type": "frame",
+                "episode": episode,
+                "step": step,
+                "reward": reward,
+                "width": width,
+                "height": height,
+                "image": image,
             }
         )
 

@@ -97,7 +97,9 @@
     "fullscreen": "Fullscreen (Esc to exit)",
     "fullscreen_exit": "Exit fullscreen (Esc)",
     "swarm_agents": "Agents",
-    "swarm_targets": "Targets"
+    "swarm_targets": "Targets",
+    "badge_gpu": "GPU training",
+    "badge_cpu": "CPU training"
   },
   "play": {
     "start": "Play vs AI",
@@ -154,6 +156,17 @@
     "series_best": "Best",
     "series_avg": "Gen avg",
     "series_worst": "Worst"
+  },
+  "hwstats": {
+    "cpu": "CPU",
+    "gpu": "GPU",
+    "util": "Util",
+    "ram": "RAM",
+    "vram": "VRAM",
+    "temp": "Temp",
+    "power": "Power",
+    "toggle_show": "Show hardware stats",
+    "toggle_hide": "Hide hardware stats"
   },
   "leaderboard": {
     "title": "Top-5 Children",

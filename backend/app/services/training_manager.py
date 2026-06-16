@@ -16,6 +16,7 @@ from app.envs.registry import get_env
 from app.schemas.checkpoints import CheckpointMeta
 from app.schemas.training import (
     EvolutionMetrics,
+    HwStatsFrame,
     QLearningMetrics,
     QTableFrame,
     TrainConfig,
@@ -37,6 +38,8 @@ logger = get_logger(__name__)
 # Cap on metric frames retained for a checkpoint's metrics.json (per-rollout / per-generation
 # frames only — the high-frequency progress ticks are not logged). Generous for any CartPole run.
 _METRICS_LOG_CAP = 10_000
+# Cadence of the algorithm-independent hardware-telemetry frame (the HW panel), in seconds.
+_HW_STATS_INTERVAL = 1.0
 
 
 class AlreadyRunningError(RuntimeError):
@@ -158,9 +161,14 @@ class TrainingManager:
             initial_status = self._status_locked()
 
         self._broadcast_status()
+        # Algo-independent HW telemetry for the lifetime of THIS run. The stop event is created per
+        # run and handed to both the ticker and _run, so a back-to-back start can't have the finishing
+        # run's teardown stop the next run's ticker (a shared field would race; see _run's finally).
+        hw_stop = threading.Event()
+        self._start_hw_ticker(hw_stop)
         self._thread = threading.Thread(
             target=self._run,
-            args=(config, gym_id, self._control, resume),
+            args=(config, gym_id, self._control, resume, hw_stop),
             name="ppo-trainer",
             daemon=True,
         )
@@ -244,6 +252,31 @@ class TrainingManager:
         if thread is not None:
             thread.join(timeout)
 
+    # -- hardware telemetry (the HW panel, G4b) ---------------------------------
+
+    def _start_hw_ticker(self, stop: threading.Event) -> None:
+        """Broadcast a 1 Hz hardware-telemetry frame while the run is active — independent of the
+        algorithm (PPO / neuroevolution / Q-learning all light up the HW panel). The daemon thread
+        owns ``stop`` (this run's event, set in ``_run``'s finally) and also self-retires if the run
+        leaves an active state, so it can never broadcast for a *different* run than the one it began."""
+
+        def loop() -> None:
+            from app.services.hw_stats import sample  # lazy: psutil/pynvml off the boot path
+
+            while not stop.wait(_HW_STATS_INTERVAL):
+                with self._lock:
+                    active = self._state in ("running", "paused", "stopping")
+                if not active:
+                    break
+                try:
+                    frame = HwStatsFrame(stats=sample()).model_dump()
+                except Exception:  # noqa: BLE001 — telemetry must never disturb the run
+                    logger.debug("HW stats sample failed", exc_info=True)
+                    continue
+                self._broadcast(frame)
+
+        threading.Thread(target=loop, name="hw-stats", daemon=True).start()
+
     # -- worker thread ----------------------------------------------------------
 
     def _run(
@@ -252,6 +285,7 @@ class TrainingManager:
         gym_id: str,
         control: TrainControl,
         resume: bytes | None = None,
+        hw_stop: threading.Event | None = None,
     ) -> None:
         try:
             if config.algo == "neuroevolution":
@@ -301,6 +335,8 @@ class TrainingManager:
                 self._error = str(exc)
         finally:
             preview_streamer.detach_run()  # stop the preview + close its render env
+            if hw_stop is not None:
+                hw_stop.set()  # retire *this run's* HW-telemetry ticker promptly (own event, no race)
         self._persist_run()  # archive the finished run for history / comparison (D2)
         self._broadcast_status()
 

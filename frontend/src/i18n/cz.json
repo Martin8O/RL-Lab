@@ -97,7 +97,9 @@
     "fullscreen": "Celá obrazovka (Esc ukončí)",
     "fullscreen_exit": "Ukončit celou obrazovku (Esc)",
     "swarm_agents": "Agenti",
-    "swarm_targets": "Cíle"
+    "swarm_targets": "Cíle",
+    "badge_gpu": "Trénink na GPU",
+    "badge_cpu": "Trénink na CPU"
   },
   "play": {
     "start": "Hrát proti AI",
@@ -154,6 +156,17 @@
     "series_best": "Nejlepší",
     "series_avg": "Průměr gen.",
     "series_worst": "Nejhorší"
+  },
+  "hwstats": {
+    "cpu": "CPU",
+    "gpu": "GPU",
+    "util": "Využití",
+    "ram": "RAM",
+    "vram": "VRAM",
+    "temp": "Teplota",
+    "power": "Příkon",
+    "toggle_show": "Zobrazit hardwarové statistiky",
+    "toggle_hide": "Skrýt hardwarové statistiky"
   },
   "leaderboard": {
     "title": "Top-5 dětí",

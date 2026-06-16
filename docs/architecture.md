@@ -93,17 +93,21 @@ The backend env set (`client_state`) and the frontend `clientKind` must stay in 
 ## Contracts in one place
 
 Every WS frame and REST body is a **pydantic model** in `backend/app/schemas/` and a matching **TS type** in
-`frontend/src/api/types.ts`. The WS stream is a tagged union on `type` (`metrics`, `progress`, `evolution`,
-`status`, `frame`, `preview`, `play_status`, `play_frame`, `play_result`, plus the inbound `{type:"action"}`).
+`frontend/src/api/types.ts`. The WS stream is a tagged union on `type` (`metrics`, `progress`, `hwstats`,
+`evolution`, `q_learning`, `qtable`, `highscore`, `status`, `frame`, `preview`, `play_status`, `play_frame`,
+`play_result`, plus the inbound `{type:"action"}`). `hwstats` (G4b) is a 1 Hz hardware-telemetry sample
+broadcast by the training manager for *any* active run, so the CPU/GPU panel works for every algorithm.
 
 ## The extensibility seams
 
 Adding a *vector-obs + discrete-action* game is data-only (a registry row + content). Beyond that, a set of
 typed seams need real code — see [`adding-an-environment.md`](adding-an-environment.md) and `CLAUDE.md`:
 
-1. **Policy/device** — `trainer_ppo._build_model` (image obs → `CnnPolicy`+CUDA vs `MlpPolicy`+CPU).
-2. **Shared Atari path** — frame-stack/vec-env used by the trainer *and* both streamers.
-3. **Action space** — discrete `int` vs continuous `box` (done for classic-control continuous; image-box next).
+1. **Policy/device** — `trainer_ppo._build_model` (image obs → `CnnPolicy`+CUDA vs `MlpPolicy`+CPU). **Landed
+   for Atari in G4b / ADR-044**; the image preview policy is an SB3 `save`/`load` CPU snapshot (ADR-019 holds).
+2. **Shared Atari path** — `app/envs/atari.make_atari` (`AtariWrapper`+frame-stack) feeds the trainer (`n_envs=8`)
+   *and* the preview streamer (`n_envs=1`) so obs/action shapes match (**G4b**). CarRacing's image trainer is G3c-train.
+3. **Action space** — discrete `int` vs continuous `box` (done for classic-control + multi-joint; CarRacing image-box play landed, image-box *training* is G3c-train).
 4. **Competitive play** — a `side` selector + a 2-agent env (Pong).
 5. **Board games** — a parallel turn-based/self-play subsystem (OpenSpiel), not a registry row.
 6. **Multi-agent** (PettingZoo, **landed G7a / ADR-038**) — N agents in one shared world (the parallel API),

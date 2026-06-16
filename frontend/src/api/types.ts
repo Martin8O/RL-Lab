@@ -136,6 +136,27 @@ export interface TrainingMetrics {
   elapsed: number
 }
 
+/** Live hardware telemetry (G4b). CPU + RAM always present; GPU fields are null when NVML/pynvml is
+ *  unavailable (a non-NVIDIA machine) → the panel shows `—`. `cpu_process_pct` is this process
+ *  normalised to 0–100 % of the whole machine; memory in MB. */
+export interface HwStats {
+  cpu_process_pct: number
+  ram_used_mb: number
+  ram_total_mb: number
+  gpu_util_pct: number | null
+  gpu_vram_used_mb: number | null
+  gpu_vram_total_mb: number | null
+  gpu_temp_c: number | null
+  gpu_power_w: number | null
+}
+
+/** WS frame: {type:"hwstats", ...} — a 1 Hz HW telemetry sample, broadcast by the manager for any
+ *  active run regardless of algorithm (PPO / neuroevolution / Q-learning all feed the HW panel). */
+export interface HwStatsFrame {
+  type: 'hwstats'
+  stats: HwStats
+}
+
 /** WS frame: {type:"progress", ...} pushed at a steady ~1 Hz during a run.
  *  Carries the rolling reward/length means so the reward chart can plot at ~1 Hz. */
 export interface TrainingProgress {
@@ -533,6 +554,7 @@ export const PLAY_SCORE_TOP_N = 5
 export type TrainWsFrame =
   | TrainingMetrics
   | TrainingProgress
+  | HwStatsFrame
   | EvolutionMetrics
   | QLearningMetrics
   | QTableFrame

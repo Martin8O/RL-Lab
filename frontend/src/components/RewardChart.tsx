@@ -7,6 +7,7 @@ import { fetchRuns, fetchRun, deleteRun } from '../api/client'
 import type { RunDetail, RunMeta } from '../api/types'
 import SkillMeter from './SkillMeter'
 import ParamInfo from './ParamInfo'
+import HwStats from './HwStats'
 
 // ── EMA ─────────────────────────────────────────────────────────────────────
 
@@ -790,6 +791,7 @@ export default function RewardChart() {
           the chart shrinks to sit above it and the meter never covers the curve / x-axis / solved markers. */}
       <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       <div ref={containerRef} style={{ flex: 1, minHeight: 0, overflow: 'hidden', position: 'relative' }}>
+        <HwStats />
         {hasChart ? (
           <>
             <LineChart series={series} markers={markers} width={size.w} height={size.h} xFmt={xFmt} ariaLabel={t('chart.aria_label')} />

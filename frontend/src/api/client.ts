@@ -172,16 +172,19 @@ export function useTrainingWs(): void {
           useAppStore.getState().addMetrics(frame)
         } else if (frame.type === 'progress') {
           useAppStore.getState().setProgress(frame)
+        } else if (frame.type === 'hwstats') {
+          useAppStore.getState().setHwStats(frame.stats)
         } else if (frame.type === 'status') {
           const prev = useAppStore.getState().trainState
           useAppStore.getState().setTrainState(frame.state)
-          // Clear chart when a brand-new run starts (timesteps reset to 0)
+          // Clear chart + stale HW telemetry when a brand-new run starts (timesteps reset to 0)
           if (
             frame.state === 'running' &&
             frame.timesteps === 0 &&
             (prev === 'idle' || prev === 'stopped' || prev === 'finished' || prev === 'error')
           ) {
             useAppStore.getState().clearMetrics()
+            useAppStore.getState().setHwStats(null)
           }
         } else if (frame.type === 'evolution') {
           useAppStore.getState().addEvolution(frame)

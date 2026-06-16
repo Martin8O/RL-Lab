@@ -809,12 +809,11 @@ register(
 # RGB frame, not a vector/discrete state. That breaks two CartPole-shaped
 # assumptions the rest of the registry never hit, so the family is *data-rows +
 # gating*, not free like Toy Text:
-#   * obs_type="image" → a future trainer needs a CnnPolicy + a GPU (the
-#     trainer_ppo._build_model seam). So training is **gated**: hw_requirement="gpu"
-#     and the UI disables Run while no CUDA device is present (see /api/system). Atari
-#     trains in G4b on the desktop; until then these are **human-playable now** — human
-#     play needs no neural net, only env stepping + the JPEG render path, both of which
-#     already exist (client_render returns None for an image obs → server JPEG).
+#   * obs_type="image" → training needs a CnnPolicy + CUDA (the trainer_ppo._build_model
+#     branch + the shared app/envs/atari.py frame-stack vec env, built in G4b). So training
+#     stays hw_requirement="gpu": the UI disables Run while no CUDA device is present (see
+#     /api/system) and the manager rejects it. On the RTX 5070 desktop Atari trains now;
+#     human play needs no neural net (env stepping + the JPEG render path) so it ran from G4a.
 #   * the numpy neuroevolution genome + tabular Q-learning can't consume an image, so
 #     supported_algos=["ppo"] (PPO-only) as data — the same opt-out pattern CarRacing uses.
 #
@@ -861,8 +860,8 @@ def _atari_spec(
         human_playable=True,
         competitive=False,
         difficulty=difficulty,
-        hw_requirement="gpu",  # training needs a GPU; the UI gates Run, human play stays available now
-        train_implemented=False,  # image obs → CnnPolicy/frame-stack seam not built yet (G4b); stays gated even on a GPU
+        hw_requirement="gpu",  # CnnPolicy training needs a GPU; the UI gates Run on a CPU box, human play stays
+        train_implemented=True,  # G4b: CnnPolicy + AtariWrapper/frame-stack + CUDA trainer built — trains on a GPU
     )
 
 

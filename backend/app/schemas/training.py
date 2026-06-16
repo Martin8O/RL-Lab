@@ -93,6 +93,37 @@ class TrainingMetrics(BaseModel):
     elapsed: float
 
 
+class HwStats(BaseModel):
+    """Live hardware telemetry, sampled onto each 1 Hz progress frame (G4b).
+
+    CPU + RAM are always present (``psutil``); the GPU fields are **optional** — ``None`` when
+    NVML/``pynvml`` is unavailable (a non-NVIDIA machine) so the panel can show ``—`` rather than a
+    misleading 0. ``cpu_process_pct`` is this process's CPU use normalised to 0–100 % of the whole
+    machine (raw ``psutil`` per-process % can exceed 100 on multi-core); memory is reported in MB.
+    """
+
+    cpu_process_pct: float
+    ram_used_mb: float
+    ram_total_mb: float
+    gpu_util_pct: float | None = None
+    gpu_vram_used_mb: float | None = None
+    gpu_vram_total_mb: float | None = None
+    gpu_temp_c: float | None = None
+    gpu_power_w: float | None = None
+
+
+class HwStatsFrame(BaseModel):
+    """WS frame: {type:"hwstats", ...} — one 1 Hz hardware-telemetry sample (G4b).
+
+    Broadcast by the training manager for the lifetime of *any* active run, independent of the
+    algorithm: PPO, neuroevolution and tabular Q-learning all get the HW panel (the PPO progress
+    ticker is the wrong home — evolution/Q-learning emit no progress frame). Decoupled + unlogged.
+    """
+
+    type: Literal["hwstats"] = "hwstats"
+    stats: HwStats
+
+
 class TrainingProgress(BaseModel):
     """Lightweight ~1 Hz progress frame, pushed over WS as {type:"progress", ...}.
 

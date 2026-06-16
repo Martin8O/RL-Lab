@@ -119,19 +119,20 @@ def test_atari_skill_bands_span_symmetric_range() -> None:
 # -- training implemented vs GPU-gated (the capability-aware gate, pre-migration hardening) -----
 
 
-def test_train_implemented_tracks_image_obs() -> None:
-    """`train_implemented` is False exactly for the image-obs envs (Atari, CarRacing) whose CnnPolicy
-    trainer isn't built yet (G4b/G3c-train), and True for every vector/discrete env — including the
-    GPU-gated *vector* heavies (BipedalWalker, MuJoCo) that train with the existing MlpPolicy. This is
-    what lets a GPU machine un-gate the heavies while keeping image training gated."""
+def test_train_implemented_split_after_g4b() -> None:
+    """After G4b the image-obs family splits: **Atari trains** (the CnnPolicy + AtariWrapper/frame-stack
+    + CUDA seam is built), while **CarRacing stays gated** (its non-Atari image trainer is G3c-train).
+    Every vector/discrete env — including the GPU-gated *vector* heavies (BipedalWalker/MuJoCo, MlpPolicy)
+    — trains too. So ``train_implemented`` is False for exactly the not-yet-built image trainers, which
+    today is only CarRacing; a GPU box still keeps that one gated via the manager backstop below."""
     for spec in list_envs():
-        expected = spec.obs_type != "image"
+        expected = spec.id != "carracing"  # the only env whose trainer isn't built yet
         assert spec.train_implemented is expected, (
-            f"{spec.id}: train_implemented={spec.train_implemented} but obs_type={spec.obs_type}"
+            f"{spec.id}: train_implemented={spec.train_implemented} (obs_type={spec.obs_type})"
         )
-    # Spot-check the two named cases on both sides of the split.
-    assert get_env("pong").train_implemented is False  # type: ignore[union-attr]
-    assert get_env("carracing").train_implemented is False  # type: ignore[union-attr]
+    # Spot-check both sides of the post-G4b split.
+    assert get_env("pong").train_implemented is True  # type: ignore[union-attr]  # image, Atari trainer built (G4b)
+    assert get_env("carracing").train_implemented is False  # type: ignore[union-attr]  # image, G3c-train pending
     assert get_env("bipedalwalker").train_implemented is True  # type: ignore[union-attr]
     assert get_env("hopper").train_implemented is True  # type: ignore[union-attr]
 

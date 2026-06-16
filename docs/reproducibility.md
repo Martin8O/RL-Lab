@@ -15,9 +15,11 @@ finished run can be reproduced from its archived config alone.
 - **Training is headless and off-thread (ADR-007).** SB3 `learn()` runs on a daemon thread with no
   rendering in the loop; the seed flows into the env and the model.
 - **The preview can't change the result (ADR-008/019).** The live preview renders from a **decoupled
-  policy snapshot** (a numpy forward over copied weights for PPO; the generation leader for
-  neuroevolution) — never `model.predict` on the live model, which was proven to perturb a same-seed PPO
-  trajectory. Turning the visual on/off does not alter a run.
+  policy snapshot** — a numpy forward over copied weights for a *vector* PPO obs, an SB3 `save`/`load`
+  **CPU copy** for an *image* `CnnPolicy` (G4b/ADR-044; the numpy forward can't do a CNN, and a CPU copy
+  shares no tensor state with the live CUDA model), or the generation leader for neuroevolution — never
+  `model.predict` on the live model, which was proven to perturb a same-seed PPO trajectory. Turning the
+  visual on/off does not alter a run.
 - **Neuroevolution scores are reproducible per child.** Fitness is the **mean undiscounted return** over
   `episodes` evaluation episodes; each Top-K child surfaces the **deterministic env seed** it was scored
   with (instead of a meaningless γ/α), so any child's run can be re-created exactly (ADR-010).

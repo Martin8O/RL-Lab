@@ -16,6 +16,7 @@ import type {
   QLearningHyperparams,
   QLearningMetrics,
   QTableFrame,
+  HwStats,
   TrainingMetrics,
   TrainingProgress,
   TrainState,
@@ -151,6 +152,7 @@ interface AppState {
   metricsHistory:  TrainingMetrics[]
   progressHistory: TrainingProgress[]   // ~1 Hz frames — feeds the reward chart
   lastProgress:    TrainingProgress | null
+  lastHwStats:     HwStats | null       // G4b: latest CPU/GPU telemetry — feeds the HW panel
   bestReward:      number | null        // best score this session (live high)
   evolutionHistory: EvolutionMetrics[]  // per-generation frames — feeds the Fitness chart
   lastEvolution:   EvolutionMetrics | null
@@ -191,6 +193,7 @@ interface AppState {
   setTrainState:      (s: TrainState)                   => void
   addMetrics:         (m: TrainingMetrics)              => void
   setProgress:        (p: TrainingProgress)             => void
+  setHwStats:         (s: HwStats | null)               => void
   addEvolution:       (e: EvolutionMetrics)             => void
   seedEvolution:      (e: EvolutionMetrics)             => void
   addQLearning:       (q: QLearningMetrics)             => void
@@ -241,6 +244,7 @@ export const useAppStore = create<AppState>()(
       metricsHistory:  [],
       progressHistory: [],
       lastProgress:    null,
+      lastHwStats:     null,
       bestReward:      null,
       evolutionHistory: [],
       lastEvolution:   null,
@@ -296,6 +300,7 @@ export const useAppStore = create<AppState>()(
       setVisual:         (visual)         => set({ visual }),
       setSpeed:          (speed)          => set({ speed }),
       setTrainState:     (trainState)     => set({ trainState }),
+      setHwStats:        (lastHwStats)    => set({ lastHwStats }),
 
       addMetrics: (m) =>
         set((s) => {

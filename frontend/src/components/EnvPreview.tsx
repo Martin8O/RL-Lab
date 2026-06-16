@@ -507,6 +507,23 @@ export default function EnvPreview() {
 
         <div style={{ flex: 1 }} />
 
+        {/* CPU/GPU training badge — centred in this header while a run is live; GPU = accent/green,
+            CPU = muted. Derived from the selected env's hw_requirement (no new state). */}
+        {runLive && (
+          <div style={{
+            display: 'inline-flex', alignItems: 'center', height: 'var(--control-sm)', padding: '0 11px',
+            borderRadius: 'var(--radius-pill)', fontSize: 'var(--fs-label)', whiteSpace: 'nowrap',
+            fontWeight: 'var(--fw-medium)', letterSpacing: 'var(--ls-tight)',
+            background: selectedEnv?.hw_requirement === 'gpu' ? 'var(--success-surface)' : 'var(--surface-2)',
+            border: `1px solid ${selectedEnv?.hw_requirement === 'gpu' ? 'var(--success)' : 'var(--border-default)'}`,
+            color: selectedEnv?.hw_requirement === 'gpu' ? 'var(--success)' : 'var(--text-muted)',
+          }}>
+            {selectedEnv?.hw_requirement === 'gpu' ? t('envpreview.badge_gpu') : t('envpreview.badge_cpu')}
+          </div>
+        )}
+
+        <div style={{ flex: 1 }} />
+
         {/* Visual on/off — quiet (surface, never a bright fill); the eye carries the accent */}
         <button
           onClick={toggleVisual}
