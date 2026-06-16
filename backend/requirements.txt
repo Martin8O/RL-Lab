@@ -13,7 +13,8 @@
 # build per docs/MIGRATION.md:
 #   pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128
 # Box2D (LunarLander, G3a) is CPU-friendly and installed from a prebuilt wheel — no
-# compiler needed on Windows/py3.11. Atari/MuJoCo extras stay deferred to the GPU phase.
+# compiler needed on Windows/py3.11. Atari (G4a) and MuJoCo (G5a) are installed and
+# human-playable on CPU now; only their *training* (CnnPolicy / millions of steps) is GPU-gated.
 
 # --- Web stack (A3) ---
 annotated-types==0.7.0
@@ -103,3 +104,18 @@ pettingzoo==1.26.1
 scipy==1.17.1
 SuperSuit==3.11.0
 tinyscaler==1.2.8
+
+# --- MuJoCo stack (G5a — continuous-control / robotics) ---
+# `pip install gymnasium[mujoco]` pulls the `mujoco` wheel (the DeepMind physics engine, native
+# libs bundled — no compiler) plus its GL backends. The risk the prompt flagged — offscreen
+# `rgb_array` rendering on Windows needing a GL backend — was verified FIRST: all six envs
+# (Hopper/Walker2d/HalfCheetah/Ant/Reacher/Swimmer) render a 480×480×3 frame on the laptop with
+# the bundled glfw/pyopengl, so they are human-playable on CPU now (vector obs + continuous Box
+# action → the G1b/G3b seam + server-JPEG render). Only *training* (a few million steps) is
+# GPU-gated to the desktop. etils/zipp are transitive (mujoco's epath); imageio is gymnasium's.
+etils==1.14.0
+glfw==2.10.0
+ImageIO==2.37.3
+mujoco==3.9.0
+PyOpenGL==3.1.10
+zipp==4.1.0

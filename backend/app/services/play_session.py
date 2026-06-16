@@ -106,6 +106,10 @@ class PlaySession:
         # How much longer a play episode runs vs training (EnvSpec.play_step_scale) — also widens
         # the skill floor so the rating span matches the longer episode.
         self._play_step_scale = 1
+        # Per-env extra slow-down on the human-play step interval (EnvSpec.human_play_slowdown); 1.0
+        # for almost everything, >1 for fall-fast high-fps envs (MuJoCo Hopper/Walker2d) so a person
+        # gets more real seconds before the topple. Applies to human mode only.
+        self._human_play_slowdown = 1.0
         self._stop = False
 
     # -- wiring -----------------------------------------------------------------
@@ -151,6 +155,7 @@ class PlaySession:
             self._n_actions = None
             self._box_low = self._box_high = self._box_shape = None
             self._play_step_scale = spec.play_step_scale
+            self._human_play_slowdown = spec.human_play_slowdown
             self._step = 0
             self._score = 0.0
             self._result = None
@@ -251,6 +256,16 @@ class PlaySession:
         render_fps = float(env.metadata.get("render_fps", _DEFAULT_RENDER_FPS))
         base_dt = 1.0 / (render_fps or _DEFAULT_RENDER_FPS)
         send_interval = 1.0 / _SEND_FPS_CAP
+        # Human play must not advance the simulation faster than it shows frames (1 step ≤ 1 sent
+        # frame). A high-render_fps env — MuJoCo Hopper/Walker2d run at 125 steps/s — otherwise falls
+        # over in ~1 s, before a person can react or even see a leg move (the other MuJoCo envs run at
+        # 20–50 fps and play fine). Cap the human base step rate at the frame-send rate; the speed
+        # slider still scales it (down to 0.1× for very deliberate play). AI play keeps the env's own
+        # real-time rate so a trained demo looks natural; turn-based human play ignores base_dt entirely.
+        # On top of the cap, fall-fast envs apply a per-env slow-down (human_play_slowdown) so a person
+        # gets more real seconds before an unpreventable topple (MuJoCo Hopper/Walker2d ≈5× longer).
+        if self._mode == "human":
+            base_dt = max(base_dt, send_interval) * self._human_play_slowdown
 
         score = 0.0
         step = 0

@@ -59,6 +59,15 @@ class EnvSpec(BaseModel):
     # PLAY sessions (human + AI) multiply the env's max_episode_steps by this so a person has time
     # to actually play short envs; training keeps the standard length. 1 = no change.
     play_step_scale: int = 1
+    # Extra slow-down on the per-step interval for HUMAN play only (AI play is unaffected). Most envs
+    # need none (1.0). It exists for envs that end on an early *termination* a human can't prevent
+    # (a fall), where play_step_scale can't help — extending the step cap does nothing when the episode
+    # ends on the fall, not the cap. The only lever left is wall-clock: stepping slower gives a person
+    # more real seconds to react before the inevitable fall. MuJoCo Hopper/Walker2d render at 125 fps
+    # and topple in ~1 s; even capped at the 30 fps frame rate that is only ~8 s, so they set this ~8
+    # (≈5× longer wall-clock once the fixed per-frame render cost is included). The speed slider still
+    # scales on top of it.
+    human_play_slowdown: float = 1.0
     # Whether the skill meter's 0% floor (min_score) is widened by play_step_scale for play. True for
     # STEP-PENALTY envs whose failure floor (≈ −1 × max_steps) genuinely grows with episode length
     # (MountainCar/Acrobot −1/step, Pendulum per-step cost). False for shaped/terminal-reward envs
@@ -1369,3 +1378,155 @@ _MPE_GAMES: list[
 
 for _mpe_row in _MPE_GAMES:
     register(_mpe_spread_spec(*_mpe_row))
+
+
+# ---------------------------------------------------------------------------
+# MuJoCo family (continuous control / robotics) — G5a "install + human-play on CPU
+# now, training GPU-gated" (the Atari/BipedalWalker pattern).
+#
+# These are vector-obs + **continuous Box** physics envs (image-free, MlpPolicy), so
+# they are DATA ROWS that reuse two existing seams with no engine code:
+#   * the G1b/G3b continuous-box action seam — box-aware predict/play/preview, and a
+#     PER-JOINT vector play keymap (each held key contributes a torque vector that the
+#     frontend sums; play_session reshapes + clips it), exactly like BipedalWalker; and
+#   * the server-JPEG render path — MuJoCo is NOT in client_render, so client_state()
+#     returns None and the streamer renders env.render()→rgb_array→JPEG (like Atari).
+# The risk the prompt flagged (offscreen rgb_array on Windows needing a GL backend) was
+# checked FIRST: all six envs render a 480×480×3 frame on the laptop with the bundled
+# glfw/pyopengl, so G5a builds here — no GL rabbit-hole, nothing deferred for rendering.
+#
+# Training is **gated** (hw_requirement="gpu"). Unlike CarRacing (which genuinely needs
+# the CnnPolicy seam for its image obs), MuJoCo is a vector env that *could* train on the
+# CPU — but a good gait takes a few million steps, impractical on the laptop, so it is
+# step-count-gated to the desktop exactly like BipedalWalker. The RTX 5070 is also where
+# SAC/TD3 (the algorithms that shine on MuJoCo, S5) will land. Human play needs no trained
+# model and is available now. supported_algos=["ppo"] — neuroevolution is opted out as data
+# (population search is impractical on hard multi-joint locomotion), like the box2d heavies.
+#
+# Skill: min_score is the venv-measured **idle (zero-torque) baseline** per the ADR-026 rule
+# (a do-nothing agent must read ~0%, NOT the deeper random/flailing floor). MuJoCo's quirk is
+# that "idle" is POSITIVE for the locomotion envs — the per-step "healthy" bonus accrues while
+# a standing robot has not yet fallen (Ant stands the full episode ≈ +990; Hopper/Walker fall
+# after ≈ +100–150) — so each env's floor is its own measured idle return, not a shared 0.
+# HalfCheetah/Swimmer idle ≈ 0 (never terminate; random flailing goes negative → clamps to 0%).
+# floor_scales_with_steps is False for the locomotion envs (a fall is terminal; the floor does
+# not deepen with the cap) and play_step_scale=1 (their native ~1000 steps is a fine play
+# length). Reacher is the exception: a 50-step arm-reach with a per-step distance penalty (a
+# genuine step-penalty env, like Pendulum), so floor_scales_with_steps=True and play_step_scale=6
+# lengthens its very short episode for a human (the floor widens with it). solved_score is each
+# env's gym reward_threshold where one exists (Hopper 3800, HalfCheetah 4800, Ant 6000, Reacher
+# −3.75, Swimmer 360); Walker2d has none, so 3500 is the widely-cited strong-PPO mark.
+# ---------------------------------------------------------------------------
+
+
+def _mujoco_spec(
+    env_id: str,
+    gym_id: str,
+    display: str,
+    difficulty: Literal["beginner", "intermediate", "advanced"],
+    min_score: float,
+    solved_score: float,
+    default_total_timesteps: int,
+    play_step_scale: int,
+    floor_scales_with_steps: bool,
+    desc_en: str,
+    desc_cz: str,
+) -> EnvSpec:
+    """Build one MuJoCo EnvSpec from a data row (the family is otherwise identical: vector obs,
+    continuous box action, PPO-only, GPU-gated training, human-playable now)."""
+    return EnvSpec(
+        id=env_id,
+        gym_id=gym_id,
+        display_name=Bilingual(en=display, cz=display),  # the gym ids are the conventional names
+        description=Bilingual(en=desc_en, cz=desc_cz),
+        family="mujoco",
+        obs_type="vector",  # a fixed-length float state → MlpPolicy (no CnnPolicy); server-JPEG render
+        action_space="box",  # continuous per-joint torques in [-1, 1] — the G1b/G3b continuous-box seam
+        supported_algos=["ppo"],  # PPO-only (evolution opted out as data — hard multi-joint locomotion)
+        hyperparams=_standard_hyperparams(),
+        solved_score=solved_score,
+        min_score=min_score,  # venv-measured idle (zero-torque) baseline → a do-nothing reads ~0% (ADR-026)
+        default_total_timesteps=default_total_timesteps,  # the ★ PPO budget when GPU training lands
+        play_step_scale=play_step_scale,
+        floor_scales_with_steps=floor_scales_with_steps,
+        human_playable=True,
+        competitive=False,
+        difficulty=difficulty,
+        hw_requirement="gpu",  # millions of steps → desktop; play available now (like BipedalWalker)
+    )
+
+
+# id, gym_id, display, difficulty, min_score, solved_score, budget, play_scale, floor_scales, desc EN, desc CZ
+_MUJOCO_GAMES: list[
+    tuple[str, str, str, Literal["beginner", "intermediate", "advanced"], float, float, int, int, bool, str, str]
+] = [
+    ("hopper", "Hopper-v5", "Hopper-v5", "advanced", 120.0, 3800.0, 1_000_000, 1, False,
+     "Teach a one-legged robot to hop forward as far as it can without toppling over. A MuJoCo "
+     "physics task with an 11-number state (joint angles and velocities) and three continuous "
+     "joint torques — thigh, knee and ankle. Hopping forward earns reward, staying upright earns "
+     "a small bonus each step, and a fall ends the run; a good hopper scores around +3800 (the "
+     "'solved' mark).",
+     "Naučte jednonohého robota skákat vpřed co nejdál, aniž by se převrátil. Úloha s fyzikou "
+     "MuJoCo se stavem o 11 číslech (úhly a rychlosti kloubů) a třemi spojitými momenty v kloubech "
+     "— stehno, koleno a kotník. Skákání vpřed dává odměnu, udržení vzpřímené polohy přidává každý "
+     "krok malý bonus a pád běh ukončí; dobrý skokan dosáhne kolem +3800 (hranice „vyřešeno“)."),
+    ("walker2d", "Walker2d-v5", "Walker2d-v5", "advanced", 80.0, 3500.0, 1_000_000, 1, False,
+     "Teach a two-legged robot to walk forward as far as it can without falling. A MuJoCo task "
+     "with a 17-number state and six continuous joint torques — a thigh, knee and foot on each "
+     "leg. Forward progress and staying upright earn reward, a fall ends the run; a smooth walk "
+     "scores well into the thousands (around +3500 counts as a strong gait).",
+     "Naučte dvounohého robota chodit vpřed co nejdál, aniž by upadl. Úloha s fyzikou MuJoCo se "
+     "stavem o 17 číslech a šesti spojitými momenty v kloubech — stehno, koleno a chodidlo na "
+     "každé noze. Postup vpřed a udržení vzpřímené polohy dávají odměnu, pád běh ukončí; plynulá "
+     "chůze dosáhne klidně tisíců (kolem +3500 je už silná chůze)."),
+    ("halfcheetah", "HalfCheetah-v5", "HalfCheetah-v5", "advanced", 0.0, 4800.0, 1_000_000, 1, False,
+     "Teach a two-legged 'cheetah' to run forward as fast as possible. A MuJoCo task with a "
+     "17-number state and six continuous joint torques (a thigh, shin and foot at the front and "
+     "the back). It never falls over — the whole challenge is a fast, efficient gait. Reward is "
+     "the forward speed minus a small effort cost, and a strong run scores around +4800.",
+     "Naučte dvounohého „geparda“ běžet vpřed co nejrychleji. Úloha s fyzikou MuJoCo se stavem o "
+     "17 číslech a šesti spojitými momenty v kloubech (stehno, holeň a chodidlo vepředu i vzadu). "
+     "Nikdy se nepřevrátí — celou výzvou je rychlý, úsporný běh. Odměnou je rychlost vpřed minus "
+     "malá cena za námahu a silný běh dosáhne kolem +4800."),
+    ("ant", "Ant-v5", "Ant-v5", "advanced", 980.0, 6000.0, 2_000_000, 1, False,
+     "Teach a four-legged robot to walk forward across the plane. A MuJoCo task with a large "
+     "105-number state and eight continuous joint torques — a hip and an ankle on each of four "
+     "legs. Forward progress and staying healthy earn reward, flipping over ends the run; a good "
+     "walker scores around +6000 (the 'solved' mark).",
+     "Naučte čtyřnohého robota chodit vpřed po rovině. Úloha s fyzikou MuJoCo s velkým stavem o "
+     "105 číslech a osmi spojitými momenty v kloubech — kyčel a kotník na každé ze čtyř nohou. "
+     "Postup vpřed a udržení „zdraví“ dávají odměnu, převrácení běh ukončí; dobrý chodec dosáhne "
+     "kolem +6000 (hranice „vyřešeno“)."),
+    ("reacher", "Reacher-v5", "Reacher-v5", "intermediate", -12.0, -3.75, 200_000, 6, True,
+     "Steer a two-jointed robot arm so its tip touches a target dot, then hold it there. A short "
+     "MuJoCo task with a 10-number state and two continuous joint torques. Every step costs the "
+     "distance to the target plus a little for effort, so a quick, steady reach scores best (near "
+     "−3.75, the 'solved' mark); the episode is only 50 steps long.",
+     "Naveďte dvoukloubové robotické rameno tak, aby se jeho špička dotkla cílové tečky, a pak ji "
+     "tam udržte. Krátká úloha s fyzikou MuJoCo se stavem o 10 číslech a dvěma spojitými momenty v "
+     "kloubech. Každý krok stojí vzdálenost k cíli plus trochu za námahu, takže nejlépe boduje "
+     "rychlé a klidné dosažení (kolem −3,75, hranice „vyřešeno“); epizoda trvá jen 50 kroků."),
+    ("swimmer", "Swimmer-v5", "Swimmer-v5", "intermediate", 0.0, 360.0, 1_000_000, 1, False,
+     "Teach a three-link 'swimmer' to glide forward through a viscous fluid by rippling its two "
+     "joints. A MuJoCo task with an 8-number state and two continuous joint torques. Reward is the "
+     "forward speed minus a small effort cost, so a good swimming rhythm — alternating the joints "
+     "in time — scores around +360.",
+     "Naučte třídílného „plavce“ klouzat vpřed viskózní tekutinou vlněním svých dvou kloubů. Úloha "
+     "s fyzikou MuJoCo se stavem o 8 číslech a dvěma spojitými momenty v kloubech. Odměnou je "
+     "rychlost vpřed minus malá cena za námahu, takže dobrý plavecký rytmus — střídání kloubů v "
+     "pravý čas — dosáhne kolem +360."),
+]
+
+for _mj_row in _MUJOCO_GAMES:
+    register(_mujoco_spec(*_mj_row))
+
+# Hopper and Walker2d render at 125 fps and fall fast, so even with human play capped at the 30 fps
+# frame rate a person gets only ~8 s before the topple — too short to actually play. Stretch their
+# human-play wall-clock ~5× (the user's request) so there is real time to react; the other MuJoCo
+# envs already run slow enough (20–50 fps) and never fall this fast, so they keep the default 1.0.
+# Set post-construction (a single data tweak on two of six rows) rather than threading a mostly-1.0
+# column through the whole _MUJOCO_GAMES table.
+for _slow_id in ("hopper", "walker2d"):
+    _slow_spec = get_env(_slow_id)
+    if _slow_spec is not None:
+        _slow_spec.human_play_slowdown = 8.0

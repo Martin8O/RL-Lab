@@ -70,6 +70,25 @@ const BIPEDAL_TIPS: Bilingual = {
     + '„Sledovat AI“.',
 }
 
+// MuJoCo (G5a) — shared "how to play" tip for the locomotion robots (Hopper / Walker2d /
+// HalfCheetah / Ant). They all face the same difficulty: many continuous joints to coordinate by
+// hand, which is the whole reason an AI is trained for them. Reacher and Swimmer have their own tips.
+const MUJOCO_WALK_TIP: Bilingual = {
+  en: 'Steering several leg joints at once is genuinely hard by hand — which is exactly why an AI is '
+    + 'trained for these. Try to find a rhythm: push and release the joints in a repeating pattern '
+    + 'so the robot pushes off and swings a leg through, then catches itself, rather than holding the '
+    + 'keys down. On the bigger robots only the main joints are mapped (the feet and ankles stay '
+    + 'relaxed), so you are nudging the legs, not micro-managing every joint. Lower the play speed '
+    + '(down to 0.1×) to give yourself time to react. Switch to "Watch AI" once a model has been '
+    + 'trained for this on a GPU.',
+  cz: 'Řídit několik kloubů nohou najednou je rukama vážně těžké — přesně proto se na to cvičí AI. '
+    + 'Zkuste najít rytmus: klouby tlačte a pouštějte v opakujícím se vzoru, ať se robot odrazí a '
+    + 'prošvihne nohu vpřed a pak se zachytí, místo držení kláves. U větších robotů jsou namapované '
+    + 'jen hlavní klouby (chodidla a kotníky zůstávají uvolněné), takže nohama jen pošťuchujete, ne '
+    + 'řídíte každý kloub zvlášť. Snížením rychlosti hraní (až na 0,1×) získáte čas reagovat. Až '
+    + 'bude na to natrénovaný model na GPU, přepněte na „Sledovat AI“.',
+}
+
 export const PLAY_GUIDES: Record<string, PlayGuide> = {
   cartpole: {
     goal: {
@@ -306,6 +325,150 @@ export const PLAY_GUIDES: Record<string, PlayGuide> = {
         + 'se při brzdění zablokuje), zelený pruh je natočení volantu a červený pruh ukazuje, jak rychle '
         + 'se auto otáčí — sledujte je a smyk poznáte dřív, než ho ucítíte. Až bude na to natrénovaný '
         + 'model na GPU, přepněte na „Sledovat AI“.',
+    },
+  },
+
+  // ── MuJoCo (G5a) — continuous per-joint torque control ──────────────────────────────────────
+  // Shared locomotion tip for Hopper / Walker2d / HalfCheetah / Ant (the per-env goal + controls
+  // differ). The point these make pedagogically: steering many joints by hand is near-impossible,
+  // which is exactly why an AI is trained for it. Reacher and Swimmer get their own tips below.
+  hopper: {
+    goal: {
+      en: 'Make the one-legged robot hop forward (to the right) as far as you can without toppling '
+        + 'over. You drive its three joints directly — thigh, knee and ankle. Forward progress earns '
+        + 'reward and staying upright earns a small bonus each step; a fall ends the run. A good '
+        + 'hopper scores around +3800 (the "solved" mark). The episode ends on a fall or after 1000 steps.',
+      cz: 'Rozskákejte jednonohého robota vpřed (doprava) co nejdál, aniž by se převrátil. Ovládáte '
+        + 'přímo jeho tři klouby — stehno, koleno a kotník. Postup vpřed dává odměnu a udržení '
+        + 'vzpřímené polohy přidává každý krok malý bonus; pád běh ukončí. Dobrý skokan dosáhne kolem '
+        + '+3800 (hranice „vyřešeno“). Epizoda končí pádem nebo po 1000 krocích.',
+    },
+    controls: [
+      { keys: '← / →', action: { en: 'Thigh (hip) — torque each way', cz: 'Stehno (kyčel) — moment každým směrem' } },
+      { keys: '↑ / ↓', action: { en: 'Knee — torque each way', cz: 'Koleno — moment každým směrem' } },
+      { keys: 'A / D', action: { en: 'Ankle (foot) — torque each way', cz: 'Kotník (chodidlo) — moment každým směrem' } },
+      { keys: '(release)', action: { en: 'No torque — the joints go limp', cz: 'Bez momentu — klouby ochabnou' } },
+    ],
+    tips: MUJOCO_WALK_TIP,
+  },
+
+  walker2d: {
+    goal: {
+      en: 'Walk the two-legged robot forward (to the right) as far as you can without falling. You '
+        + 'drive the thigh and knee of each leg; the two feet are left relaxed. Forward progress and '
+        + 'staying upright earn reward, a fall ends the run. A smooth walk scores well into the '
+        + 'thousands (around +3500 is a strong gait). The episode ends on a fall or after 1000 steps.',
+      cz: 'Doveďte dvounohého robota vpřed (doprava) co nejdál, aniž by upadl. Ovládáte stehno a '
+        + 'koleno každé nohy; obě chodidla zůstávají uvolněná. Postup vpřed a udržení vzpřímené '
+        + 'polohy dávají odměnu, pád běh ukončí. Plynulá chůze dosáhne klidně tisíců (kolem +3500 je '
+        + 'silná chůze). Epizoda končí pádem nebo po 1000 krocích.',
+    },
+    controls: [
+      { keys: '← / →', action: { en: 'Right leg — thigh', cz: 'Pravá noha — stehno' } },
+      { keys: '↑ / ↓', action: { en: 'Right leg — knee', cz: 'Pravá noha — koleno' } },
+      { keys: 'A / D', action: { en: 'Left leg — thigh', cz: 'Levá noha — stehno' } },
+      { keys: 'W / S', action: { en: 'Left leg — knee', cz: 'Levá noha — koleno' } },
+      { keys: '(release)', action: { en: 'No torque (the feet stay relaxed)', cz: 'Bez momentu (chodidla zůstávají uvolněná)' } },
+    ],
+    tips: MUJOCO_WALK_TIP,
+  },
+
+  halfcheetah: {
+    goal: {
+      en: 'Make the two-legged "cheetah" run forward (to the right) as fast as you can. It never falls '
+        + 'over, so the whole challenge is a fast, efficient gait. You drive the thigh and shin of each '
+        + 'leg; the two feet are left relaxed. Reward is the forward speed minus a small effort cost; a '
+        + 'strong run scores around +4800. The episode always runs 1000 steps.',
+      cz: 'Rozběhněte dvounohého „geparda“ vpřed (doprava) co nejrychleji. Nikdy se nepřevrátí, takže '
+        + 'celou výzvou je rychlý, úsporný běh. Ovládáte stehno a holeň každé nohy; obě chodidla '
+        + 'zůstávají uvolněná. Odměnou je rychlost vpřed minus malá cena za námahu; silný běh dosáhne '
+        + 'kolem +4800. Epizoda trvá vždy 1000 kroků.',
+    },
+    controls: [
+      { keys: '← / →', action: { en: 'Back leg — thigh', cz: 'Zadní noha — stehno' } },
+      { keys: '↑ / ↓', action: { en: 'Back leg — shin', cz: 'Zadní noha — holeň' } },
+      { keys: 'A / D', action: { en: 'Front leg — thigh', cz: 'Přední noha — stehno' } },
+      { keys: 'W / S', action: { en: 'Front leg — shin', cz: 'Přední noha — holeň' } },
+      { keys: '(release)', action: { en: 'No torque (the feet stay relaxed)', cz: 'Bez momentu (chodidla zůstávají uvolněná)' } },
+    ],
+    tips: MUJOCO_WALK_TIP,
+  },
+
+  ant: {
+    goal: {
+      en: 'Walk the four-legged robot forward (to the right) across the plane without flipping over. '
+        + 'There are eight joints — far too many to steer by hand — so you drive the four hips (one per '
+        + 'leg) and the ankles stay relaxed. Forward progress and staying healthy earn reward; a good '
+        + 'walker scores around +6000 (the "solved" mark). The episode ends on a flip or after 1000 steps.',
+      cz: 'Doveďte čtyřnohého robota vpřed (doprava) po rovině, aniž by se převrátil. Má osm kloubů — '
+        + 'na ruční ovládání jich je příliš mnoho — takže řídíte čtyři kyčle (po jedné na nohu) a '
+        + 'kotníky zůstávají uvolněné. Postup vpřed a udržení „zdraví“ dávají odměnu; dobrý chodec '
+        + 'dosáhne kolem +6000 (hranice „vyřešeno“). Epizoda končí převrácením nebo po 1000 krocích.',
+    },
+    controls: [
+      { keys: '← / →', action: { en: 'Leg 1 — hip', cz: 'Noha 1 — kyčel' } },
+      { keys: '↑ / ↓', action: { en: 'Leg 2 — hip', cz: 'Noha 2 — kyčel' } },
+      { keys: 'A / D', action: { en: 'Leg 3 — hip', cz: 'Noha 3 — kyčel' } },
+      { keys: 'W / S', action: { en: 'Leg 4 — hip', cz: 'Noha 4 — kyčel' } },
+      { keys: '(release)', action: { en: 'No torque (the ankles stay relaxed)', cz: 'Bez momentu (kotníky zůstávají uvolněné)' } },
+    ],
+    tips: MUJOCO_WALK_TIP,
+  },
+
+  reacher: {
+    goal: {
+      en: 'Steer the two-jointed arm so its tip touches the small target dot, then hold it there. Every '
+        + 'step costs the distance from the tip to the target (plus a little for effort), so the quicker '
+        + 'you reach and the steadier you hold, the higher (less negative) your score — a good reach '
+        + 'lands near −3.75 (the "solved" mark). A short task; play runs a few hundred steps.',
+      cz: 'Naveďte dvoukloubové rameno tak, aby se jeho špička dotkla malé cílové tečky, a pak ji tam '
+        + 'udržte. Každý krok stojí vzdálenost špičky od cíle (plus trochu za námahu), takže čím dřív '
+        + 'dosáhnete a čím klidněji udržíte, tím vyšší (méně záporné) skóre — dobré dosažení skončí '
+        + 'kolem −3,75 (hranice „vyřešeno“). Krátká úloha; hraní trvá pár set kroků.',
+    },
+    controls: [
+      { keys: '← / →', action: { en: 'Shoulder joint — turn each way', cz: 'Ramenní kloub — otáčet každým směrem' } },
+      { keys: '↑ / ↓', action: { en: 'Elbow joint — turn each way', cz: 'Loketní kloub — otáčet každým směrem' } },
+      { keys: '(release)', action: { en: 'No torque — the arm drifts', cz: 'Bez momentu — rameno se volně pohybuje' } },
+    ],
+    tips: {
+      en: 'This is the most playable of the MuJoCo robots — only two joints, like a little claw machine. '
+        + 'Nudge the shoulder and elbow to swing the tip onto the dot, then ease off and make tiny '
+        + 'corrections to keep it there rather than overshooting. Lower the play speed (down to 0.1×) if '
+        + 'it feels twitchy. Switch to "Watch AI" once a model has been trained for this on a GPU.',
+      cz: 'Tohle je nejhratelnější z robotů MuJoCo — jen dva klouby, jako malý jeřáb na hračky. '
+        + 'Pohybujte ramenem a loktem, ať dostanete špičku na tečku, pak uberte a drobnými korekcemi ji '
+        + 'tam udržte, místo abyste přestřelili. Pokud je to cuklavé, snižte rychlost hraní (až na 0,1×). '
+        + 'Až bude na to natrénovaný model na GPU, přepněte na „Sledovat AI“.',
+    },
+  },
+
+  swimmer: {
+    goal: {
+      en: 'Make the three-link swimmer glide forward (to the right) through the fluid by rippling its '
+        + 'two joints. Reward is the forward speed minus a small effort cost, so a steady swimming '
+        + 'rhythm — bending the joints in turn — scores best (a good swim reaches around +360). The '
+        + 'episode runs 1000 steps; there is nothing to fall off, only the swimming to get right.',
+      cz: 'Rozplavte třídílného plavce vpřed (doprava) tekutinou vlněním jeho dvou kloubů. Odměnou je '
+        + 'rychlost vpřed minus malá cena za námahu, takže nejlépe boduje stálý plavecký rytmus — '
+        + 'ohýbání kloubů po sobě (dobré plavání dosáhne kolem +360). Epizoda trvá 1000 kroků; není '
+        + 'odkud spadnout, jen je třeba trefit plavání.',
+    },
+    controls: [
+      { keys: '← / →', action: { en: 'Front joint — bend each way', cz: 'Přední kloub — ohnout každým směrem' } },
+      { keys: '↑ / ↓', action: { en: 'Rear joint — bend each way', cz: 'Zadní kloub — ohnout každým směrem' } },
+      { keys: '(release)', action: { en: 'No torque — glide', cz: 'Bez momentu — klouzání' } },
+    ],
+    tips: {
+      en: 'Swimming is all about rhythm: alternate the two joints in a steady wave rather than holding '
+        + 'them, so the body undulates and pushes against the fluid. Holding both joints one way just '
+        + 'curls the swimmer up. It takes some practice to find a stroke that actually moves you forward '
+        + '— which is why it makes a nice training task. Switch to "Watch AI" once a model has been '
+        + 'trained for this on a GPU.',
+      cz: 'Plavání je hlavně o rytmu: střídejte oba klouby v pravidelné vlně, místo abyste je drželi, ať '
+        + 'se tělo vlní a odtlačuje od tekutiny. Držení obou kloubů jedním směrem plavce jen stočí. '
+        + 'Chvíli zabere najít záběr, který vás opravdu posune vpřed — proto je to pěkná tréninková '
+        + 'úloha. Až bude na to natrénovaný model na GPU, přepněte na „Sledovat AI“.',
     },
   },
 

@@ -20,7 +20,13 @@ with training the same GPU-gated `CnnPolicy` case — confirming the seams stack
 **dict-observation** env (MiniGrid — a 7×7×3 view + `direction` + a `mission` string) is **data too**:
 `make_env` applies `FlatObsWrapper` for `family=="minigrid"`, flattening it to a vector so the same
 `MlpPolicy`/genome train (on CPU) with no engine change, while the colourful grid still renders server-side
-as a JPEG and play is turn-based (G2c). A **multi-agent** env (PettingZoo — N agents in one shared world) rides the now-built multi-agent seam: data
+as a JPEG and play is turn-based (G2c). A **MuJoCo robotics** env (Hopper, Walker2d, HalfCheetah, Ant, Reacher,
+Swimmer — vector obs + continuous `Box`, G5a) is **data + content only**: it reuses the continuous-box play path
+(a per-joint vector keymap, like BipedalWalker) and the server-JPEG render path (not in `client_render`) at once,
+with `hw_requirement="gpu"` gating training (a gait needs millions of steps — like BipedalWalker, *not* a
+`CnnPolicy` gate). Two play fields tune the human feel for these fall-fast 125 fps robots: human play is capped at
+the frame rate (ADR-041) and `human_play_slowdown` stretches the per-step wall-clock for envs that end on an
+unpreventable fall (ADR-042). A **multi-agent** env (PettingZoo — N agents in one shared world) rides the now-built multi-agent seam: data
 plus the `ma_env` adapter, trained with parameter-sharing PPO and drawn as a "swarm" (G7a; see below). A
 **2-agent / competitive setup or turn-based self-play** needs code at one of the seams (bottom of this page).
 

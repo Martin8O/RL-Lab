@@ -126,6 +126,98 @@ const CARRACING_KEYMAP: PlayKeymap = {
   idleAction: 0, // all keys released → backend fills a zero vector [0,0,0] (no steer/gas/brake)
 }
 
+// MuJoCo (G5a) — continuous per-joint torque control, the same per-joint VECTOR scheme as
+// BipedalWalker (each key carries a torque vector; EnvPreview SUMS the held keys element-wise into
+// one action vector that the backend reshapes + clips; releasing all keys sends the scalar idle 0 →
+// a zero-torque vector). Real-time, paced by the speed slider. Every torque is in [-1, 1]. The
+// low-DoF robots map ALL their joints; the high-DoF robots (Walker2d/HalfCheetah 6, Ant 8) map the
+// main driving joints to Arrows + WASD and leave the rest (feet / ankles) relaxed at 0 — controlling
+// every joint by keyboard is impossible, which is exactly the point (that is why an AI is trained).
+
+// Reacher — Box(2): the two arm joints. ← / → the inner (shoulder) joint, ↑ / ↓ the outer (elbow).
+const REACHER_KEYMAP: PlayKeymap = {
+  bindings: [
+    { keys: ['ArrowLeft', 'a', 'A'], action: [-1, 0] }, // shoulder joint, one way
+    { keys: ['ArrowRight', 'd', 'D'], action: [1, 0] }, // shoulder joint, other way
+    { keys: ['ArrowUp', 'w', 'W'], action: [0, 1] }, // elbow joint, one way
+    { keys: ['ArrowDown', 's', 'S'], action: [0, -1] }, // elbow joint, other way
+  ],
+  idleAction: 0,
+}
+
+// Swimmer — Box(2): the two body joints. ← / → the front joint, ↑ / ↓ the rear joint.
+const SWIMMER_KEYMAP: PlayKeymap = {
+  bindings: [
+    { keys: ['ArrowLeft', 'a', 'A'], action: [-1, 0] }, // front joint, one way
+    { keys: ['ArrowRight', 'd', 'D'], action: [1, 0] }, // front joint, other way
+    { keys: ['ArrowUp', 'w', 'W'], action: [0, 1] }, // rear joint, one way
+    { keys: ['ArrowDown', 's', 'S'], action: [0, -1] }, // rear joint, other way
+  ],
+  idleAction: 0,
+}
+
+// Hopper — Box(3): thigh, knee, ankle. Arrows drive the thigh + knee; A/D drive the ankle.
+const HOPPER_KEYMAP: PlayKeymap = {
+  bindings: [
+    { keys: ['ArrowLeft'], action: [-1, 0, 0] }, // thigh (hip), one way
+    { keys: ['ArrowRight'], action: [1, 0, 0] }, // thigh (hip), other way
+    { keys: ['ArrowUp'], action: [0, 1, 0] }, // knee, one way
+    { keys: ['ArrowDown'], action: [0, -1, 0] }, // knee, other way
+    { keys: ['a', 'A'], action: [0, 0, -1] }, // ankle (foot), one way
+    { keys: ['d', 'D'], action: [0, 0, 1] }, // ankle (foot), other way
+  ],
+  idleAction: 0,
+}
+
+// Walker2d — Box(6): [right thigh, right knee, right foot, left thigh, left knee, left foot].
+// Arrows drive the right leg's thigh + knee, WASD the left leg's; the two feet stay relaxed (0).
+const WALKER2D_KEYMAP: PlayKeymap = {
+  bindings: [
+    { keys: ['ArrowLeft'], action: [-1, 0, 0, 0, 0, 0] }, // right thigh
+    { keys: ['ArrowRight'], action: [1, 0, 0, 0, 0, 0] },
+    { keys: ['ArrowUp'], action: [0, 1, 0, 0, 0, 0] }, // right knee
+    { keys: ['ArrowDown'], action: [0, -1, 0, 0, 0, 0] },
+    { keys: ['a', 'A'], action: [0, 0, 0, -1, 0, 0] }, // left thigh
+    { keys: ['d', 'D'], action: [0, 0, 0, 1, 0, 0] },
+    { keys: ['w', 'W'], action: [0, 0, 0, 0, 1, 0] }, // left knee
+    { keys: ['s', 'S'], action: [0, 0, 0, 0, -1, 0] },
+  ],
+  idleAction: 0,
+}
+
+// HalfCheetah — Box(6): [back thigh, back shin, back foot, front thigh, front shin, front foot].
+// Arrows drive the back leg's thigh + shin, WASD the front leg's; the two feet stay relaxed (0).
+const HALFCHEETAH_KEYMAP: PlayKeymap = {
+  bindings: [
+    { keys: ['ArrowLeft'], action: [-1, 0, 0, 0, 0, 0] }, // back thigh
+    { keys: ['ArrowRight'], action: [1, 0, 0, 0, 0, 0] },
+    { keys: ['ArrowUp'], action: [0, 1, 0, 0, 0, 0] }, // back shin
+    { keys: ['ArrowDown'], action: [0, -1, 0, 0, 0, 0] },
+    { keys: ['a', 'A'], action: [0, 0, 0, -1, 0, 0] }, // front thigh
+    { keys: ['d', 'D'], action: [0, 0, 0, 1, 0, 0] },
+    { keys: ['w', 'W'], action: [0, 0, 0, 0, 1, 0] }, // front shin
+    { keys: ['s', 'S'], action: [0, 0, 0, 0, -1, 0] },
+  ],
+  idleAction: 0,
+}
+
+// Ant — Box(8): four legs, each [hip, ankle], so hips sit at indices 0/2/4/6. Arrows + WASD drive
+// the four hips (one key pair each); the four ankles stay relaxed (0). Eight joints cannot be driven
+// by hand, so this controls the legs at the hips and lets the ankles hang.
+const ANT_KEYMAP: PlayKeymap = {
+  bindings: [
+    { keys: ['ArrowLeft'], action: [-1, 0, 0, 0, 0, 0, 0, 0] }, // leg 1 hip
+    { keys: ['ArrowRight'], action: [1, 0, 0, 0, 0, 0, 0, 0] },
+    { keys: ['ArrowUp'], action: [0, 0, 1, 0, 0, 0, 0, 0] }, // leg 2 hip
+    { keys: ['ArrowDown'], action: [0, 0, -1, 0, 0, 0, 0, 0] },
+    { keys: ['a', 'A'], action: [0, 0, 0, 0, -1, 0, 0, 0] }, // leg 3 hip
+    { keys: ['d', 'D'], action: [0, 0, 0, 0, 1, 0, 0, 0] },
+    { keys: ['w', 'W'], action: [0, 0, 0, 0, 0, 0, 1, 0] }, // leg 4 hip
+    { keys: ['s', 'S'], action: [0, 0, 0, 0, 0, 0, -1, 0] },
+  ],
+  idleAction: 0,
+}
+
 export const PLAY_KEYMAPS: Record<string, PlayKeymap> = {
   // CartPole: 0 = push left, 1 = push right. No idle action — the cart always moves.
   cartpole: {
@@ -186,6 +278,13 @@ export const PLAY_KEYMAPS: Record<string, PlayKeymap> = {
   bipedalwalkerhardcore: BIPEDAL_KEYMAP,
   // CarRacing — steer / gas / brake vector control (see CARRACING_KEYMAP).
   carracing: CARRACING_KEYMAP,
+  // MuJoCo (G5a) — per-joint torque vector control (see the per-env keymaps above).
+  reacher: REACHER_KEYMAP,
+  swimmer: SWIMMER_KEYMAP,
+  hopper: HOPPER_KEYMAP,
+  walker2d: WALKER2D_KEYMAP,
+  halfcheetah: HALFCHEETAH_KEYMAP,
+  ant: ANT_KEYMAP,
   // Toy Text grid-worlds — turn-based: one move per key press (see FROZENLAKE_KEYMAP).
   frozenlake: FROZENLAKE_KEYMAP,
   frozenlake_noslip: FROZENLAKE_KEYMAP,

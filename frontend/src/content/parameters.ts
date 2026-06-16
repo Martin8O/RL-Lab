@@ -25,6 +25,73 @@ export interface ParamInfo {
   perEnv?: Record<string, Bilingual>
 }
 
+// MuJoCo (G5a) — the six continuous-control robots share almost all of their parameter guidance
+// (continuous box action, MlpPolicy, GPU-gated training), so the env-agnostic notes are defined once
+// here and referenced from each robot's perEnv key below. Only `reward` (whose numbers differ per
+// robot) is written per-env. Mirrors the shared-constant pattern in playGuides.ts (BIPEDAL_* etc.).
+const MUJOCO_ALGO: Bilingual = {
+  en: 'Only PPO is offered here. These MuJoCo robots are continuous-control tasks — the agent outputs '
+    + 'smooth joint torques, not button presses — and PPO is the method that learns a gait or a reach. '
+    + 'Neuroevolution is turned off as data (population search is impractical on hard multi-joint '
+    + 'control). Training takes millions of steps, so it is reserved for a GPU machine and Run is '
+    + 'disabled here; you can play it by hand now and watch a trained AI once one exists. (On the GPU '
+    + 'desktop, SAC and TD3 are the algorithms that really shine on MuJoCo.)',
+  cz: 'Tady je k dispozici jen PPO. Tito roboti MuJoCo jsou úlohy spojitého řízení — agent vydává '
+    + 'plynulé momenty v kloubech, ne stisky tlačítek — a PPO je metoda, která se naučí chůzi či '
+    + 'dosažení. Neuroevoluce je vypnutá jako data (populační hledání je u těžkého víceklouobového '
+    + 'řízení nepraktické). Trénink zabere miliony kroků, takže je vyhrazen pro stroj s GPU a Spustit '
+    + 'je zde zakázané; rukama si to zahrajete už teď a natrénovanou AI uvidíte, jakmile bude existovat. '
+    + '(Na stroji s GPU na MuJoCo opravdu vynikají algoritmy SAC a TD3.)',
+}
+
+const MUJOCO_LR: Bilingual = {
+  en: 'The default 3e-4 is the standard starting point for MuJoCo too. Continuous control can be '
+    + 'sensitive, so keep it moderate — too large a step destabilises the gait; lean on more steps '
+    + 'instead. (Training is GPU-only, so this applies once you train on the desktop.)',
+  cz: 'Výchozí 3e-4 je standardní výchozí bod i pro MuJoCo. Spojité řízení může být citlivé, takže ji '
+    + 'držte umírněnou — příliš velký krok rozhodí chůzi; spoléhejte raději na víc kroků. (Trénink je '
+    + 'jen na GPU, takže se to týká až tréninku na desktopu.)',
+}
+
+const MUJOCO_GAMMA: Bilingual = {
+  en: 'Keep γ high (0.99): locomotion is a long sequence of coordinated steps, so the agent must value '
+    + 'progress and staying upright many steps ahead, not just the next torque.',
+  cz: 'Nechte γ vysoké (0.99): pohyb je dlouhá řada koordinovaných kroků, takže agent musí cenit postup '
+    + 'a udržení vzpřímené polohy mnoho kroků dopředu, ne jen další moment.',
+}
+
+const MUJOCO_CLIP: Bilingual = {
+  en: 'Leave it at 0.2 — continuous control can be unstable, and the clip is what keeps one bad batch '
+    + 'from wrecking a working gait; tune budget and learning rate first.',
+  cz: 'Nechte ji na 0.2 — spojité řízení může být nestabilní a ořezávání brání jedné špatné dávce '
+    + 'zničit funkční chůzi; laďte nejdřív rozpočet a rychlost učení.',
+}
+
+const MUJOCO_ENT: Bilingual = {
+  en: "PPO's continuous action head already explores with its own noise, so 0 can work; a small bonus "
+    + '(e.g. 0.01) can help it discover forward motion instead of standing still. Keep it modest — too '
+    + 'much randomness just makes the robot flail.',
+  cz: 'Spojitá akční hlava PPO už zkoumá vlastním šumem, takže 0 může stačit; drobný bonus (např. 0,01) '
+    + 'může pomoci objevit pohyb vpřed místo stání na místě. Držte ho mírný — moc náhodnosti robota jen '
+    + 'rozhází.',
+}
+
+const MUJOCO_STEPS: Bilingual = {
+  en: 'The ★ budget is tuned per robot: the locomotion tasks (Hopper, Walker2d, HalfCheetah, Ant) need '
+    + 'a lot of practice — a good gait typically takes a few million steps — while the short Reacher '
+    + 'reach needs far fewer. (Training runs on a GPU machine; here Run is disabled until then.)',
+  cz: 'Rozpočet ★ je laděný pro každého robota: pohybové úlohy (Hopper, Walker2d, HalfCheetah, Ant) '
+    + 'potřebují hodně cviku — dobrá chůze obvykle zabere pár milionů kroků — kdežto krátké dosažení u '
+    + 'Reacheru mnohem méně. (Trénink běží na stroji s GPU; tady je Spustit do té doby zakázané.)',
+}
+
+const MUJOCO_LOSS: Bilingual = {
+  en: 'As always the loss just wobbles — judge MuJoCo progress from the reward curve climbing toward '
+    + 'the solved score, not from this one. Wild spikes can hint at instability (lower the learning rate).',
+  cz: 'Jako vždy ztráta jen kolísá — pokrok u MuJoCo posuzujte podle křivky odměny stoupající ke skóre '
+    + '„vyřešeno“, ne podle ní. Divoké výkyvy mohou naznačovat nestabilitu (snižte rychlost učení).',
+}
+
 export const PARAM_INFO: Record<string, ParamInfo> = {
   algorithm: {
     general: {
@@ -116,6 +183,12 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
         en: 'PPO only, same as the 3-agent version — one shared policy now drives a six-agent swarm. The bigger the swarm, the more there is to coordinate, but it is still the single shared brain learning for everyone.',
         cz: 'Jen PPO, stejně jako u verze se třemi agenty — jedna sdílená strategie teď řídí roj šesti agentů. Čím větší roj, tím víc koordinace, ale stále se učí jeden sdílený mozek za všechny.',
       },
+      hopper: MUJOCO_ALGO,
+      walker2d: MUJOCO_ALGO,
+      halfcheetah: MUJOCO_ALGO,
+      ant: MUJOCO_ALGO,
+      reacher: MUJOCO_ALGO,
+      swimmer: MUJOCO_ALGO,
     },
   },
 
@@ -202,6 +275,12 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
         en: '3e-4 is fine — this hard task needs budget and exploration far more than a higher learning rate.',
         cz: '3e-4 je v pořádku — tato těžká úloha potřebuje rozpočet a zkoumání mnohem víc než vyšší rychlost učení.',
       },
+      hopper: MUJOCO_LR,
+      walker2d: MUJOCO_LR,
+      halfcheetah: MUJOCO_LR,
+      ant: MUJOCO_LR,
+      reacher: MUJOCO_LR,
+      swimmer: MUJOCO_LR,
     },
   },
 
@@ -288,6 +367,12 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
         en: 'A high γ (0.99) is critical — the ball reward is many steps (key, door, room) away and must propagate all the way back.',
         cz: 'Vysoké γ (0.99) je klíčové — odměna za míček je mnoho kroků daleko (klíč, dveře, místnost) a musí se přenést celou cestu zpět.',
       },
+      hopper: MUJOCO_GAMMA,
+      walker2d: MUJOCO_GAMMA,
+      halfcheetah: MUJOCO_GAMMA,
+      ant: MUJOCO_GAMMA,
+      reacher: MUJOCO_GAMMA,
+      swimmer: MUJOCO_GAMMA,
     },
   },
 
@@ -338,6 +423,12 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
         en: 'Leave it at 0.2 — learning from pixels can be unstable, and the clip is what keeps one bad batch from wrecking a working driving policy; tune budget and learning rate first.',
         cz: 'Nechte ji na 0.2 — učení z pixelů může být nestabilní a ořezávání brání jedné špatné dávce zničit funkční strategii řízení; laďte nejdřív rozpočet a rychlost učení.',
       },
+      hopper: MUJOCO_CLIP,
+      walker2d: MUJOCO_CLIP,
+      halfcheetah: MUJOCO_CLIP,
+      ant: MUJOCO_CLIP,
+      reacher: MUJOCO_CLIP,
+      swimmer: MUJOCO_CLIP,
     },
   },
 
@@ -424,6 +515,12 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
         en: 'The most important dial here — almost nothing is rewarded until the ball is picked up, so push exploration (0.01–0.1). Even then this hierarchical task is hard.',
         cz: 'Nejdůležitější knoflík tady — dokud se nesebere míček, neodměňuje se téměř nic, takže přidejte zkoumání (0,01–0,1). I tak je tato hierarchická úloha těžká.',
       },
+      hopper: MUJOCO_ENT,
+      walker2d: MUJOCO_ENT,
+      halfcheetah: MUJOCO_ENT,
+      ant: MUJOCO_ENT,
+      reacher: MUJOCO_ENT,
+      swimmer: MUJOCO_ENT,
     },
   },
 
@@ -670,6 +767,12 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
         en: 'Six agents and six targets is much harder to coordinate, so it needs the larger ★ 1M budget — and even then expect only partial coverage on a CPU. This row is really a showcase of the swarm at scale; the heavy training belongs on the GPU desktop (G7b).',
         cz: 'Šest agentů a šest cílů se koordinuje mnohem hůř, takže potřebuje větší rozpočet ★ 1M — a i tak čekejte na CPU jen částečné pokrytí. Tento řádek je hlavně ukázka roje ve větším měřítku; náročný trénink patří na stroj s GPU (G7b).',
       },
+      hopper: MUJOCO_STEPS,
+      walker2d: MUJOCO_STEPS,
+      halfcheetah: MUJOCO_STEPS,
+      ant: MUJOCO_STEPS,
+      reacher: MUJOCO_STEPS,
+      swimmer: MUJOCO_STEPS,
     },
   },
 
@@ -1089,6 +1192,30 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
         en: 'Same sparse reward; expect a long flat 0 (the ball is hard to reach) before any climb — that is the sparse-reward profile, not a bug.',
         cz: 'Stejná řídká odměna; čekejte dlouhou rovnou 0 (na míček je těžké dosáhnout), než vůbec začne stoupat — to je profil řídké odměny, ne chyba.',
       },
+      hopper: {
+        en: 'Hopper pays a little for each bit of forward hop and a small bonus for staying upright, and a fall ends the run, so the curve climbs from about +120 (just standing briefly) toward +3800 ("solved") as it learns to hop.',
+        cz: 'Hopper platí trochu za každý kousek skoku vpřed a malý bonus za udržení vzpřímené polohy a pád běh ukončí, takže křivka stoupá zhruba z +120 (jen krátké stání) k +3800 („vyřešeno“), jak se učí skákat.',
+      },
+      walker2d: {
+        en: 'Walker2d pays for forward progress plus a small upright bonus, and a fall ends the run, so the curve climbs from about +80 toward the thousands (+3500 is a strong gait) as it learns to walk.',
+        cz: 'Walker2d platí za postup vpřed plus malý bonus za vzpřímenou polohu a pád běh ukončí, takže křivka stoupá zhruba z +80 k tisícům (+3500 je silná chůze), jak se učí chodit.',
+      },
+      halfcheetah: {
+        en: 'HalfCheetah never falls, so the curve simply climbs from near 0 toward +4800 as the running gait gets faster; early flailing can dip it negative before it learns to move forward.',
+        cz: 'HalfCheetah nikdy nepadá, takže křivka prostě stoupá od skoro 0 k +4800, jak se běh zrychluje; počáteční zmatené pohyby ji mohou stáhnout do záporu, než se naučí pohyb vpřed.',
+      },
+      ant: {
+        en: 'Ant earns a per-step "healthy" bonus just for not flipping over, so the curve starts high (around +990 for standing still) and climbs toward +6000 as it learns to walk — that high baseline is normal for Ant, not a sign it has already learned.',
+        cz: 'Ant získává bonus za „zdraví“ každý krok jen za to, že se nepřevrátí, takže křivka začíná vysoko (kolem +990 za stání na místě) a stoupá k +6000, jak se učí chodit — ta vysoká základna je u Antu normální, ne známka, že už se něco naučil.',
+      },
+      reacher: {
+        en: 'Reacher pays the negative distance from the tip to the target each step (plus a little for effort), so the score is always negative; the curve climbs from about −12 (idle) toward −3.75 ("solved") as the arm learns to reach and hold.',
+        cz: 'Reacher platí zápornou vzdálenost špičky od cíle každý krok (plus trochu za námahu), takže skóre je vždy záporné; křivka stoupá zhruba z −12 (nečinnost) k −3,75 („vyřešeno“), jak se rameno učí dosáhnout a udržet.',
+      },
+      swimmer: {
+        en: 'Swimmer pays the forward speed minus a small effort cost, so the curve climbs from near 0 toward +360 as it finds a swimming rhythm; there is no fall, only the stroke to get right.',
+        cz: 'Swimmer platí rychlost vpřed minus malou cenu za námahu, takže křivka stoupá od skoro 0 k +360, jak najde plavecký rytmus; není žádný pád, jen je třeba trefit záběr.',
+      },
     },
   },
 
@@ -1130,6 +1257,12 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
         en: 'The loss just wobbles here too; read progress from the reward curve, not the loss.',
         cz: 'Ztráta i tady jen kolísá; pokrok čtěte z křivky odměny, ne ze ztráty.',
       },
+      hopper: MUJOCO_LOSS,
+      walker2d: MUJOCO_LOSS,
+      halfcheetah: MUJOCO_LOSS,
+      ant: MUJOCO_LOSS,
+      reacher: MUJOCO_LOSS,
+      swimmer: MUJOCO_LOSS,
     },
   },
 
