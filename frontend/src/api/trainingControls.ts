@@ -32,6 +32,7 @@ export function useRunControls(): RunControls {
   const trainState      = useAppStore((s) => s.trainState)
   const gpuAvailable    = useAppStore((s) => s.gpuAvailable)
   const clearMetrics    = useAppStore((s) => s.clearMetrics)
+  const setTrainState   = useAppStore((s) => s.setTrainState)
 
   const isRunning  = trainState === 'running'
   const isPaused   = trainState === 'paused'
@@ -43,11 +44,16 @@ export function useRunControls(): RunControls {
   const trainGated  = !!selectedEnv && selectedEnv.hw_requirement === 'gpu' && !gpuAvailable
   const canRun      = !!selectedEnvId && envs.length > 0 && !trainGated
 
+  // Apply the REST response's state to the store immediately, so the controls flip (Run → Pause/Stop,
+  // etc.) without waiting for the WS `status` frame. A heavy first-time env import — notably the
+  // multi-agent stack (supersuit+mpe2, ~8 s cold) running on the trainer thread — can delay that WS
+  // frame, which otherwise left a started run looking unstarted and unstoppable (the controls never
+  // showed Pause/Stop). The authoritative WS frames still reconcile any later transitions.
   async function handleRun() {
     if (!canRun) return
     clearMetrics()
     try {
-      await startTraining({
+      const status = await startTraining({
         env_id: selectedEnvId!,
         algo,
         seed,
@@ -57,14 +63,15 @@ export function useRunControls(): RunControls {
         evolution: algo === 'neuroevolution' ? evolutionParams : null,
         q_learning: algo === 'q_learning' ? qLearningParams : null,
       })
+      setTrainState(status.state)
     } catch (err) {
       console.error('Failed to start training:', err)
     }
   }
 
-  async function handlePause()  { try { await pauseTraining()  } catch { /* ignore */ } }
-  async function handleResume() { try { await resumeTraining() } catch { /* ignore */ } }
-  async function handleStop()   { try { await stopTraining()   } catch { /* ignore */ } }
+  async function handlePause()  { try { setTrainState((await pauseTraining()).state)  } catch { /* ignore */ } }
+  async function handleResume() { try { setTrainState((await resumeTraining()).state) } catch { /* ignore */ } }
+  async function handleStop()   { try { setTrainState((await stopTraining()).state)   } catch { /* ignore */ } }
 
   return { handleRun, handlePause, handleResume, handleStop, isRunning, isPaused, isStopping, isActive, canRun, trainGated }
 }

@@ -20,6 +20,7 @@
   "sidebar": {
     "title": "Parameters",
     "game_selector": "Game / Environment",
+    "game_count": "Total games / environments available",
     "loading_envs": "Loading…",
     "algorithm": "Algorithm",
     "algo_ppo": "PPO",

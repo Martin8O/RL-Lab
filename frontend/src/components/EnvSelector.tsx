@@ -66,7 +66,14 @@ export default function EnvSelector({ disabled }: { disabled?: boolean }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-      <label style={labelStyle}>{t('sidebar.game_selector')}</label>
+      <label style={labelStyle}>
+        {t('sidebar.game_selector')}
+        {envs.length > 0 && (
+          <span style={countStyle} title={t('sidebar.game_count')} aria-label={t('sidebar.game_count')}>
+            {envs.length}
+          </span>
+        )}
+      </label>
       <button
         ref={triggerRef}
         type="button"
@@ -133,6 +140,14 @@ export default function EnvSelector({ disabled }: { disabled?: boolean }) {
 
 const labelStyle: CSSProperties = {
   fontSize: 'var(--fs-label)', fontWeight: 'var(--fw-medium)', color: 'var(--text-muted)',
+  display: 'inline-flex', alignItems: 'center', gap: 6,
+}
+// Total number of registered games/envs, shown beside the label as a quiet mono count pill.
+const countStyle: CSSProperties = {
+  fontFamily: 'var(--font-mono)', fontFeatureSettings: 'var(--ff-tabular)',
+  fontSize: 'var(--fs-meta)', fontWeight: 'var(--fw-semibold)', color: 'var(--text-faint)',
+  background: 'var(--surface-inset)', border: '1px solid var(--border-default)',
+  borderRadius: 'var(--radius-pill)', padding: '0 7px', lineHeight: '16px',
 }
 const triggerStyle: CSSProperties = {
   width: '100%', height: 'var(--control-md)', padding: '0 12px',

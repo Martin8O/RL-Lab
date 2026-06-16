@@ -20,6 +20,7 @@
   "sidebar": {
     "title": "Parametry",
     "game_selector": "Hra / Prostředí",
+    "game_count": "Celkový počet dostupných her / prostředí",
     "loading_envs": "Načítání…",
     "algorithm": "Algoritmus",
     "algo_ppo": "PPO",
