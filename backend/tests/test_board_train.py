@@ -95,6 +95,9 @@ def test_train_board_short_run_emits_metrics_and_packs_reloadable_checkpoint() -
     # A decoupled preview policy was published, and a board.zip checkpoint was packed.
     assert policies
     assert snaps and snaps[-1].artifact_name == "board.zip" and snaps[-1].algo == "ppo"
+    # Save must work from the moment the run starts — not only after the first round boundary (G6e fix):
+    # an immediate snapshot is published at 0 steps, with more following at each rollout boundary.
+    assert snaps[0].timesteps == 0
     # The packed checkpoint reloads as a masked predict that always returns a LEGAL move.
     predict = board_engine.load_board_predict(snaps[-1].blob)
     game = board_engine.load_game("tic_tac_toe")

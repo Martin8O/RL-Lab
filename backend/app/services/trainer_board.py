@@ -211,12 +211,35 @@ def train_board(
                 )
             )
 
+    def take_snapshot(iteration: int) -> None:
+        # Publish a savable checkpoint so "Save" works mid-run. Done at startup AND every rollout boundary
+        # (matching PPO's per-rollout cadence, trainer_ppo._snapshot) — not only once per round, which
+        # left Save unavailable until the first ~per_round steps (the user hit "no model to save" until
+        # ~16k). `_snapshot` in the manager just keeps the latest, so publishing often is cheap + correct.
+        if on_snapshot is None:
+            return
+        buf = io.BytesIO()
+        model.save(buf)
+        on_snapshot(
+            CheckpointArtifact(
+                algo="ppo",  # surfaced as PPO (the board self-play precedent); routed by is_board_game
+                blob=buf.getvalue(),
+                artifact_name="board.zip",
+                reward=last_eval[0],
+                timesteps=int(model.num_timesteps),
+                total_timesteps=total_target,
+                iteration=iteration,
+            )
+        )
+
     def on_rollout() -> None:
         rollout[0] += 1
         emit()
+        take_snapshot(rollout[0])  # keep Save available between round boundaries (every ~n_steps)
 
     publish()  # initial (untrained) preview policy + chart point
     emit()
+    take_snapshot(0)  # an immediate snapshot so Save works the moment the run starts (untrained net)
     callback = _BoardCallback(control, on_rollout)
 
     try:
@@ -243,20 +266,7 @@ def train_board(
             )
             publish()
             emit()
-            if on_snapshot is not None:
-                buf = io.BytesIO()
-                model.save(buf)
-                on_snapshot(
-                    CheckpointArtifact(
-                        algo="ppo",  # surfaced as PPO (the board self-play precedent); routed by is_board_game
-                        blob=buf.getvalue(),
-                        artifact_name="board.zip",
-                        reward=last_eval[0],
-                        timesteps=int(model.num_timesteps),
-                        total_timesteps=total_target,
-                        iteration=r + 1,
-                    )
-                )
+            take_snapshot(r + 1)  # round-boundary snapshot — now with the freshly-evaluated reward
         return "stopped" if control.stop_requested else "finished"
     finally:
         if model.env is not None:
