@@ -49,6 +49,20 @@ class GridLayout(BaseModel):
     cells: list[str]
 
 
+class BoardMove(BaseModel):
+    """One legal move of a move-based board game (Breakthrough, G6e/ADR-054): the OpenSpiel action int
+    plus the board-cell indices it moves **from** and **to** (row-major, matching ``BoardState.cells``).
+
+    A move is a (from-square → to-square), not a single-cell placement, so the client can't derive the
+    action from one click. The backend decodes each legal action's from/to (from ``action_to_string``)
+    and streams this map; the renderer highlights a selected piece's destinations and maps a clicked
+    (from, to) pair back to ``action``. Present only for move-mode games (``BoardState.moves``)."""
+
+    action: int
+    from_cell: int
+    to_cell: int
+
+
 class BoardState(BaseModel):
     """One ply of an OpenSpiel board game (G6a), streamed inside a frame.
 
@@ -74,6 +88,11 @@ class BoardState(BaseModel):
     # A legal "pass" move that maps to no board cell (Othello when a player has no placement; Go).
     # The renderer shows a dedicated Pass button for it. None for games/plies without one (G6d).
     pass_action: int | None = None
+    # Move-based games (Breakthrough, G6e): per legal action of the current player, its (from→to) cells,
+    # plus the last move's cells for a highlight. None for placement games (TTT/Connect Four/Othello).
+    moves: list[BoardMove] | None = None
+    last_from: int | None = None  # the from-cell of the last move played (move games only)
+    last_to: int | None = None  # the to-cell of the last move played (move games only)
 
 
 class FrameMessage(BaseModel):

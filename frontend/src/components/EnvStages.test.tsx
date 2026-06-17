@@ -69,3 +69,60 @@ describe('<BoardStage /> (Othello, G6d)', () => {
     expect(screen.queryByRole('button', { name: 'Pass' })).not.toBeInTheDocument()
   })
 })
+
+// G6e — BoardStage's move-mode (Breakthrough) interaction: a move is (from → to), so a piece is picked
+// first, its destinations light up, and a destination click submits the matching action int. Uses a
+// tiny 3×3 board (BoardStage is generic over rows/cols) with one 'b' piece that can go to two squares.
+const breakthroughMeta = BOARD_GAMES.breakthrough
+
+function moveBoard(): BoardState {
+  const cells = Array<string>(9).fill('.')
+  cells[4] = 'b' // centre piece (row 2, col 2), player 0
+  return {
+    cells,
+    rows: 3,
+    cols: 3,
+    legal_actions: [100, 101],
+    current_player: 0,
+    last_action: null,
+    is_terminal: false,
+    winner: null,
+    moves: [
+      { action: 100, from_cell: 4, to_cell: 1 }, // up to row 1, col 2
+      { action: 101, from_cell: 4, to_cell: 7 }, // down to row 3, col 2
+    ],
+  }
+}
+
+describe('<BoardStage /> move mode (Breakthrough, G6e)', () => {
+  it('select-a-piece → highlight destinations → click a destination submits its action', () => {
+    const onCellClick = vi.fn()
+    render(
+      <BoardStage
+        envName="Breakthrough" board={moveBoard()} meta={breakthroughMeta}
+        humanTurn onCellClick={onCellClick} statusText="" banner={null}
+      />,
+    )
+    // Before selecting, the piece is a "select" button and no destinations are offered.
+    expect(screen.queryByRole('button', { name: 'Move to row 1, column 2' })).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Select your piece at row 2, column 2' }))
+
+    // Now both of that piece's destinations are clickable; clicking one submits its action int.
+    expect(screen.getByRole('button', { name: 'Move to row 1, column 2' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Move to row 3, column 2' }))
+    expect(onCellClick).toHaveBeenCalledWith(101) // the action of the (from 4 → to 7) move
+  })
+
+  it('clicking the selected piece again deselects it (destinations disappear)', () => {
+    render(
+      <BoardStage
+        envName="Breakthrough" board={moveBoard()} meta={breakthroughMeta}
+        humanTurn onCellClick={() => {}} statusText="" banner={null}
+      />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Select your piece at row 2, column 2' }))
+    expect(screen.getByRole('button', { name: 'Move to row 1, column 2' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /Selected piece at row 2, column 2/ }))
+    expect(screen.queryByRole('button', { name: 'Move to row 1, column 2' })).not.toBeInTheDocument()
+  })
+})

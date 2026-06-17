@@ -415,6 +415,15 @@ export interface WorldEntity {
 /** One ply of an OpenSpiel board game (G6a), streamed inside a play frame. Built from the generic
  *  pyspiel.State API (app/services/board_engine.py) so it carries Tic-Tac-Toe today and Connect Four
  *  / chess / go later unchanged; the renderer (content/boardGames.ts + BoardStage) maps the glyphs. */
+/** One legal move of a move-based board game (Breakthrough, G6e): the action int + the board cells it
+ *  moves from/to (row-major, matching `BoardState.cells`). The renderer maps a clicked (from,to) pair
+ *  back to `action`; present only for move-mode games (`BoardState.moves`). Mirrors backend BoardMove. */
+export interface BoardMove {
+  action: number
+  from_cell: number
+  to_cell: number
+}
+
 export interface BoardState {
   /** Row-major board glyphs: "." empty, "x"/"o" for Tic-Tac-Toe, etc. (the renderer interprets them). */
   cells: string[]
@@ -431,6 +440,12 @@ export interface BoardState {
   /** A legal "pass" move mapping to no board cell (Othello when a player has no placement; Go), or
    *  null. The renderer shows a Pass button for it instead of a cell click (G6d). */
   pass_action?: number | null
+  /** Move-based games (Breakthrough, G6e): per legal action of the current player, its (from→to) cells.
+   *  Absent for placement games (TTT/Connect Four/Othello), which keep the single-click cell/column flow. */
+  moves?: BoardMove[] | null
+  /** The from/to cells of the last move played, for a move highlight (move-mode games only). */
+  last_from?: number | null
+  last_to?: number | null
 }
 
 /** WS frame: {type:"frame", ...} — a rendered env image OR client-render state. */

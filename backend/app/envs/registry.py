@@ -1823,6 +1823,56 @@ register(
     )
 )
 
+# Breakthrough (G6e) — the FOURTH board game and the first played by a MOVE, not a placement: each turn
+# you pick one of your pawns and step/capture it diagonally forward (first to reach the far rank wins).
+# So the click is two-step — select a piece, then one of its highlighted destinations — handled
+# generically as content/boardGames.ts actionMode "move" (the renderer maps the clicked from→to pair to
+# an OpenSpiel action via the per-move {from,to} cell map the backend now streams in BoardState.moves,
+# G6e/ADR-054). Engine-side still data-only (the board subsystem resolves everything from gym_id). The
+# board parser reads OpenSpiel's compact 8×8 string (BoardStrFormat "compact"). It trains with the same
+# MaskablePPO-vs-MCTS engine; the net learns fast against a near-random teacher, so it is taught
+# novice→easy (cheap, fast self-play) and scored vs the MEDIUM reference (board_engine.BOARD_PROFILES) —
+# eval-vs-easy saturates at +1 almost immediately, so medium is the honest, non-saturating yardstick.
+register(
+    EnvSpec(
+        id="breakthrough",
+        gym_id="breakthrough",  # the OpenSpiel short name (resolved by app.services.board_engine)
+        display_name=Bilingual(en="Breakthrough", cz="Breakthrough (Průlom)"),
+        description=Bilingual(
+            en="A race across an 8×8 board: every piece steps one square straight or diagonally "
+            "forward, and captures only diagonally. The first player to land a piece on the opponent's "
+            "home rank wins — so it is all about breaking through their wall. A move is a piece *move* "
+            "(pick a piece, then its destination), not a placement. Play against a built-in AI that "
+            "searches ahead (Monte-Carlo Tree Search) — pick a side and a difficulty — or **train your "
+            "own neural net** to play (it learns by playing the search AI) and then face it.",
+            cz="Závod přes desku 8×8: každá figurka jde o jedno políčko rovně nebo úhlopříčně vpřed a "
+            "bere pouze úhlopříčně. Vyhrává ten, kdo první dostane figurku na soupeřovu domácí řadu — "
+            "jde tedy o průlom jeho obrany. Tah je *přesun* figurky (vyberete figurku a pak její cíl), "
+            "ne pokládání. Hrajte proti vestavěné AI, která prohledává tahy dopředu (Monte-Carlo "
+            "stromové prohledávání) — vyberte si stranu a obtížnost — nebo si **natrénujte vlastní "
+            "neuronovou síť** (učí se hrou proti prohledávací AI) a pak se jí postavte.",
+        ),
+        family="board",
+        obs_type="vector",  # inert tag — board games are routed, never made via make_env
+        action_space="discrete",  # Discrete(768): the (from-square, direction) move encoding
+        supported_algos=["ppo"],  # surfaced as "ppo"; routed to the board trainer by is_board_game
+        hyperparams=_board_hyperparams(),  # standard PPO knobs (ent_coef ★ 0.01); rounds is internal
+        # Same eval-vs-reference-MCTS ∈ [−1, 1] chart scale as the other board games (solved = +1, min =
+        # −1); trained novice→easy and scored vs MEDIUM (BOARD_PROFILES) so the curve climbs honestly.
+        solved_score=1.0,
+        min_score=-1.0,
+        default_total_timesteps=120_000,  # ★ budget — learns fast vs the cheap teacher (curve plateaus by ~50k; ≈7 min CPU)
+        play_step_scale=1,
+        floor_scales_with_steps=False,
+        turn_based=True,  # one move per click-pair; the board subsystem drives the turn loop
+        human_playable=True,  # play a side vs the MCTS AI or your trained net
+        competitive=True,  # 2-player zero-sum → routed to the board trainer, like simple_tag
+        difficulty="advanced",  # a deep strategic move game
+        hw_requirement="cpu",  # MCTS + the MaskablePPO board trainer both run on CPU (no GPU gate)
+        train_implemented=True,  # the same game-agnostic neural board trainer (MaskablePPO vs MCTS, G6b)
+    )
+)
+
 # Hopper and Walker2d render at 125 fps and fall fast, so even with human play capped at the 30 fps
 # frame rate a person gets only ~8 s before the topple — too short to actually play. Stretch their
 # human-play wall-clock ~5× (the user's request) so there is real time to react; the other MuJoCo

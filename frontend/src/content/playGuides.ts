@@ -214,6 +214,42 @@ export const PLAY_GUIDES: Record<string, PlayGuide> = {
     },
   },
 
+  // Breakthrough (G6e) — the first MOVE game: clicked, turn-based, played by (from→to). Click one of
+  // your pieces to light up its legal destinations, then click a square to move/capture there. Same
+  // training-free MCTS AI as the other board games, or your own trained net.
+  breakthrough: {
+    goal: {
+      en: 'Be the first to march a piece all the way across the 8×8 board to the opponent\'s home row. '
+        + 'Every piece moves one square straight or diagonally forward, but can only capture diagonally '
+        + '— and a captured piece is removed for good. You play one colour (pick your side); the '
+        + 'built-in AI takes the other. It is a race and a wall at once: push for a breakthrough while '
+        + 'keeping enough defenders that the AI can\'t slip a piece past you.',
+      cz: 'Buďte první, kdo provede figurku celou deskou 8×8 až na soupeřovu domácí řadu. Každá figurka '
+        + 'jde o jedno políčko rovně nebo úhlopříčně vpřed, ale brát může jen úhlopříčně — a sebraná '
+        + 'figurka mizí nadobro. Hrajete jednu barvu (vyberte si stranu); vestavěná AI hraje druhou. Je '
+        + 'to závod i obrana zároveň: tlačte na průlom, ale nechte si dost obránců, aby AI neproklouzla '
+        + 'figurkou kolem vás.',
+    },
+    controls: [
+      { keys: 'Click', action: { en: 'Click one of your pieces to light up its moves', cz: 'Klikněte na svou figurku, ať se zvýrazní její tahy' } },
+      { keys: 'Click', action: { en: 'Then click a highlighted square to move or capture there', cz: 'Pak klikněte na zvýrazněné políčko, kam táhnout nebo brát' } },
+    ],
+    tips: {
+      en: 'This game is mouse-driven and turn-based — no keyboard. Click a piece to see where it can go '
+        + '(click it again, or another piece, to change your mind), then click a gold-marked square. '
+        + 'Captures are diagonal only, so a piece defended diagonally is safe head-on. Advancing in a '
+        + 'connected phalanx is far stronger than racing one lone runner — a lone piece is easily taken. '
+        + 'Watch the edges: a piece on a file has fewer diagonal defenders. Drop to Easy for a real '
+        + 'chance to win; switch to "Watch AI vs AI" to see two searchers race across the board.',
+      cz: 'Hra se ovládá myší a je tahová — žádná klávesnice. Klikněte na figurku, ať vidíte, kam může '
+        + '(dalším kliknutím na ni nebo na jinou figurku výběr změníte), pak klikněte na zlatě označené '
+        + 'políčko. Bere se jen úhlopříčně, takže figurka krytá úhlopříčně je zepředu v bezpečí. Postup '
+        + 'v sevřeném houfu je mnohem silnější než hnát jednoho osamělého běžce — osamělá figurka se '
+        + 'snadno sebere. Hlídejte okraje: figurka na kraji má méně úhlopříčných obránců. Na Lehké máte '
+        + 'reálnou šanci vyhrát; přepnutím na „Sledovat AI vs AI“ uvidíte závod dvou prohledávačů.',
+    },
+  },
+
   lunarlander: {
     goal: {
       en: 'Land the module gently on the pad between the two flags, upright and slow, with both '

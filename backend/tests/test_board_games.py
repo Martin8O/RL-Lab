@@ -155,6 +155,74 @@ def test_clean_grid_games_have_no_pass_action() -> None:
         assert board_engine.board_payload(game.new_initial_state(), None)["pass_action"] is None
 
 
+# -- G6e: move-based board interaction (Breakthrough, ADR-054) --------------
+
+
+def test_breakthrough_registered() -> None:
+    spec = get_env("breakthrough")
+    assert spec is not None and spec.gym_id == "breakthrough"
+    assert spec.family == "board" and spec.action_space == "discrete"
+    assert spec.train_implemented is True and spec.hw_requirement == "cpu"
+    assert spec.min_score == -1.0 and spec.solved_score == 1.0
+
+
+def test_breakthrough_compact_board_parses_to_clean_8x8() -> None:
+    """OpenSpiel prints Breakthrough's 8×8 board *compactly* (a row-label digit glued to packed cells,
+    plus a trailing ``abcdefgh`` column-label line), unlike Othello's spaced grid — yet ``board_payload``
+    must still yield a clean 8×8 grid of only ``.``/``b``/``w`` with no label chars leaking in (G6e)."""
+    game = board_engine.load_game("breakthrough")
+    p = board_engine.board_payload(game.new_initial_state(), None)
+    assert p["rows"] == 8 and p["cols"] == 8 and len(p["cells"]) == 64
+    assert set(p["cells"]) <= {".", "b", "w"}  # the compact labels/headers must not leak through
+    assert p["cells"].count("b") == 16 and p["cells"].count("w") == 16  # two full rows each
+
+
+def test_breakthrough_streams_from_to_move_map() -> None:
+    """A move game streams a per-legal-action ``{action, from_cell, to_cell}`` map (G6e): every legal
+    action decodes, starts on a current-player piece and lands on an empty or capturable enemy cell."""
+    game = board_engine.load_game("breakthrough")
+    state = game.new_initial_state()
+    p = board_engine.board_payload(state, None)
+    moves = p["moves"]
+    assert moves is not None and {m["action"] for m in moves} == set(p["legal_actions"])  # all decoded
+    cells = p["cells"]
+    for m in moves:
+        assert 0 <= m["from_cell"] < 64 and 0 <= m["to_cell"] < 64
+        assert cells[m["from_cell"]] == "b"  # player 0 ('b') moves first
+        assert cells[m["to_cell"]] in (".", "w")  # step into empty or capture an enemy diagonally
+    assert p["last_from"] is None and p["last_to"] is None  # no move played yet
+
+
+def test_breakthrough_clicked_action_applies_and_reports_last_move() -> None:
+    """The streamed action int round-trips: applying it moves the piece, and the next payload reports
+    that move's from/to cells (for the move highlight) decoded from the *current* state."""
+    game = board_engine.load_game("breakthrough")
+    state = game.new_initial_state()
+    move = board_engine.board_payload(state, None)["moves"][0]
+    state.apply_action(move["action"])
+    p = board_engine.board_payload(state, move["action"])
+    assert p["last_from"] == move["from_cell"] and p["last_to"] == move["to_cell"]
+    assert p["cells"][move["from_cell"]] == "."  # the piece vacated its square
+    assert p["cells"][move["to_cell"]] == "b"  # …and now stands on the destination
+
+
+def test_placement_games_omit_the_move_fields() -> None:
+    """The move map is additive: placement games (TTT/Connect Four/Othello) carry no ``moves``/
+    ``last_from``/``last_to`` keys at all, so their payloads stay byte-identical to before G6e."""
+    for gym_id in ("tic_tac_toe", "connect_four", "othello"):
+        game = board_engine.load_game(gym_id)
+        p = board_engine.board_payload(game.new_initial_state(), None)
+        assert "moves" not in p and "last_from" not in p and "last_to" not in p
+
+
+def test_breakthrough_profile_trains_cheap_scores_vs_medium() -> None:
+    """Breakthrough is taught novice→easy (cheap, fast self-play) but scored vs the MEDIUM reference:
+    eval-vs-easy saturates at +1 almost at once, so medium is the honest, non-saturating yardstick."""
+    prof = board_engine.board_profile("breakthrough")
+    assert prof.eval_strength == "medium"
+    assert prof.teacher_start == "novice" and prof.teacher_end == "easy"
+
+
 # -- the game-agnostic board engine -----------------------------------------
 
 

@@ -145,6 +145,16 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
           + 'obraty, kterých můžete využít. Na **Těžké** zvraty předvídá a hraje na rohy — tvrdá zkouška. '
           + '**Střední** je férová první partie.',
       },
+      breakthrough: {
+        en: 'Breakthrough rewards looking a few moves ahead — one careless advance can hand the AI a '
+          + 'capture that opens a lane. On **Easy** the AI searches little and lets pieces run past '
+          + 'undefended. On **Hard** it spots your breakthroughs early and blocks them — a real fight. '
+          + '**Medium** is a fair first game.',
+        cz: 'Breakthrough odměňuje výhled o pár tahů dopředu — jeden neopatrný postup může AI darovat '
+          + 'sebrání, které otevře cestu. Na **Lehké** AI prohledává málo a nechá figurky proběhnout bez '
+          + 'obrany. Na **Těžké** vaše průlomy odhalí včas a zablokuje je — opravdový souboj. **Střední** '
+          + 'je férová první partie.',
+      },
     },
   },
   algorithm: {
@@ -1229,6 +1239,10 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
       othello: {
         en: "Score = how the net does vs the reference (easy) AI: **−1** loses all, **0** draws all, **+1** wins all (\"solved\"). Othello is huge, so a fresh net starts low — around −0.7 — then climbs as it learns to beat the easy searcher, typically settling a bit above 0 (it wins more than it loses). Reaching +1 (winning *every* game) is a very high bar, so a curve well below the line is still genuine progress.",
         cz: 'Skóre = jak si síť vede proti referenční (lehké) AI: **−1** vše prohraje, **0** vše remizuje, **+1** vše vyhraje („vyřešeno“). Othello je obrovské, takže čerstvá síť začíná nízko — kolem −0,7 — a pak stoupá, jak se učí porážet lehkého prohledávače, obvykle se ustálí kousek nad 0 (vyhrává víc, než prohrává). Dosáhnout +1 (vyhrát *každou* partii) je velmi vysoká laťka, takže i křivka hluboko pod čárou je skutečný pokrok.',
+      },
+      breakthrough: {
+        en: "Score = how the net does vs the reference (medium) AI: **−1** loses all, **0** draws all, **+1** wins all (\"solved\"). A fresh net starts deep in the red (around −0.9), then climbs as it learns to break through — it beats the *easy* searcher almost at once, so it is scored against the tougher *medium* one to keep the curve honest and rising rather than instantly pinned at the top. Settling above 0 means it wins more than it loses against a real searcher.",
+        cz: 'Skóre = jak si síť vede proti referenční (střední) AI: **−1** vše prohraje, **0** vše remizuje, **+1** vše vyhraje („vyřešeno“). Čerstvá síť začíná hluboko v záporu (kolem −0,9) a pak stoupá, jak se učí prorážet — *lehkého* prohledávače porazí takřka okamžitě, takže se měří proti tvrdšímu *střednímu*, aby křivka zůstala poctivá a stoupala, místo aby se hned přilepila ke stropu. Ustálení nad 0 znamená, že proti skutečnému prohledávači vyhrává víc, než prohrává.',
       },
     },
   },

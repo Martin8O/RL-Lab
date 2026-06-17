@@ -21,13 +21,16 @@ export interface BoardGameMeta {
   /** Map a (lower-cased) board glyph char → the piece to draw. Empty cells ("." / " ") are omitted. */
   pieces: Record<string, BoardPiece>
   /**
-   * How a clicked cell maps to a game action (G6c). `'cell'` (default) — the action index *equals* the
-   * cell index, so a legal cell is directly clickable (Tic-Tac-Toe: 9 cells = 9 actions). `'column'` —
-   * the action is the cell's **column** and the piece drops to the lowest empty row (Connect Four: 7
-   * column-actions over a 6×7 board). The backend `BoardState` is identical either way; only this flag +
+   * How a clicked cell maps to a game action. `'cell'` (default, G6a) — the action index *equals* the
+   * cell index, so a legal cell is directly clickable (Tic-Tac-Toe: 9 cells = 9 actions). `'column'`
+   * (G6c) — the action is the cell's **column** and the piece drops to the lowest empty row (Connect
+   * Four: 7 column-actions over a 6×7 board). `'move'` (G6e) — a move is a (from-square → to-square):
+   * the user clicks one of their pieces, the renderer highlights that piece's legal destinations (from
+   * `BoardState.moves`), and a destination click submits the matching action int (Breakthrough). The
+   * backend `BoardState` carries the extra `moves` map for `'move'` games; only this flag +
    * `BoardStage`'s click/highlight maths differ. Everything else stays game-agnostic.
    */
-  actionMode?: 'cell' | 'column'
+  actionMode?: 'cell' | 'column' | 'move'
   /** The idle board shown when the game is selected but no session is running. */
   idle: BoardState
 }
@@ -69,6 +72,25 @@ function othelloIdleBoard(): BoardState {
   }
 }
 
+/** Breakthrough's opening position: each player's two back rows filled with pawns. Player 0 ('b') sits
+ *  on the top two rows and advances downward; player 1 ('w') sits on the bottom two and advances up. */
+function breakthroughIdleBoard(): BoardState {
+  const cells = Array<string>(64).fill('.')
+  for (let i = 0; i < 16; i++) cells[i] = 'b' // top two rows (ranks 8 & 7)
+  for (let i = 48; i < 64; i++) cells[i] = 'w' // bottom two rows (ranks 2 & 1)
+  return {
+    cells,
+    rows: 8,
+    cols: 8,
+    legal_actions: [],
+    current_player: 0,
+    last_action: null,
+    is_terminal: false,
+    winner: null,
+    moves: [],
+  }
+}
+
 export const BOARD_GAMES: Record<string, BoardGameMeta> = {
   // Tic-Tac-Toe: glyph 'x' = player 0 (moves first, accent), 'o' = player 1 (danger). The action
   // index equals the cell index (0–8), so a legal cell is directly clickable.
@@ -104,6 +126,20 @@ export const BOARD_GAMES: Record<string, BoardGameMeta> = {
       o: { player: 1, glyph: '◯', color: 'var(--text-strong)' },
     },
     idle: othelloIdleBoard(),
+  },
+  // Breakthrough (G6e): an 8×8 move game — the FIRST game played by (from-square → to-square) clicks
+  // rather than a placement (actionMode 'move'). Player 0 ('b') starts on the top two rows and advances
+  // DOWN; player 1 ('w') starts on the bottom two and advances UP, so directional triangles read as the
+  // pieces' march. Two saturated, high-contrast hues tell the sides apart (the Connect Four palette —
+  // the pale --accent reads as white at this size). The backend streams the per-move {from,to} cell map
+  // (BoardState.moves); BoardStage handles the two-step select-then-move interaction generically.
+  breakthrough: {
+    pieces: {
+      b: { player: 0, glyph: '▼', color: 'var(--danger)' },
+      w: { player: 1, glyph: '▲', color: 'var(--viz-6)' },
+    },
+    actionMode: 'move',
+    idle: breakthroughIdleBoard(),
   },
 }
 

@@ -21,6 +21,7 @@ training_manager) — the same discipline as ``ma_env``.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any, Literal, NamedTuple
 
@@ -69,10 +70,16 @@ class BoardProfile(NamedTuple):
 # so it barely learns; trained against the near-random NOVICE teacher (ramping up to easy) it gets
 # enough early wins to climb, and scored against the easy reference its honest curve rises from ≈−0.7
 # to ≈+0.2 over a CPU budget (verified). So it is taught novice→easy and scored vs easy.
+# Breakthrough (G6e) learns *fast*: trained against the near-random NOVICE→easy teacher it crushes the
+# easy reference (eval-vs-easy hits +1 by ~20k steps, verified). Easy is therefore a saturating, useless
+# yardstick, so it is scored against the tougher MEDIUM reference — the honest curve then climbs from
+# ≈−0.9 to ≈+0.6/+0.9 over a CPU budget (verified) instead of pinning at the top. The cheap teacher keeps
+# self-play fast (~250–530 steps/s) even though the medium eval is the stronger bar.
 BOARD_PROFILES: dict[str, BoardProfile] = {
     "tic_tac_toe": BoardProfile(eval_strength="medium", teacher_start="easy", teacher_end="medium"),
     "connect_four": BoardProfile(eval_strength="easy", teacher_start="easy", teacher_end="easy"),
     "othello": BoardProfile(eval_strength="easy", teacher_start="novice", teacher_end="easy"),
+    "breakthrough": BoardProfile(eval_strength="medium", teacher_start="novice", teacher_end="easy"),
 }
 _DEFAULT_PROFILE = BOARD_PROFILES["tic_tac_toe"]
 
@@ -134,39 +141,49 @@ class MctsOpponent:
 
 
 class BoardStrFormat(NamedTuple):
-    """How to read the board grid out of ``str(state)`` for a game (G6d).
+    """How to read the board grid out of ``str(state)`` for a game (G6d/G6e).
 
-    Most OpenSpiel grid games (Tic-Tac-Toe, Connect Four) print a **clean** grid — one row per line,
-    one char per cell, ``.`` for empty — which :func:`_board_grid` reads directly. Othello prints a
-    **decorated** grid (a "Black to play" header, ``a b c …`` column labels, ``1 … 8`` row labels,
-    ``-`` for empty and a space between cells), so its rows must be detokenised. This descriptor
-    captures the two things that vary (the empty marker + whether rows are label-wrapped); the rest of
-    the subsystem stays game-agnostic. Keyed by the OpenSpiel short name; defaults to the clean format.
+    OpenSpiel prints its boards in a few different ASCII layouts; this descriptor captures the variation
+    so :func:`_board_grid` can extract a clean ``rows × cols`` cell list while the rest of the subsystem
+    stays game-agnostic. ``kind`` selects the layout, ``empty`` is the empty-cell marker:
+
+    * ``"clean"`` (Tic-Tac-Toe, Connect Four) — one row per line, one char per cell, no labels; read
+      directly (byte-identical to G6a/G6c).
+    * ``"spaced"`` (Othello) — a header + ``a b c`` / ``1 … 8`` labels, cells **space-separated**; each
+      board row is the line whose first whitespace token is a digit (the row label).
+    * ``"compact"`` (Breakthrough) — ``a … h`` / ``1 … 8`` labels, cells **packed with no separators**
+      and a single-char row label prefixed directly (``"8bbbbbbbb"``); strip the leading digit label,
+      take ``cols`` chars. A trailing column-label line (``" abcdefgh"``) has no leading digit → skipped.
+
+    The ``"spaced"``/``"compact"`` paths take the authoritative ``rows × cols`` from the
+    ``observation_tensor`` shape so header/label lines never leak into the grid. Keyed by the OpenSpiel
+    short name; defaults to the clean format.
     """
 
     empty: str  # the empty-cell marker in str(state) ("." for most games, "-" for Othello)
-    labeled: bool  # True ⇒ rows are space-separated and wrapped by numeric row labels (Othello)
+    kind: Literal["clean", "spaced", "compact"]
 
 
-_DEFAULT_STR_FORMAT = BoardStrFormat(empty=".", labeled=False)
+_DEFAULT_STR_FORMAT = BoardStrFormat(empty=".", kind="clean")
 _BOARD_STR_FORMATS: dict[str, BoardStrFormat] = {
-    "othello": BoardStrFormat(empty="-", labeled=True),
+    "othello": BoardStrFormat(empty="-", kind="spaced"),
+    "breakthrough": BoardStrFormat(empty=".", kind="compact"),
 }
 
 
 def _board_grid(state: Any) -> tuple[int, int, list[str]]:
     """Extract the ``(rows, cols, cells)`` grid from ``str(state)``, normalising empties to ``"."``.
 
-    Cells are row-major single glyph chars (``"."`` empty, ``"x"``/``"o"`` pieces). Clean-grid games
-    (TTT/Connect Four) parse byte-identically to G6a; labeled games (Othello) read each board row as
-    the ``cols`` single-char cell tokens between the numeric row labels, with the true ``rows × cols``
-    taken from the ``observation_tensor`` shape (so the header/label lines never leak into the grid).
+    Cells are row-major single glyph chars (``"."`` empty, ``"x"``/``"o"``/``"b"``/``"w"`` pieces).
+    Dispatches on the per-game :class:`BoardStrFormat`: clean grids (TTT/Connect Four) parse
+    byte-identically to G6a, while decorated grids (Othello spaced, Breakthrough compact) are
+    detokenised against the true ``rows × cols`` from the ``observation_tensor`` shape.
     """
     game = state.get_game()
     fmt = _BOARD_STR_FORMATS.get(game.get_type().short_name, _DEFAULT_STR_FORMAT)
     text = str(state).strip("\n")
 
-    if not fmt.labeled:
+    if fmt.kind == "clean":
         lines = [ln.rstrip() for ln in text.split("\n") if ln.strip() != ""]
         rows = len(lines)
         cols = max((len(ln) for ln in lines), default=0)
@@ -177,18 +194,91 @@ def _board_grid(state: Any) -> tuple[int, int, list[str]]:
                 cells.append("." if ch == fmt.empty else ch)
         return rows, cols, cells
 
-    # Labeled grid (Othello): the obs-tensor shape gives the authoritative rows × cols; each board row
-    # is the line whose first whitespace token is a digit (the row label), followed by `cols` cell chars.
+    # Decorated grids: the obs-tensor shape gives the authoritative rows × cols.
     shape = game.observation_tensor_shape()
     rows, cols = int(shape[-2]), int(shape[-1])
     grid: list[str] = []
     for ln in text.split("\n"):
-        toks = ln.split()
-        if len(toks) >= cols + 1 and toks[0].isdigit():
-            grid.extend("." if ch == fmt.empty else ch for ch in toks[1 : 1 + cols])
         if len(grid) >= rows * cols:
             break
+        if fmt.kind == "spaced":
+            # Each board row: a digit row-label token followed by `cols` single-char cell tokens.
+            toks = ln.split()
+            if len(toks) >= cols + 1 and toks[0].isdigit():
+                grid.extend("." if ch == fmt.empty else ch for ch in toks[1 : 1 + cols])
+        else:  # "compact": a leading digit label glued to `cols` packed cell chars.
+            s = ln.strip()
+            if s and s[0].isdigit():
+                k = 0
+                while k < len(s) and s[k].isdigit():
+                    k += 1  # consume the (1+ digit) row label
+                row_cells = s[k : k + cols]
+                if len(row_cells) == cols:
+                    grid.extend("." if ch == fmt.empty else ch for ch in row_cells)
     return rows, cols, grid
+
+
+# Move-based board games (G6e, ADR-054) — a move is a (from-square → to-square), not a placement, so
+# the renderer needs the board cells each legal action moves between. Breakthrough's ``action_to_string``
+# is a clean coordinate pair (``"a7a6"`` = file a, rank 7 → file a, rank 6), which :func:`_parse_move`
+# decodes generically: a square token is ``<file letter><rank number>`` (file ``a`` = column 0, rank 1 =
+# the bottom row), so the convention carries to checkers and, with a richer decoder, chess (whose SAN
+# strings — ``"Nc3"``, ``"O-O"`` — *don't* parse to two squares here, deferred to G6g). Listed games stream
+# a per-legal-action ``{from,to}`` map; every other game leaves ``BoardState.moves`` absent (byte-identical).
+_MOVE_GAMES: frozenset[str] = frozenset({"breakthrough"})
+_SQUARE_RE = re.compile(r"([a-z])([0-9]+)")
+
+
+def _square_to_cell(file_ch: str, rank: int, rows: int, cols: int) -> int | None:
+    """A board square (``file_ch`` ``a``-based column, ``rank`` 1-based from the **bottom**) → a row-major
+    cell index matching :func:`_board_grid` (rank ``rows`` is the top line). ``None`` if out of bounds."""
+    col = ord(file_ch) - ord("a")
+    if not (0 <= col < cols and 1 <= rank <= rows):
+        return None
+    return (rows - rank) * cols + col
+
+
+def _parse_move(move_str: str, rows: int, cols: int) -> tuple[int, int] | None:
+    """Decode an ``action_to_string`` move into ``(from_cell, to_cell)`` if it is a clean coordinate
+    pair (exactly two valid algebraic squares), else ``None`` (a non-coordinate move — pass, chess SAN)."""
+    squares = _SQUARE_RE.findall(move_str.strip())
+    if len(squares) != 2:
+        return None
+    cells = [_square_to_cell(f, int(r), rows, cols) for f, r in squares]
+    if cells[0] is None or cells[1] is None:
+        return None
+    return cells[0], cells[1]
+
+
+def _legal_moves(state: Any, rows: int, cols: int) -> list[dict[str, int]]:
+    """For the current player, each legal action's ``{action, from_cell, to_cell}`` (move games, G6e).
+
+    The client maps a clicked (from, to) pair back to the action int; actions that don't decode to a
+    coordinate pair are omitted (handled elsewhere — a pass rides ``pass_action``)."""
+    player = int(state.current_player())
+    out: list[dict[str, int]] = []
+    for a in state.legal_actions():
+        parsed = _parse_move(state.action_to_string(player, int(a)), rows, cols)
+        if parsed is not None:
+            out.append({"action": int(a), "from_cell": parsed[0], "to_cell": parsed[1]})
+    return out
+
+
+def _last_move_cells(state: Any, last_action: int | None, rows: int, cols: int) -> tuple[int | None, int | None]:
+    """The ``(from_cell, to_cell)`` of the move just played, for a last-move highlight (move games).
+
+    ``action_to_string`` is position-independent for these games (verified), so the *current* state can
+    decode an action played by either player; we pass a valid player index (the current one, or 0 at a
+    terminal node where ``current_player()`` is the sentinel). ``(None, None)`` if it doesn't decode."""
+    if last_action is None:
+        return None, None
+    cp = int(state.current_player())
+    player = cp if 0 <= cp < int(state.get_game().num_players()) else 0
+    try:
+        parsed = _parse_move(state.action_to_string(player, int(last_action)), rows, cols)
+    except Exception:  # noqa: BLE001 — a non-decodable action must not break the frame
+        return None, None
+    return parsed if parsed is not None else (None, None)
 
 
 def _pass_action(state: Any) -> int | None:
@@ -226,7 +316,7 @@ def board_payload(state: Any, last_action: int | None) -> dict[str, Any]:
         if top > 0 and returns.count(top) == 1:
             winner = returns.index(top)
 
-    return {
+    payload: dict[str, Any] = {
         "cells": cells,
         "rows": rows,
         "cols": cols,
@@ -239,6 +329,15 @@ def board_payload(state: Any, last_action: int | None) -> dict[str, Any]:
         # A legal "pass" move (Othello when stuck), or None — the renderer shows a Pass button for it.
         "pass_action": _pass_action(state),
     }
+
+    # Move-based games (Breakthrough, G6e): the move isn't a placement, so add the per-legal-action
+    # (from→to) cell map the client needs to turn a clicked pair into an action + the last move's cells
+    # for the move highlight. Absent for placement games (TTT/Connect Four/Othello) — byte-identical.
+    if state.get_game().get_type().short_name in _MOVE_GAMES:
+        payload["moves"] = [] if terminal else _legal_moves(state, rows, cols)
+        payload["last_from"], payload["last_to"] = _last_move_cells(state, last_action, rows, cols)
+
+    return payload
 
 
 def outcome(state: Any, player: int) -> tuple[float, Literal["win", "draw", "loss"]]:

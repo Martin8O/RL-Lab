@@ -5,6 +5,7 @@
 // state layout in sync with the backend's client_state.
 
 import type { CSSProperties, RefObject } from 'react'
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { BoardState, GridLayout } from '../api/types'
 import type { BoardGameMeta } from '../content/boardGames'
@@ -297,29 +298,56 @@ export function BoardStage({ envName, board, meta, humanTurn, onCellClick, statu
   const bannerColor =
     banner?.kind === 'win' ? 'var(--success)' : banner?.kind === 'loss' ? 'var(--danger)' : 'var(--text-strong)'
 
-  // Column games (Connect Four, G6c): a move is a column drop, so a cell's action is its column. Cell
-  // games (Tic-Tac-Toe): action == cell index. No HOVER highlighting at all — by request the board is
-  // plain; a legal cell is simply a clickable button (cursor only). The one highlight kept is a ring on
-  // the *last move played* (a useful, single-cell marker the user asked to keep).
+  // Three interaction modes (content/boardGames.ts actionMode). Cell games (Tic-Tac-Toe): action ==
+  // cell index. Column games (Connect Four, G6c): a cell's action is its column; the disc drops to the
+  // lowest empty row. Move games (Breakthrough, G6e): a move is (from-square → to-square) — click your
+  // piece, then a highlighted destination. The backend BoardState is identical for cell/column; move
+  // games additionally carry `moves` (per legal action's from/to cells). No HOVER highlighting at all —
+  // a clickable cell is just a button (cursor only); the kept highlights are the last move + (move mode)
+  // the gold selection/destination markers.
   const columnMode = meta.actionMode === 'column'
+  const moveMode = meta.actionMode === 'move'
   const actionOf = (i: number) => (columnMode ? i % cols : i)
 
-  // The just-played disc to ring: in cell mode it is the last_action cell; in column mode it is the
-  // top-most filled cell of the last_action column (pieces stack from the bottom, so the most recent
-  // one sits at the smallest occupied row index).
+  // Move-mode selection — which of the human's pieces is picked. Reset whenever the turn passes, the
+  // board advances (a move was played) or the game ends, via React's canonical "reset state on prop
+  // change during render" pattern (no effect — setState-in-effect triggers cascading renders).
+  const [selectedFrom, setSelectedFrom] = useState<number | null>(null)
+  const turnKey = `${humanTurn}:${last_action}:${is_terminal}`
+  const [prevTurnKey, setPrevTurnKey] = useState(turnKey)
+  if (turnKey !== prevTurnKey) {
+    setPrevTurnKey(turnKey)
+    setSelectedFrom(null)
+  }
+
+  const moves = board.moves ?? []
+  // The cells the human can move FROM, and (once a piece is picked) that piece's destination cell → action.
+  const fromCells = moveMode ? new Set(moves.map((m) => m.from_cell)) : null
+  const destForSelected = new Map<number, number>()
+  if (moveMode && selectedFrom != null) {
+    for (const m of moves) if (m.from_cell === selectedFrom) destForSelected.set(m.to_cell, m.action)
+  }
+  const moveInteractive = moveMode && humanTurn && !is_terminal
+
   const isFilled = (i: number) => {
     const v = cells[i]?.trim() ?? ''
     return v !== '' && v !== '.'
   }
-  let lastCell: number | null = null
-  if (last_action !== null) {
+  // The just-played cell(s) to ring. Cell mode: the last_action cell. Column mode: the top-most filled
+  // cell of the last_action column. Move mode: the last move's from + to cells (streamed as last_from/to,
+  // since a move int doesn't map to a single cell). A subtle "what just happened" marker.
+  const lastCells = new Set<number>()
+  if (moveMode) {
+    if (board.last_from != null) lastCells.add(board.last_from)
+    if (board.last_to != null) lastCells.add(board.last_to)
+  } else if (last_action !== null) {
     if (columnMode) {
       for (let r = 0; r < rows; r++) {
         const idx = r * cols + last_action
-        if (isFilled(idx)) { lastCell = idx; break }
+        if (isFilled(idx)) { lastCells.add(idx); break }
       }
     } else {
-      lastCell = last_action
+      lastCells.add(last_action)
     }
   }
 
@@ -328,6 +356,11 @@ export function BoardStage({ envName, board, meta, humanTurn, onCellClick, statu
     background: 'var(--surface-2)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-default)',
     padding: 0, margin: 0,
   }
+
+  // While the human is choosing a move, a mode-specific hint replaces the generic status (no banner up).
+  const moveHint = moveInteractive && !banner
+    ? (selectedFrom == null ? t('board.select_piece') : t('board.select_dest'))
+    : null
 
   return (
     <div role="group" aria-label={envName} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14 }}>
@@ -340,7 +373,7 @@ export function BoardStage({ envName, board, meta, humanTurn, onCellClick, statu
         {banner?.mark && (
           <span aria-hidden style={{ color: banner.mark.color, fontWeight: 800 }}>{banner.mark.glyph}</span>
         )}
-        {banner ? banner.text : statusText}
+        {banner ? banner.text : (moveHint ?? statusText)}
       </div>
 
       <div style={{
@@ -353,15 +386,66 @@ export function BoardStage({ envName, board, meta, humanTurn, onCellClick, statu
         {cells.map((ch, i) => {
           const r = Math.floor(i / cols)
           const c = i % cols
-          const action = actionOf(i)
           const mark = ch.trim().toUpperCase()
           const piece = meta.pieces[ch.trim().toLowerCase()]
-          const ring = lastCell === i ? `inset 0 0 0 3px ${piece?.color ?? 'var(--accent)'}` : undefined
           const glyph = piece && (
             <span aria-hidden style={{ fontSize: cellPx * 0.55, lineHeight: 1, color: piece.color, fontWeight: 800 }}>
               {piece.glyph}
             </span>
           )
+          // The last-move trail ring — kept muted in move mode so it never competes with the gold
+          // selection/destination highlights; the placement games keep the piece-coloured ring.
+          const trailRing = lastCells.has(i)
+            ? `inset 0 0 0 3px ${moveMode ? 'var(--text-muted)' : (piece?.color ?? 'var(--accent)')}`
+            : undefined
+
+          // ── Move mode (Breakthrough): pick a piece, then click one of its gold-marked destinations ──
+          if (moveMode) {
+            if (moveInteractive && selectedFrom === i) {
+              // The picked piece — a gold ring; click again to deselect.
+              return (
+                <button key={i} onClick={() => setSelectedFrom(null)}
+                  aria-label={t('board.cell_selected', { row: r + 1, col: c + 1 })}
+                  style={{ ...cellBox, cursor: 'pointer', boxShadow: 'inset 0 0 0 3px var(--goal)' }}>
+                  {glyph}
+                </button>
+              )
+            }
+            const destAction = moveInteractive ? destForSelected.get(i) : undefined
+            if (destAction !== undefined) {
+              // A legal destination: an empty target shows a centred gold dot, a capture shows the gold
+              // ring around the enemy glyph. Clicking submits the matching action int.
+              return (
+                <button key={i} onClick={() => { onCellClick(destAction); setSelectedFrom(null) }}
+                  aria-label={t('board.cell_move_to', { row: r + 1, col: c + 1 })}
+                  style={{ ...cellBox, cursor: 'pointer', boxShadow: piece ? 'inset 0 0 0 3px var(--goal)' : undefined }}>
+                  {glyph ?? <span aria-hidden style={{ display: 'block', width: cellPx * 0.3, height: cellPx * 0.3, borderRadius: '50%', background: 'var(--goal)' }} />}
+                </button>
+              )
+            }
+            if (moveInteractive && fromCells?.has(i)) {
+              // One of the human's movable pieces — selectable.
+              return (
+                <button key={i} onClick={() => setSelectedFrom(i)}
+                  aria-label={t('board.cell_select', { row: r + 1, col: c + 1 })}
+                  style={{ ...cellBox, cursor: 'pointer', boxShadow: trailRing }}>
+                  {glyph}
+                </button>
+              )
+            }
+            return (
+              <div key={i} role="img"
+                aria-label={piece
+                  ? t('board.cell_taken', { mark, row: r + 1, col: c + 1 })
+                  : t('board.cell_empty', { row: r + 1, col: c + 1 })}
+                style={{ ...cellBox, boxShadow: trailRing }}>
+                {glyph}
+              </div>
+            )
+          }
+
+          // ── Cell / column mode (Tic-Tac-Toe, Connect Four) ──
+          const action = actionOf(i)
           const playable = !is_terminal && humanTurn && legal.has(action)
           // In column mode the landing spot is an empty cell, so the empty cells of a legal column are
           // the buttons; in cell mode the legal (empty) cell itself is the button — as before.
@@ -374,7 +458,7 @@ export function BoardStage({ envName, board, meta, humanTurn, onCellClick, statu
                 aria-label={columnMode
                   ? t('board.cell_drop', { col: c + 1 })
                   : t('board.cell_play', { row: r + 1, col: c + 1 })}
-                style={{ ...cellBox, cursor: 'pointer', boxShadow: ring }}
+                style={{ ...cellBox, cursor: 'pointer', boxShadow: trailRing }}
               >
                 {glyph}
               </button>
@@ -387,7 +471,7 @@ export function BoardStage({ envName, board, meta, humanTurn, onCellClick, statu
               aria-label={piece
                 ? t('board.cell_taken', { mark, row: r + 1, col: c + 1 })
                 : t('board.cell_empty', { row: r + 1, col: c + 1 })}
-              style={{ ...cellBox, boxShadow: ring }}
+              style={{ ...cellBox, boxShadow: trailRing }}
             >
               {glyph}
             </div>

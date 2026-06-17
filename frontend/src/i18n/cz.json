@@ -154,6 +154,11 @@
     "cell_drop": "Vhodit žeton do sloupce {{col}}",
     "cell_taken": "Řádek {{row}}, sloupec {{col}}: {{mark}}",
     "cell_empty": "Řádek {{row}}, sloupec {{col}}: prázdné",
+    "cell_select": "Vyberte svou figurku na řádku {{row}}, sloupci {{col}}",
+    "cell_selected": "Vybraná figurka na řádku {{row}}, sloupci {{col}} — dalším kliknutím zrušíte výběr",
+    "cell_move_to": "Přesunout na řádek {{row}}, sloupec {{col}}",
+    "select_piece": "Váš tah — klikněte na jednu ze svých figurek",
+    "select_dest": "Nyní klikněte na zvýrazněné políčko, kam chcete táhnout",
     "pass": "Vynechat tah",
     "must_pass": "Žádný možný tah — musíte vynechat"
   },
