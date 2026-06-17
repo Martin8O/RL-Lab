@@ -49,6 +49,30 @@ class GridLayout(BaseModel):
     cells: list[str]
 
 
+class BoardState(BaseModel):
+    """One ply of an OpenSpiel board game (G6a), streamed inside a frame.
+
+    Built from the **generic** ``pyspiel.State`` API (see ``app.services.board_engine.board_payload``),
+    so it carries Tic-Tac-Toe today and Connect Four / chess / go later with no contract change. The
+    client renderer (``content/boardGames.ts`` + ``BoardStage``) interprets the per-cell glyphs. Lives
+    here (not in ``schemas.play``) so it can ride **both** a ``play_frame`` (human/AI play, ``PlayFrame.
+    board``) and a training-preview ``frame`` (the live board preview, ``FrameMessage.board``, G6b)
+    without a circular import (``schemas.play`` already imports from this module).
+    """
+
+    # Row-major board glyphs: "." empty, "x"/"o" for Tic-Tac-Toe, etc. (the renderer maps them).
+    cells: list[str]
+    rows: int
+    cols: int
+    # Action indices that are legal for the player to move now (empty once the game is over). The
+    # client highlights these on the human's turn and rejects clicks on any other cell.
+    legal_actions: list[int]
+    current_player: int  # whose turn (0 = first player; <0 at a terminal/chance node)
+    last_action: int | None  # the action just applied (for a "last move" highlight); None at start
+    is_terminal: bool
+    winner: int | None  # winning player index, or None for a draw / a game still in progress
+
+
 class FrameMessage(BaseModel):
     """One rendered env frame, pushed over WS as {type:"frame", ...}.
 
@@ -76,6 +100,9 @@ class FrameMessage(BaseModel):
     # canvas (None for every single-agent env). Streamed each frame so a late joiner always has it.
     agents: list[AgentSprite] | None = None
     world: list[WorldEntity] | None = None
+    # Board-game state (G6b) — the live training preview self-plays the learning net ply by ply; the
+    # client renders it on the same BoardStage as play (None for every non-board env).
+    board: BoardState | None = None
 
 
 class PreviewState(BaseModel):

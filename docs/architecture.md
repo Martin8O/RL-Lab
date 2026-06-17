@@ -109,19 +109,28 @@ typed seams need real code — see [`adding-an-environment.md`](adding-an-enviro
    *and* the preview streamer (`n_envs=1`) so obs/action shapes match (**G4b**). CarRacing's image trainer is G3c-train.
 3. **Action space** — discrete `int` vs continuous `box` (done for classic-control + multi-joint; CarRacing image-box *human* play landed; **Atari image AI-play landed in G4c / ADR-046** via `play_session._run_image_ai` over the `make_atari` vec env); image-box *training* is G3c-train.
 4. **Competitive play** — a `side` selector + a 2-agent env (Pong).
-5. **Board games** (OpenSpiel, **foundation landed G6a / ADR-050**) — a 2-player, turn-based, perfect-info,
-   zero-sum game with legal-move masking + self-play is `pyspiel.State`, not a `gym.Env`, so a board row
-   (`family="board"`) is a discoverable picker entry **routed via `is_board_game` to `app/services/board_engine.py`**
-   (the parallel to `is_multi_agent`), never through `make_env`. The engine is pure `pyspiel`+numpy, no torch:
-   G6a's opponent is a **training-free MCTS**, so the neural self-play trainer is deferred to G6b
-   (`train_implemented=False`, gate note `not_implemented_board`). Board play **reuses the play lane**
-   (`play_session._run_board`: human-vs-MCTS via the turn-based pending-action path; `mode="ai"` = MCTS-vs-MCTS
-   watch); the contract grows additively (`BoardState` on `PlayFrame.board`, `side`/`ai_strength` on `PlayConfig`,
-   `outcome` + optional `rating` on `PlayResult`). The board is client-rendered (`clientKind="board"`, `BoardStage`);
-   only the renderer's glyph map (`content/boardGames.ts`) + the one catalog row are game-specific — engine/session/
+5. **Board games** (OpenSpiel, **foundation G6a / ADR-050; neural trainer G6b / ADR-051**) — a 2-player,
+   turn-based, perfect-info, zero-sum game with legal-move masking + self-play is `pyspiel.State`, not a
+   `gym.Env`, so a board row (`family="board"`) is a discoverable picker entry **routed via `is_board_game` to
+   `app/services/board_engine.py`** (the parallel to `is_multi_agent`), never through `make_env`. The built-in
+   opponent is a **training-free MCTS**. **G6b made it trainable** (`train_implemented=True`):
+   `services/trainer_board.py` is a `sb3-contrib` **MaskablePPO** (action mask from `legal_actions()`) that learns
+   by playing the MCTS *teacher* (a risk-gate found pure self-play too slow on a CPU budget; vs-MCTS draws TTT in
+   ~80–100k steps). The manager routes board+ppo → `train_board` via `is_board_game` (still `algo=="ppo"`, the
+   `trainer_tag` custom-trainer shape). A game-agnostic `BoardSelfPlayEnv` (single-agent gym view, randomised seat,
+   `action_masks()`) + an ADR-019-safe masked CPU snapshot + `eval_vs_mcts` are the glue; the honest learning curve
+   is **eval-vs-reference-MCTS ∈ [−1,1]** reported as `ep_rew_mean` on the existing `metrics` + `progress` frames
+   (the Reward tab reads `progressHistory`). The decoupled preview self-plays the learning net on the board
+   (additive `board` on the preview `FrameMessage`; `BoardState` lives in `schemas/preview` to ride both a
+   `play_frame` and a preview `frame`). Board play **reuses the play lane** (`play_session._run_board`): human-vs-MCTS,
+   **human-vs-your-trained-net** (a board `checkpoint_id` → `board_engine.load_board_predict`), or an AI-vs-AI watch
+   (MCTS or net); the contract grows additively (`side`/`ai_strength`/`checkpoint_id` on `PlayConfig`, `outcome` +
+   optional `rating` on `PlayResult`). The board is client-rendered (`clientKind="board"`, `BoardStage`); only the
+   renderer's glyph map (`content/boardGames.ts`) + the one catalog row are game-specific — engine/session/trainer/
    contract are game-agnostic (a `connect_four` test drives the same functions). The 3-valued win/draw/loss outcome
-   replaces the continuous skill meter with an honest W/D/L banner; the play leaderboard is deferred. **G6a ships
-   Tic-Tac-Toe vs MCTS; the neural self-play trainer is G6b.**
+   replaces the continuous skill meter with an honest W/D/L banner (which names the opponent — the MCTS difficulty or
+   "your trained AI"); the play leaderboard is deferred. **Ships Tic-Tac-Toe; further games (Connect Four → chess/go)
+   are data + a renderer glyph map.**
 6. **Multi-agent** (PettingZoo, **landed G7a / ADR-038**) — N agents in one shared world (the parallel API),
    so *not* the single-agent `make_env` factory. A dedicated adapter (`app/services/ma_env.py`) builds the
    raw parallel env (preview/render) and the SuperSuit parameter-sharing **vec env** (one shared `MlpPolicy`

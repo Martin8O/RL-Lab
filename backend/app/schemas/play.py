@@ -15,7 +15,7 @@ from typing import Literal
 
 from pydantic import BaseModel
 
-from app.schemas.preview import GridLayout
+from app.schemas.preview import BoardState, GridLayout
 from app.schemas.skill import SkillRating
 
 # Who controls the agent: a human at the keyboard, or a loaded checkpoint playing itself.
@@ -24,26 +24,9 @@ PlayState = Literal["idle", "playing", "finished", "stopped", "error"]
 # Board-game (G6a) AI opponent strength → MCTS simulation count (see board_engine.STRENGTH_SIMS).
 BoardStrength = Literal["easy", "medium", "hard"]
 
-
-class BoardState(BaseModel):
-    """One ply of an OpenSpiel board game (G6a), streamed inside a ``play_frame``.
-
-    Built from the **generic** ``pyspiel.State`` API (see ``app.services.board_engine``), so it
-    carries Tic-Tac-Toe today and Connect Four / chess / go later with no contract change. The
-    client renderer (``content/boardGames.ts`` + ``BoardStage``) interprets the per-cell glyphs.
-    """
-
-    # Row-major board glyphs: "." empty, "x"/"o" for Tic-Tac-Toe, etc. (the renderer maps them).
-    cells: list[str]
-    rows: int
-    cols: int
-    # Action indices that are legal for the player to move now (empty once the game is over). The
-    # client highlights these on the human's turn and rejects clicks on any other cell.
-    legal_actions: list[int]
-    current_player: int  # whose turn (0 = first player; <0 at a terminal/chance node)
-    last_action: int | None  # the action just applied (for a "last move" highlight); None at start
-    is_terminal: bool
-    winner: int | None  # winning player index, or None for a draw / a game still in progress
+# BoardState moved to app.schemas.preview (a render payload shared by play_frame + the training-preview
+# frame, G6b); re-exported here so existing ``from app.schemas.play import BoardState`` imports still work.
+__all__ = ["BoardState", "PlayConfig", "PlayResult", "PlayStatus", "PlayFrame", "PlayActionMessage"]
 
 
 class PlayConfig(BaseModel):

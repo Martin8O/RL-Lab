@@ -190,6 +190,8 @@ interface AppState {
   playError:        string | null
   playCheckpointId: string | null        // selected checkpoint for AI watch mode
   playCheckpointLabel: string | null     // its label — the AI's leaderboard identity on finish
+  playActiveCheckpoint: string | null    // the ACTIVE session's checkpoint id (from the backend status);
+                                         // for board play, non-null ⇒ the opponent is your trained net (G6b)
   envSkill:         EnvSkill | null       // backend skill thresholds for the selected env
   playScores:       PlayScores | null     // Human + AI boards for the selected env
 
@@ -291,6 +293,7 @@ export const useAppStore = create<AppState>()(
       playError:        null,
       playCheckpointId: null,
       playCheckpointLabel: null,
+      playActiveCheckpoint: null,
       envSkill:         null,
       playScores:       null,
 
@@ -483,6 +486,9 @@ export const useAppStore = create<AppState>()(
           // ("Your skill" vs "AI skill") matches the running session even after a reload reconcile;
           // when idle (mode null) keep the selector's choice for the next session.
           playMode: s.mode ?? state.playMode,
+          // The active session's checkpoint (board play, G6b): non-null ⇒ the opponent is the trained
+          // net, so the result banner says "your trained AI" instead of an MCTS difficulty.
+          playActiveCheckpoint: s.checkpoint_id ?? null,
         })),
 
       // High-frequency per-frame update (throttled by the caller) so the skill meter climbs live.

@@ -1436,6 +1436,18 @@ def _self_play_hyperparams() -> dict[str, dict[str, HyperparamDef]]:
     return hp
 
 
+def _board_hyperparams() -> dict[str, dict[str, HyperparamDef]]:
+    """Standard PPO knobs with a small ``ent_coef`` ★ — the board trainer (MaskablePPO vs the MCTS
+    teacher, G6b) benefits from a little exploration so the masked policy doesn't collapse onto one
+    line too early. The self-play ``rounds`` schedule is internal for board (not a UI knob), so this
+    is the plain PPO block, not ``_self_play_hyperparams``."""
+    hp = _standard_hyperparams()
+    hp["ppo"]["ent_coef"] = HyperparamDef(
+        type="float", default=0.01, recommended=0.01, min=0.0, max=0.1, step=0.001,
+    )
+    return hp
+
+
 def _mpe_tag_spec(
     env_id: str,
     n_adversaries: int,
@@ -1665,15 +1677,15 @@ for _mj_row in _MUJOCO_GAMES:
 # 2-player, turn-based, perfect-info, zero-sum game with legal-move masking and self-play —
 # OpenSpiel's pyspiel.State API, NOT a gym.Env. A board row is a discoverable picker entry but
 # is **routed to app/services/board_engine.py via is_board_game** (mirroring is_multi_agent for
-# PettingZoo), so it never goes through app.envs.factory.make_env. Only Tic-Tac-Toe ships in
-# G6a, human-playable vs a training-free MCTS opponent; the neural self-play trainer is G6b, so
-# train_implemented=False (the Train lane shows a "self-play coming later" note via the
-# not_implemented_board gate reason). obs_type="vector" is an inert tag here (the
-# observation_tensor IS a flat vector, but make_env never runs for a board env);
-# supported_algos=["ppo"] is the simple_tag precedent — competitive self-play is surfaced as
-# "ppo" and the manager will route board+ppo → the board self-play trainer in G6b (the parallel
-# to is_competitive_ma → train_tag). hyperparams={"ppo": {}} keeps the AlgoSwitch/store happy
-# (no tunables render while gated); default_total_timesteps is a placeholder (unused while gated).
+# PettingZoo), so it never goes through app.envs.factory.make_env. Only Tic-Tac-Toe ships, both
+# human-playable (vs a training-free MCTS opponent, G6a) and NOW trainable: the neural board trainer
+# landed in G6b (train_implemented=True) — MaskablePPO learns by playing the MCTS teacher (ADR-051),
+# so the agent's skill curve, Save/Load, Watch-AI and Play-vs-your-net all come alive. obs_type=
+# "vector" is an inert tag here (the observation_tensor IS a flat vector, but make_env never runs for
+# a board env); supported_algos=["ppo"] is the simple_tag precedent — competitive self-play is
+# surfaced as "ppo" and the manager routes board+ppo → app/services/trainer_board.py via is_board_game
+# (the parallel to is_competitive_ma → train_tag). hyperparams uses the standard PPO block (ent_coef
+# ★ 0.01); the round schedule is internal. CPU — no GPU gate.
 # ---------------------------------------------------------------------------
 
 register(
@@ -1683,30 +1695,35 @@ register(
         display_name=Bilingual(en="Tic-Tac-Toe", cz="Piškvorky 3×3"),
         description=Bilingual(
             en="The classic 3×3 game: take turns placing your mark and try to get three in a row. "
-            "Played here against a built-in AI that searches ahead (Monte-Carlo Tree Search) — pick a "
-            "side and a difficulty. With perfect play on both sides every game is a draw, which makes it "
-            "the perfect, testable first board game. Self-play *training* arrives in a later step.",
-            cz="Klasická hra 3×3: střídavě pokládáte své značky a snažíte se dostat tři v řadě. Tady "
-            "hrajete proti vestavěné AI, která prohledává tahy dopředu (Monte-Carlo stromové prohledávání) "
-            "— vyberte si stranu a obtížnost. Při dokonalé hře obou stran je každá partie remíza, což z ní "
-            "dělá ideální, ověřitelnou první deskovou hru. Trénink self-play přijde v dalším kroku.",
+            "Play against a built-in AI that searches ahead (Monte-Carlo Tree Search) — pick a side and "
+            "a difficulty — or **train your own neural net** to play (it learns by playing the search AI) "
+            "and then face it. With perfect play on both sides every game is a draw, which makes it the "
+            "perfect, testable first board game.",
+            cz="Klasická hra 3×3: střídavě pokládáte své značky a snažíte se dostat tři v řadě. Hrajte "
+            "proti vestavěné AI, která prohledává tahy dopředu (Monte-Carlo stromové prohledávání) — "
+            "vyberte si stranu a obtížnost — nebo si **natrénujte vlastní neuronovou síť** (učí se hrou "
+            "proti prohledávací AI) a pak se jí postavte. Při dokonalé hře obou stran je každá partie "
+            "remíza, což z ní dělá ideální, ověřitelnou první deskovou hru.",
         ),
         family="board",
         obs_type="vector",  # inert tag — board games are routed, never made via make_env
         action_space="discrete",  # Discrete(9): place a mark in one of the nine cells
-        supported_algos=["ppo"],  # self-play surfaced as "ppo" (simple_tag precedent); trainer = G6b
-        hyperparams={"ppo": {}},  # no tunables render while training is gated; keeps AlgoSwitch valid
-        solved_score=1.0,  # zero-sum win = +1 (the meter is replaced by a W/D/L card for board games)
-        min_score=-1.0,  # zero-sum loss = −1
-        default_total_timesteps=100_000,  # placeholder — unused while train_implemented=False (G6b)
+        supported_algos=["ppo"],  # surfaced as "ppo"; routed to the board trainer by is_board_game (G6b)
+        hyperparams=_board_hyperparams(),  # standard PPO knobs (ent_coef ★ 0.01); rounds is internal
+        # The learning chart plots eval-vs-reference-MCTS ∈ [−1, 1] as ep_rew_mean, so the meter scale
+        # already matches: solved = +1 (win), min = −1 (loss); a well-trained TTT net converges toward 0
+        # (draws — the game's ceiling). Board PLAY still shows a W/D/L card, not the continuous meter.
+        solved_score=1.0,
+        min_score=-1.0,
+        default_total_timesteps=100_000,  # ★ budget — a near-optimal (drawing) net in ~80–100k (G6b)
         play_step_scale=1,
         floor_scales_with_steps=False,
         turn_based=True,  # one move per click; the board subsystem drives the turn loop
-        human_playable=True,  # play a side vs the MCTS AI now (training-free)
-        competitive=True,  # 2-player zero-sum → board self-play trainer (G6b), like simple_tag
+        human_playable=True,  # play a side vs the MCTS AI or your trained net
+        competitive=True,  # 2-player zero-sum → routed to the board trainer (G6b), like simple_tag
         difficulty="beginner",
-        hw_requirement="cpu",  # MCTS + (later) small-game self-play need no GPU
-        train_implemented=False,  # neural self-play trainer = G6b; Train lane gated until then
+        hw_requirement="cpu",  # MCTS + the MaskablePPO board trainer both run on CPU (no GPU gate)
+        train_implemented=True,  # neural trainer landed in G6b (MaskablePPO vs the MCTS teacher, ADR-051)
     )
 )
 

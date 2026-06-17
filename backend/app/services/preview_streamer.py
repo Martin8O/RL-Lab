@@ -194,11 +194,17 @@ class PreviewStreamer:
 
     def _run(self, env_id: str) -> None:
         from app.envs.registry import get_env
+        from app.services.board_engine import is_board_game
         from app.services.ma_env import is_multi_agent
 
+        # Board games (OpenSpiel) are a turn-based subsystem, not a gym.Env (the 7th seam, ADR-050/051):
+        # the live preview self-plays the learning net ply by ply on a pyspiel.State, NOT via make_env.
+        spec = get_env(env_id)
+        if is_board_game(spec):
+            self._run_board(env_id, spec)
+            return
         # Multi-agent (PettingZoo) envs are a different shape — N agents in one shared world — so they
         # run their own parallel rollout loop + swarm-frame emit (the 5th seam, ADR-038).
-        spec = get_env(env_id)
         if is_multi_agent(spec):
             self._run_ma(env_id)
             return
@@ -248,6 +254,71 @@ class PreviewStreamer:
                     time.sleep(base_dt / self._current_speed())
         finally:
             env.close()
+
+    # Board moves are turn-based, so the preview paces by a fixed per-ply wall-clock (scaled by the
+    # speed slider) instead of a render-fps — slow enough to follow the net's self-play game.
+    _BOARD_PLY_DELAY = 0.5
+
+    def _run_board(self, env_id: str, spec: Any) -> None:
+        """Preview loop for a board game (G6b) — self-play the learning net on a ``pyspiel.State``.
+
+        Reads the decoupled snapshot the board trainer publishes (a ``(state) -> action`` move over a
+        CPU copy, sampled so games vary; ADR-019) and applies it to **both** players (net-vs-net), so
+        the watcher sees the current policy play itself as it learns. Random/legal moves until a
+        snapshot arrives. Emits a ``{type:"frame", board: …}`` each ply — the same ``BoardState`` the
+        play lane streams, rendered on the same client ``BoardStage``. No env to close (no make_env).
+        """
+        from app.services import board_engine
+
+        try:
+            game = board_engine.load_game(spec.gym_id)
+        except Exception:  # noqa: BLE001 — a bad board game must not crash anything
+            logger.exception("Preview board game load failed for %s", env_id)
+            return
+
+        rng = np.random.default_rng()
+        episode = 0
+        try:
+            while self._active_and_visual():
+                episode += 1
+                state = game.new_initial_state()
+                step = 0
+                self._emit_board_frame(episode, step, board_engine.board_payload(state, None))
+                while not state.is_terminal() and self._active_and_visual():
+                    if self._is_paused():  # training paused → freeze the last board
+                        time.sleep(0.05)
+                        continue
+                    move = self._board_move(state, rng)
+                    state.apply_action(move)
+                    step += 1
+                    self._emit_board_frame(episode, step, board_engine.board_payload(state, move))
+                    time.sleep(self._BOARD_PLY_DELAY / self._current_speed())
+                # Linger on the finished board a moment before the next game (still abortable).
+                for _ in range(6):
+                    if not self._active_and_visual() or self._is_paused():
+                        break
+                    time.sleep(self._BOARD_PLY_DELAY / self._current_speed())
+        finally:
+            pass  # nothing to close — the board subsystem holds no env/render handle
+
+    def _board_move(self, state: Any, rng: Any) -> int:
+        """The published net's move for the player to act (random legal until a snapshot arrives)."""
+        with self._lock:
+            predict = self._predict
+        if predict is None:
+            return int(rng.choice(state.legal_actions()))
+        try:
+            move = int(predict(state))
+            return move if move in state.legal_actions() else int(rng.choice(state.legal_actions()))
+        except Exception:  # noqa: BLE001 — a flaky snapshot falls back to a random legal move
+            logger.debug("Preview board predict failed; using random move", exc_info=True)
+            return int(rng.choice(state.legal_actions()))
+
+    def _emit_board_frame(self, episode: int, step: int, board: dict[str, Any]) -> None:
+        """Broadcast one board ply as a preview frame carrying the BoardState payload (no JPEG)."""
+        self._broadcast(
+            {"type": "frame", "episode": episode, "step": step, "reward": 0.0, "board": board}
+        )
 
     def _run_ma(self, env_id: str) -> None:
         """Preview loop for a multi-agent (PettingZoo) env — the 5th seam (ADR-038).

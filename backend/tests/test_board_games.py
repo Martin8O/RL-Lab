@@ -33,8 +33,8 @@ def test_tictactoe_registered() -> None:
     assert spec.human_playable is True
     assert spec.competitive is True
     assert spec.turn_based is True
-    assert spec.hw_requirement == "cpu"  # MCTS needs no GPU
-    assert spec.train_implemented is False  # neural self-play trainer = G6b
+    assert spec.hw_requirement == "cpu"  # MCTS + the MaskablePPO board trainer both run on CPU
+    assert spec.train_implemented is True  # neural trainer landed in G6b (MaskablePPO vs MCTS teacher)
     assert spec.min_score == -1.0 and spec.solved_score == 1.0  # zero-sum loss / win
 
 
@@ -163,21 +163,15 @@ def test_board_human_vs_mcts_reaches_a_valid_outcome() -> None:
     assert label != "win"  # a perfect opponent never lets a naive human win
 
 
-# -- training gate ----------------------------------------------------------
+# -- training un-gated (G6b) -------------------------------------------------
 
 
-def test_board_training_is_gated() -> None:
-    """Starting training for a board game is rejected (the neural self-play trainer is G6b); the env
-    stays human-playable via Play. train_implemented=False is enforced by the manager backstop."""
-    resp = client.post(
-        "/api/train/start",
-        json={
-            "env_id": "tictactoe", "algo": "ppo", "seed": 1, "total_timesteps": 1000,
-            "hyperparams": {
-                "learning_rate": 3e-4, "gamma": 0.99, "clip_range": 0.2, "ent_coef": 0.0,
-                "n_steps": 128, "batch_size": 64, "n_hidden_layers": 2,
-                "neurons_per_layer": 64, "activation": "tanh",
-            },
-        },
-    )
-    assert resp.status_code == 400
+def test_board_training_no_longer_gated() -> None:
+    """G6b flipped the board trainer on: a board env is now trainable (``train_implemented=True``) on
+    CPU, so the manager's gate (train_implemented + GPU checks) no longer rejects it. The trainer
+    itself is exercised end-to-end in ``test_board_train.py`` (a real short MaskablePPO run)."""
+    spec = get_env("tictactoe")
+    assert spec is not None
+    assert spec.train_implemented is True  # no longer rejected by the train_implemented backstop
+    assert spec.hw_requirement == "cpu"  # and not GPU-gated either → the manager accepts the run
+    assert "ppo" in spec.supported_algos  # routed to trainer_board by is_board_game (still algo=="ppo")

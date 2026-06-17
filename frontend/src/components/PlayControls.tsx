@@ -45,16 +45,23 @@ export default function PlayControls() {
 
   const [checkpoints, setCheckpoints] = useState<CheckpointMeta[]>([])
   const [error, setError] = useState<string | null>(null)
+  // Board games (G6b): which opponent the human (or the AI-vs-AI watch) faces — '' = the built-in MCTS
+  // (G6a, paced by the difficulty selector), or a saved checkpoint id = your trained net. Local +
+  // unpersisted; defaults to the MCTS so the G6a behaviour is the default and the net is opt-in.
+  const [boardOpponent, setBoardOpponent] = useState<string>('')
 
   const env          = envs.find((e) => e.id === selectedEnvId)
   const humanPlayable = env?.human_playable ?? false
-  // Board games (G6a): the "AI" side is a built-in MCTS (no checkpoint), so "AI plays" is an
-  // AI-vs-AI watch and the controls swap the checkpoint picker for side + difficulty selectors.
+  // Board games (G6a): the built-in "AI" side is an MCTS (no checkpoint), so "AI plays" is an AI-vs-AI
+  // watch and the controls swap the checkpoint picker for side + difficulty; G6b adds an opponent picker
+  // so you can instead face your **trained net** (a checkpoint).
   const isBoard      = env?.family === 'board'
   const playing      = playState === 'playing'
   const trainLive    = trainState === 'running' || trainState === 'paused' || trainState === 'stopping'
   // Checkpoints that can actually be played here (same env; any algo works via the AI policy).
   const envCheckpoints = checkpoints.filter((c) => c.env_id === selectedEnvId)
+  // Board: face the trained net when a valid checkpoint is picked, else the built-in MCTS.
+  const useBoardNet  = isBoard && boardOpponent !== '' && envCheckpoints.some((c) => c.id === boardOpponent)
 
   // Load checkpoints when the backend comes online and whenever a play session ends (a new
   // checkpoint may have been saved meanwhile). Cheap, read-only.
@@ -83,17 +90,21 @@ export default function PlayControls() {
     setError(null)
     setPlayMode(mode)
     // Remember which model the AI plays so its leaderboard identity is known on finish
-    // (the checkpoint label already encodes algo + size, so use it verbatim).
+    // (the checkpoint label already encodes algo + size, so use it verbatim). Board games are W/D/L
+    // (no score leaderboard), so they carry no label.
     const ckpt = mode === 'ai' && !isBoard
       ? envCheckpoints.find((c) => c.id === playCheckpointId) ?? null
       : null
     setPlayCheckpointLabel(ckpt ? ckpt.label : null)
+    // Board opponent: the picked trained net (a checkpoint) or null = the built-in MCTS (G6b). For a
+    // non-board env, only AI play carries a checkpoint.
+    const boardCheckpoint = useBoardNet ? boardOpponent : null
     try {
       const status = await startPlay({
         env_id: selectedEnvId ?? 'cartpole',
         mode,
-        // Board games have no checkpoint (the AI is a built-in MCTS); every other env's AI loads one.
-        checkpoint_id: mode === 'ai' && !isBoard ? playCheckpointId : null,
+        // Board: the trained net (or null = built-in MCTS). Other envs: the AI policy for an AI watch.
+        checkpoint_id: isBoard ? boardCheckpoint : (mode === 'ai' ? playCheckpointId : null),
         // Human play: a fresh random seed each game, so envs with a randomized scene (LunarLander's
         // moon terrain) vary like the training preview does — a fixed seed made every game identical.
         // AI play keeps the configured seed so a checkpoint demo stays reproducible. For board games
@@ -193,7 +204,7 @@ export default function PlayControls() {
 
           {isBoard ? (
             <>
-              {/* Board games (G6a): pick your side + the MCTS opponent strength (difficulty). */}
+              {/* Board games (G6a): pick your side. */}
               <label style={labelStyle}>
                 {t('play.board_side')}
                 <select
@@ -205,19 +216,45 @@ export default function PlayControls() {
                   <option value={1}>{t('play.board_side_second')}</option>
                 </select>
               </label>
-              <label style={labelStyle}>
-                {t('play.board_difficulty')}
-                <select
-                  value={boardStrength}
-                  onChange={(e) => setBoardStrength(e.target.value as BoardStrength)}
-                  style={selectStyle}
-                >
-                  <option value="easy">{t('play.diff_easy')}</option>
-                  <option value="medium">{t('play.diff_medium')}</option>
-                  <option value="hard">{t('play.diff_hard')}</option>
-                </select>
-              </label>
-              <ParamInfo paramId="board_difficulty" label={t('play.board_difficulty')} />
+              {/* Opponent (G6b): the built-in search AI (MCTS, with a difficulty) or your trained net.
+                  Only shown once a checkpoint exists for this game; otherwise it's always the MCTS. */}
+              {envCheckpoints.length > 0 && (
+                <label style={labelStyle}>
+                  {t('play.board_opponent')}
+                  <select
+                    /* Derived so a stale pick (e.g. after an env switch) falls back to the built-in AI
+                       without a setState-in-effect — useBoardNet already encodes the id's validity. */
+                    value={useBoardNet ? boardOpponent : ''}
+                    onChange={(e) => setBoardOpponent(e.target.value)}
+                    style={{ ...selectStyle, maxWidth: 160 }}
+                  >
+                    <option value="">{t('play.board_opponent_ai')}</option>
+                    {envCheckpoints.map((c) => (
+                      <option key={c.id} value={c.id} title={c.label}>
+                        {optionLabel(c.label)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+              {/* Difficulty only applies to the built-in MCTS; a trained net has no sims knob. */}
+              {!useBoardNet && (
+                <>
+                  <label style={labelStyle}>
+                    {t('play.board_difficulty')}
+                    <select
+                      value={boardStrength}
+                      onChange={(e) => setBoardStrength(e.target.value as BoardStrength)}
+                      style={selectStyle}
+                    >
+                      <option value="easy">{t('play.diff_easy')}</option>
+                      <option value="medium">{t('play.diff_medium')}</option>
+                      <option value="hard">{t('play.diff_hard')}</option>
+                    </select>
+                  </label>
+                  <ParamInfo paramId="board_difficulty" label={t('play.board_difficulty')} />
+                </>
+              )}
             </>
           ) : envCheckpoints.length > 0 ? (
             /* Model picker for the AI button (shown when checkpoints exist for this env) */

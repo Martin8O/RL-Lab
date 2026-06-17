@@ -26,6 +26,7 @@ from app.schemas.training import (
     TrainState,
     TrainStatus,
 )
+from app.services.board_engine import is_board_game
 from app.services.checkpoints import CheckpointArtifact, CheckpointStore, checkpoint_store
 from app.services.connection_manager import ConnectionManager, manager
 from app.services.highscores import HighScoreStore, highscores, make_meta
@@ -217,10 +218,10 @@ class TrainingManager:
         config = loaded.config
         # PPO continues the global step counter, so target an additional full budget on top of
         # where the checkpoint left off. Evolution continues by generation (handled in-trainer).
-        # Competitive self-play (simple_tag) is the exception: its budget is "rounds × per-round" and
-        # resume simply runs another full schedule, so it must NOT add the elapsed steps (that would
-        # inflate the per-round budget) — leave its total_timesteps as recorded.
-        if config.algo == "ppo" and not is_competitive_ma(spec):
+        # Competitive self-play (simple_tag) AND board games (G6b) are the exceptions: their budget is
+        # "rounds × per-round" and resume simply runs another full schedule, so they must NOT add the
+        # elapsed steps (that would inflate the per-round budget) — leave total_timesteps as recorded.
+        if config.algo == "ppo" and not is_competitive_ma(spec) and not is_board_game(spec):
             config = config.model_copy(
                 update={"total_timesteps": loaded.meta.timesteps + loaded.config.total_timesteps}
             )
@@ -335,6 +336,26 @@ class TrainingManager:
                     control,
                     self._emit_ma_metrics,
                     self._publish_predicts,
+                    self._on_snapshot,
+                    resume,
+                )
+            elif is_board_game(get_env(config.env_id)):
+                # Board game (Tic-Tac-Toe) → the neural board trainer (G6b, ADR-051): MaskablePPO learns
+                # by playing the G6a MCTS teacher (action mask from legal_actions()). Still algo=="ppo"
+                # in the UI (the board self-play precedent), routed here via is_board_game — the parallel
+                # to is_competitive_ma → train_tag. Reuses the standard metrics frame (ep_rew_mean = the
+                # eval-vs-reference-MCTS skill curve) + the single-policy preview publish + snapshot.
+                from app.services.trainer_board import (
+                    train_board,  # lazy: loads torch/SB3 + sb3-contrib
+                )
+
+                terminal = train_board(
+                    config,
+                    gym_id,
+                    control,
+                    self._emit_metrics,
+                    self._emit_progress,  # board emits progress too → the Reward tab (progressHistory) fills
+                    self._publish_predict,
                     self._on_snapshot,
                     resume,
                 )

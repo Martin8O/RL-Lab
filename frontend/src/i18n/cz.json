@@ -120,6 +120,8 @@
     "board_side": "Vaše strana",
     "board_side_first": "Začínáte (✕)",
     "board_side_second": "Druhý na tahu (◯)",
+    "board_opponent": "Soupeř",
+    "board_opponent_ai": "Vestavěná AI (prohledávání)",
     "board_difficulty": "Obtížnost",
     "diff_easy": "Lehká",
     "diff_medium": "Střední",
@@ -136,10 +138,12 @@
     "tips": "Tipy"
   },
   "board": {
-    "pick_side": "Vyberte stranu a obtížnost a stiskněte Hrát",
+    "pick_side": "Vyberte stranu a soupeře a stiskněte Hrát",
     "your_move": "Váš tah — klikněte na zvýrazněné políčko",
     "ai_thinking": "AI přemýšlí…",
     "watching": "Sledujete — na tahu {{mark}}",
+    "training": "Trénink — sledujete, jak se AI učí hrou sama proti sobě",
+    "level_net": "vámi natrénované",
     "result_win": "Vyhráli jste! (proti AI {{level}})",
     "result_loss": "Prohráli jste (proti AI {{level}})",
     "result_draw": "Remíza (proti AI {{level}})",

@@ -130,8 +130,12 @@ zipp==4.1.0
 # NOT through gym make_env. OpenSpiel 1.6.15 ships an official Windows wheel (cp311) with light pure
 # deps (attrs + ml-collections; absl-py / numpy / scipy already pinned above) — it installs/imports
 # (`pyspiel`) and runs its built-in MCTS with no compiler and no GPU, so the G6a opponent is a
-# training-free MCTS on CPU. Neural self-play training is G6b. Keep `pygame-ce` only — OpenSpiel
-# pulls no pygame.
+# training-free MCTS on CPU. Neural training is G6b. Keep `pygame-ce` only — OpenSpiel pulls no pygame.
+# G6b adds `sb3-contrib` (MaskablePPO): the neural board trainer is a masked PPO that learns by playing the
+# G6a MCTS opponent (action mask from `legal_actions()`), CPU — near-optimal Tic-Tac-Toe in ~80k steps
+# (ADR-051). sb3-contrib's only real dep is `stable-baselines3` (already pinned at 2.8.0), so it resolves
+# with no torch/SB3 change; it pulls no pygame.
 attrs==26.1.0
 ml_collections==1.1.0
 open_spiel==1.6.15
+sb3-contrib==2.8.0

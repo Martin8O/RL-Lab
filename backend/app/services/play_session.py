@@ -116,6 +116,10 @@ class PlaySession:
         # Board games (G6a): the human's side (0 = first player) + the MCTS opponent strength id.
         self._side = 0
         self._ai_strength = "medium"
+        # Board games (G6b): a trained net opponent — a masked predict(obs, mask)->action loaded from a
+        # checkpoint. None ⇒ the opponent is the built-in MCTS (G6a). Set when a board play config names
+        # a checkpoint_id (human-vs-net, or net-vs-net for an "ai" watch).
+        self._board_net: Any = None
         self._stop = False
 
     # -- wiring -----------------------------------------------------------------
@@ -139,11 +143,17 @@ class PlaySession:
 
         from app.services.board_engine import is_board_game
 
-        # Board games (G6a) are routed to the OpenSpiel subsystem: the AI is a training-free MCTS, not
-        # a checkpoint, so an "ai" board session is an AI-vs-AI *watch* that needs no policy load.
+        # Board games (G6a) are routed to the OpenSpiel subsystem: the built-in AI is a training-free
+        # MCTS, not a checkpoint, so an "ai" board session is an AI-vs-AI *watch* that needs no policy.
         predict: PredictFn | None = None
         if config.mode == "ai" and not is_board_game(spec):
             predict = self._load_ai_policy(config)
+        # Board games (G6b): if a checkpoint is named, the opponent is the trained net (human-vs-net, or
+        # net-vs-net for an "ai" watch) instead of the MCTS — loaded synchronously so a bad pick surfaces
+        # to the REST caller. No checkpoint ⇒ the G6a MCTS at ``ai_strength``.
+        board_net: Any = None
+        if is_board_game(spec) and config.checkpoint_id:
+            board_net = self._load_board_net(config)
 
         with self._lock:
             if self._state == "playing":
@@ -169,6 +179,7 @@ class PlaySession:
             # Board games (G6a): which side the human takes + the MCTS opponent strength.
             self._side = config.side
             self._ai_strength = config.ai_strength
+            self._board_net = board_net  # G6b: trained net opponent (None ⇒ MCTS)
             self._step = 0
             self._score = 0.0
             self._result = None
@@ -202,6 +213,28 @@ class PlaySession:
             return predict_from_checkpoint(loaded)
         except PolicyLoadError as exc:
             raise InvalidPlayConfigError(str(exc)) from exc
+
+    def _load_board_net(self, config: PlayConfig) -> Any:
+        """Load a board checkpoint (``board.zip``) as a masked ``predict(obs, mask)->action`` opponent.
+
+        Board nets have a different inference signature (they need the legal-move mask each move), so
+        they're loaded via :mod:`board_engine` (not ``predict_from_checkpoint``, which returns the
+        generic ``predict(obs)`` for the single-agent envs). Validated synchronously, like the AI policy.
+        """
+        from app.services import board_engine
+
+        loaded = self._ckpt.load(config.checkpoint_id or "")
+        if loaded is None:
+            raise PlayCheckpointNotFoundError(f"Checkpoint '{config.checkpoint_id}' not found")
+        if loaded.config.env_id != config.env_id:
+            raise InvalidPlayConfigError(
+                f"Checkpoint was trained on '{loaded.config.env_id}', "
+                f"not '{config.env_id}' — cannot play it here"
+            )
+        try:
+            return board_engine.load_board_predict(loaded.blob)
+        except Exception as exc:  # noqa: BLE001 — any deserialize failure → a clear, typed error
+            raise InvalidPlayConfigError(f"Could not load board model: {exc}") from exc
 
     def submit_action(self, action: float | list[float]) -> None:
         """Record the latest human action (from a WS ``{type:"action"}`` frame).
@@ -463,15 +496,23 @@ class PlaySession:
             return
 
         sims = board_engine.strength_sims(self._ai_strength)
-        # Human controls one side in human mode; both sides are MCTS in an AI-vs-AI watch.
+        # Human controls one side in human mode; both AI sides otherwise (an AI-vs-AI watch).
         human_side = self._side if self._mode == "human" else None
-        # One MCTS bot per AI-controlled player (seed-offset so a self-play watch isn't symmetric).
+        # The AI opponent: a trained net (if a checkpoint was loaded, G6b) plays every AI-controlled
+        # side; otherwise the training-free MCTS at the chosen difficulty (G6a). With a net + mode="ai"
+        # this is a net-vs-net watch; with no net it is the MCTS-vs-MCTS watch. The net's move is masked
+        # to legal by board_move_fn, so it never proposes an illegal cell.
+        net_move = (
+            board_engine.board_move_fn(game, self._board_net)
+            if self._board_net is not None else None
+        )
         bots: dict[int, board_engine.MctsOpponent] = {}
-        for player in range(game.num_players()):
-            if human_side is not None and player == human_side:
-                continue
-            bot_seed = None if seed is None else seed + player
-            bots[player] = board_engine.MctsOpponent(game, sims, bot_seed)
+        if net_move is None:
+            for player in range(game.num_players()):
+                if human_side is not None and player == human_side:
+                    continue
+                bot_seed = None if seed is None else seed + player
+                bots[player] = board_engine.MctsOpponent(game, sims, bot_seed)
         # A chance node sampler (dice etc.) — never hit by Tic-Tac-Toe, but keeps the loop general.
         rng = np.random.default_rng(seed)
         # Whose outcome to rate: the human's side in human play, else player 0's (a symmetric watch).
@@ -497,7 +538,10 @@ class PlaySession:
                     if action not in state.legal_actions():
                         continue  # reject an illegal click; keep waiting for a legal one
                 else:
-                    action = bots[state.current_player()].step(state)
+                    action = (
+                        net_move(state) if net_move is not None
+                        else bots[state.current_player()].step(state)
+                    )
                     # Pace AI moves so a human can follow them; the speed slider scales it. The
                     # human's own move applies instantly (no sleep on that branch).
                     time.sleep(_BOARD_MCTS_DELAY / self._current_speed())

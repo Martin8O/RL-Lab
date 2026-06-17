@@ -71,11 +71,14 @@ export default function EnvPreview() {
   const playSpeed     = useAppStore((s) => s.playSpeed)
   const boardSide     = useAppStore((s) => s.boardSide)
   const boardStrength = useAppStore((s) => s.boardStrength)
+  const playActiveCheckpoint = useAppStore((s) => s.playActiveCheckpoint)
   const playResult    = useAppStore((s) => s.playResult)
   const setPlayMode   = useAppStore((s) => s.setPlayMode)
   const applyPlayStatus = useAppStore((s) => s.applyPlayStatus)
 
   const selectedEnv = envs.find((e) => e.id === selectedEnvId)
+  const selectedFamily = selectedEnv?.family  // a stable string — used as a keyboard-effect dep instead
+                                              // of the whole `envs` array (which changes reference/size)
   const envName = selectedEnv?.display_name[locale] ?? t('envpreview.title')
 
   const canvasRef     = useRef<HTMLCanvasElement | null>(null)
@@ -405,7 +408,7 @@ export default function EnvPreview() {
     // default keymap would map arrow keys to action 0/1, which the board loop would read as illegal
     // cell clicks. So no keyboard wiring for a board env.
     if (clientKind === 'board') return
-    const keymap = keymapFor(selectedEnvId, envs.find((e) => e.id === selectedEnvId)?.family)
+    const keymap = keymapFor(selectedEnvId, selectedFamily)
     const isFormField = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement | null)?.tagName
       return tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA'
@@ -520,7 +523,7 @@ export default function EnvPreview() {
       window.removeEventListener('keydown', onDown)
       window.removeEventListener('keyup', onUp)
     }
-  }, [playState, playMode, selectedEnvId, envs, clientKind])
+  }, [playState, playMode, selectedEnvId, selectedFamily, clientKind])
 
   // Fullscreen the stage box on demand; Esc (or the toggle again) exits. Track the actual
   // fullscreen element so the icon stays correct even when the user exits via Esc.
@@ -580,30 +583,44 @@ export default function EnvPreview() {
   // It's the human's turn when a human session is live and the board is waiting on the human's side.
   const boardHumanTurn =
     boardPlaying && playMode === 'human' && !!board && !board.is_terminal && board.current_player === boardSide
-  // The "vs <difficulty> AI" label faced — from the persisted selection (steady through a game).
-  const aiLevelLabel = t(`play.diff_${boardStrength}`)
+  // The opponent faced, for the W/D/L banner: the trained net (G6b — the active session carries a
+  // checkpoint) reads "your trained AI"; otherwise the built-in MCTS at the chosen difficulty.
+  const vsNet = clientKind === 'board' && !!playActiveCheckpoint
+  const aiLevelLabel = vsNet ? t('board.level_net') : t(`play.diff_${boardStrength}`)
   // Whose-turn / result text for the board's status line + banner (honest W/D/L, no skill %).
   let boardStatus = t('board.pick_side')
   let boardBanner: { text: string; kind: 'win' | 'draw' | 'loss' } | null = null
   if (clientKind === 'board' && board) {
     const markFor = (player: number) =>
       Object.values(boardMeta?.pieces ?? {}).find((p) => p.player === player)?.glyph ?? `#${player + 1}`
-    const ended = board.is_terminal || playState === 'finished'
-    if (ended) {
-      if (playMode === 'human') {
-        const won = board.winner === boardSide
-        const lost = board.winner !== null && board.winner !== boardSide
-        const kind = won ? 'win' : lost ? 'loss' : 'draw'
-        boardBanner = { kind, text: t(`board.result_${kind}`, { level: aiLevelLabel }) }
-      } else {
+    const inPlay = playState === 'playing' || playState === 'finished'
+    if (inPlay) {
+      const ended = board.is_terminal || playState === 'finished'
+      if (ended) {
+        if (playMode === 'human') {
+          const won = board.winner === boardSide
+          const lost = board.winner !== null && board.winner !== boardSide
+          const kind = won ? 'win' : lost ? 'loss' : 'draw'
+          boardBanner = { kind, text: t(`board.result_${kind}`, { level: aiLevelLabel }) }
+        } else {
+          boardBanner = board.winner === null
+            ? { kind: 'draw', text: t('board.result_draw_watch') }
+            : { kind: 'draw', text: t('board.result_winner', { mark: markFor(board.winner) }) }
+        }
+      } else if (boardPlaying) {
+        boardStatus = playMode === 'human'
+          ? (boardHumanTurn ? t('board.your_move') : t('board.ai_thinking'))
+          : t('board.watching', { mark: markFor(board.current_player) })
+      }
+    } else if (runLive) {
+      // Training: the preview self-plays the learning net (G6b) — show a "watching it learn" status,
+      // plus the result of each finished self-play game as it streams.
+      boardStatus = t('board.training')
+      if (board.is_terminal) {
         boardBanner = board.winner === null
           ? { kind: 'draw', text: t('board.result_draw_watch') }
           : { kind: 'draw', text: t('board.result_winner', { mark: markFor(board.winner) }) }
       }
-    } else if (boardPlaying) {
-      boardStatus = playMode === 'human'
-        ? (boardHumanTurn ? t('board.your_move') : t('board.ai_thinking'))
-        : t('board.watching', { mark: markFor(board.current_player) })
     }
   }
   // Use the just-finished result's outcome (carries the authoritative label) when present.

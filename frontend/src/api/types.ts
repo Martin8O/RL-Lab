@@ -452,8 +452,8 @@ export interface PreviewFrame {
    *  canvas (G7a). Present instead of image/state for the multi-agent family. */
   agents?: AgentSprite[] | null
   world?: WorldEntity[] | null
-  /** Board-game state — never set on a preview frame (board games only play); declared so the
-   *  shared frame handler can read it off the PreviewFrame|PlayFrame union. */
+  /** Board-game state (G6b): the live training preview self-plays the learning net ply by ply, so a
+   *  board run streams its board here (rendered on the same BoardStage as play). Null for non-board envs. */
   board?: BoardState | null
 }
 

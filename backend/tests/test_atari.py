@@ -124,10 +124,10 @@ def test_train_implemented_split_after_g4b() -> None:
     + CUDA seam is built), while **CarRacing stays gated** (its non-Atari image trainer is G3c-train).
     Every vector/discrete env — including the GPU-gated *vector* heavies (BipedalWalker/MuJoCo, MlpPolicy)
     and the competitive multi-agent ``simple_tag`` envs (per-species self-play, G7b-2) — trains too.
-    ``train_implemented`` is False for exactly the not-yet-built trainers: the image CarRacing
-    (G3c-train) and the board games (neural self-play = G6b); a GPU box still keeps them gated via the
-    backstop."""
-    not_yet = {"carracing", "tictactoe"}  # G3c-train (image CnnPolicy) + G6b (board self-play)
+    ``train_implemented`` is False for exactly the not-yet-built trainer: the image CarRacing
+    (G3c-train). The board games now train too (MaskablePPO vs the MCTS teacher, G6b/ADR-051); a GPU
+    box still keeps CarRacing gated via the backstop."""
+    not_yet = {"carracing"}  # only G3c-train (image CnnPolicy) remains; board self-play landed in G6b
     for spec in list_envs():
         expected = spec.id not in not_yet
         assert spec.train_implemented is expected, (
@@ -138,6 +138,7 @@ def test_train_implemented_split_after_g4b() -> None:
     assert get_env("carracing").train_implemented is False  # type: ignore[union-attr]  # image, G3c-train pending
     assert get_env("bipedalwalker").train_implemented is True  # type: ignore[union-attr]
     assert get_env("mpe_tag").train_implemented is True  # type: ignore[union-attr]  # per-species self-play (G7b-2)
+    assert get_env("tictactoe").train_implemented is True  # type: ignore[union-attr]  # board trainer (G6b)
 
 
 def test_image_env_training_gated_even_with_a_gpu(monkeypatch: pytest.MonkeyPatch) -> None:

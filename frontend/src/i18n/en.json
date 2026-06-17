@@ -120,6 +120,8 @@
     "board_side": "Your side",
     "board_side_first": "Go first (✕)",
     "board_side_second": "Go second (◯)",
+    "board_opponent": "Opponent",
+    "board_opponent_ai": "Built-in AI (search)",
     "board_difficulty": "Difficulty",
     "diff_easy": "Easy",
     "diff_medium": "Medium",
@@ -136,10 +138,12 @@
     "tips": "Tips"
   },
   "board": {
-    "pick_side": "Pick a side and a difficulty, then press Play",
+    "pick_side": "Pick a side and an opponent, then press Play",
     "your_move": "Your move — click a highlighted cell",
     "ai_thinking": "AI is thinking…",
     "watching": "Watching — {{mark}} to move",
+    "training": "Training — watching the AI learn by self-play",
+    "level_net": "your trained",
     "result_win": "You win! (vs {{level}} AI)",
     "result_loss": "You lose (vs {{level}} AI)",
     "result_draw": "Draw (vs {{level}} AI)",
