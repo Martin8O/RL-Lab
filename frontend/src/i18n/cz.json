@@ -57,7 +57,8 @@
     "stopping": "Zastavuji…",
     "train_needs_gpu": "Trénink této hry vyžaduje GPU (k dispozici na stolním PC). Zatím si ji můžete zahrát ručně — použijte tlačítko Hrát níže.",
     "train_not_implemented": "Trénink této hry zatím není hotový — hry z obrazu potřebují GPU trenér (CnnPolicy), který přijde v některé z dalších verzí. Zatím si ji můžete zahrát ručně — použijte tlačítko Hrát níže.",
-    "train_not_implemented_ma": "Trénink tohoto světa přijde v některém z dalších kroků — každý druh potřebuje vlastní „mozek“. Zatím můžete jen sledovat, jak se neučený svět pohybuje (nedá se hrát ručně — roj nemá jednoho řidiče)."
+    "train_not_implemented_ma": "Trénink tohoto světa přijde v některém z dalších kroků — každý druh potřebuje vlastní „mozek“. Zatím můžete jen sledovat, jak se neučený svět pohybuje (nedá se hrát ručně — roj nemá jednoho řidiče).",
+    "train_not_implemented_board": "Trénink self-play pro deskové hry přijde v některém z dalších kroků. Zatím hrajte proti vestavěné AI tlačítkem Hrát níže — vyberte si stranu a obtížnost."
   },
   "stats": {
     "progress": "Postup",
@@ -108,6 +109,7 @@
     "start": "Hrát proti AI",
     "play": "Hrát",
     "ai_play": "Hraje AI",
+    "watch_ai": "Sledovat AI vs AI",
     "stop": "Stop",
     "mode": "Režim",
     "human": "Hrajete vy",
@@ -115,6 +117,13 @@
     "checkpoint": "Model",
     "no_checkpoints": "Uložte checkpoint pro sledování AI",
     "speed": "Rychlost",
+    "board_side": "Vaše strana",
+    "board_side_first": "Začínáte (✕)",
+    "board_side_second": "Druhý na tahu (◯)",
+    "board_difficulty": "Obtížnost",
+    "diff_easy": "Lehká",
+    "diff_medium": "Střední",
+    "diff_hard": "Těžká",
     "how_to_play": "Jak hrát",
     "busy_training": "Nejprve zastavte trénink",
     "not_playable": "Toto prostředí nelze hrát ručně",
@@ -125,6 +134,20 @@
     "goal": "Cíl",
     "controls": "Ovládání",
     "tips": "Tipy"
+  },
+  "board": {
+    "pick_side": "Vyberte stranu a obtížnost a stiskněte Hrát",
+    "your_move": "Váš tah — klikněte na zvýrazněné políčko",
+    "ai_thinking": "AI přemýšlí…",
+    "watching": "Sledujete — na tahu {{mark}}",
+    "result_win": "Vyhráli jste! (proti AI {{level}})",
+    "result_loss": "Prohráli jste (proti AI {{level}})",
+    "result_draw": "Remíza (proti AI {{level}})",
+    "result_draw_watch": "Remíza — dokonalá hra na obou stranách",
+    "result_winner": "Vyhrává {{mark}}",
+    "cell_play": "Zahrát řádek {{row}}, sloupec {{col}}",
+    "cell_taken": "Řádek {{row}}, sloupec {{col}}: {{mark}}",
+    "cell_empty": "Řádek {{row}}, sloupec {{col}}: prázdné"
   },
   "watch": {
     "about": "Na co se dívám?",
@@ -148,7 +171,8 @@
     "save": "Uložit",
     "skip": "Přeskočit",
     "best_human": "Nejlepší člověk: {{score}}",
-    "best_ai": "Nejlepší AI: {{score}}"
+    "best_ai": "Nejlepší AI: {{score}}",
+    "board_deferred": "Deskové hry se hodnotí výhra / remíza / prohra, ne body — žebříčky přijdou s tréninkem self-play v dalším kroku."
   },
   "chart": {
     "title": "Graf odměn",

@@ -32,6 +32,10 @@ export default function PlayScoreGate() {
     if (playState !== 'finished' || !playResult || !armedRef.current) return
     armedRef.current = false
 
+    // Board games (G6a) report a 3-valued win/draw/loss outcome, not a high score, so a high-score
+    // ladder doesn't fit — the play leaderboard is deferred for them (it returns with G6b training).
+    if (playResult.outcome) return
+
     const { score, steps, mode } = playResult
     const st = useAppStore.getState()
 

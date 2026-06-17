@@ -412,6 +412,24 @@ export interface WorldEntity {
   size: number
 }
 
+/** One ply of an OpenSpiel board game (G6a), streamed inside a play frame. Built from the generic
+ *  pyspiel.State API (app/services/board_engine.py) so it carries Tic-Tac-Toe today and Connect Four
+ *  / chess / go later unchanged; the renderer (content/boardGames.ts + BoardStage) maps the glyphs. */
+export interface BoardState {
+  /** Row-major board glyphs: "." empty, "x"/"o" for Tic-Tac-Toe, etc. (the renderer interprets them). */
+  cells: string[]
+  rows: number
+  cols: number
+  /** Action indices legal for the player to move now (empty once the game is over); the client
+   *  highlights these on the human's turn and rejects clicks elsewhere. */
+  legal_actions: number[]
+  current_player: number
+  last_action: number | null
+  is_terminal: boolean
+  /** Winning player index, or null for a draw / a game still in progress. */
+  winner: number | null
+}
+
 /** WS frame: {type:"frame", ...} — a rendered env image OR client-render state. */
 export interface PreviewFrame {
   type: 'frame'
@@ -434,6 +452,9 @@ export interface PreviewFrame {
    *  canvas (G7a). Present instead of image/state for the multi-agent family. */
   agents?: AgentSprite[] | null
   world?: WorldEntity[] | null
+  /** Board-game state — never set on a preview frame (board games only play); declared so the
+   *  shared frame handler can read it off the PreviewFrame|PlayFrame union. */
+  board?: BoardState | null
 }
 
 /** Partial preview update for POST /api/preview. */
@@ -492,16 +513,26 @@ export interface PlayConfig {
    *  always moves). A number for a discrete/continuous-scalar env, an array for a continuous vector
    *  env. Source of truth: content/playKeymaps.ts. */
   idle_action?: number | number[] | null
+  /** Board games (G6a) only: which player the human controls (0 = first to move) and the MCTS
+   *  opponent strength. Ignored by every other env; `mode:"ai"` on a board env is an AI-vs-AI watch. */
+  side?: number
+  ai_strength?: BoardStrength
 }
 
-/** WS frame: {type:"play_result", ...} — the final score + skill rating of a finished episode. */
+/** Board-game AI opponent strength (G6a) → MCTS simulation count, server-side. */
+export type BoardStrength = 'easy' | 'medium' | 'hard'
+
+/** WS frame: {type:"play_result", ...} — the final score + skill rating of a finished episode.
+ *  Continuous-score envs carry `rating`; board games (G6a) are 3-valued and carry `outcome` with a
+ *  null `rating` (the UI shows a win/draw/loss card, not the misleading continuous skill %). */
 export interface PlayResult {
   type: 'play_result'
   env_id: string
   mode: PlayMode
   score: number
   steps: number
-  rating: SkillRating
+  rating: SkillRating | null
+  outcome?: 'win' | 'draw' | 'loss' | null
 }
 
 /** Lifecycle snapshot: returned by /api/play/* and pushed as {type:"play_status", ...}. */
@@ -539,6 +570,8 @@ export interface PlayFrame {
    *  declared so the shared frame handler can read it off the PreviewFrame|PlayFrame union. */
   agents?: AgentSprite[] | null
   world?: WorldEntity[] | null
+  /** Board-game state (G6a) — present instead of image/state on a board play frame. */
+  board?: BoardState | null
 }
 
 /** Outbound human input over WS: {type:"action", action:<number|number[]>}. A discrete action id

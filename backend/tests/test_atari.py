@@ -124,9 +124,10 @@ def test_train_implemented_split_after_g4b() -> None:
     + CUDA seam is built), while **CarRacing stays gated** (its non-Atari image trainer is G3c-train).
     Every vector/discrete env — including the GPU-gated *vector* heavies (BipedalWalker/MuJoCo, MlpPolicy)
     and the competitive multi-agent ``simple_tag`` envs (per-species self-play, G7b-2) — trains too.
-    ``train_implemented`` is False for exactly the last not-yet-built trainer: the image CarRacing
-    (G3c-train); a GPU box still keeps it gated via the backstop."""
-    not_yet = {"carracing"}  # the only trainer not built yet (G3c-train — image CnnPolicy)
+    ``train_implemented`` is False for exactly the not-yet-built trainers: the image CarRacing
+    (G3c-train) and the board games (neural self-play = G6b); a GPU box still keeps them gated via the
+    backstop."""
+    not_yet = {"carracing", "tictactoe"}  # G3c-train (image CnnPolicy) + G6b (board self-play)
     for spec in list_envs():
         expected = spec.id not in not_yet
         assert spec.train_implemented is expected, (

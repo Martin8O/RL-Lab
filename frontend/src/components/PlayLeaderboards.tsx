@@ -10,8 +10,13 @@ import type { PlayScoreEntry } from '../api/types'
 export default function PlayLeaderboards() {
   const { t } = useTranslation()
   const playScores = useAppStore((s) => s.playScores)
+  const selectedEnvId = useAppStore((s) => s.selectedEnvId)
+  const envs = useAppStore((s) => s.envs)
   const human = playScores?.human ?? []
   const ai = playScores?.ai ?? []
+  // Board games (G6a) report win/draw/loss, not a high score, so a score ladder doesn't fit — show a
+  // "deferred" note instead of empty boards (it returns once self-play training lands in G6b).
+  const isBoard = envs.find((e) => e.id === selectedEnvId)?.family === 'board'
 
   return (
     <div style={{
@@ -26,10 +31,19 @@ export default function PlayLeaderboards() {
       }}>
         🏆 {t('playscore.title')}
       </div>
-      <div style={{ flex: 1, minHeight: 0, display: 'flex' }}>
-        <Board title={`🧑 ${t('playscore.human_title')}`} entries={human} divider />
-        <Board title={`🤖 ${t('playscore.ai_title')}`} entries={ai} />
-      </div>
+      {isBoard ? (
+        <div style={{
+          flex: 1, minHeight: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
+          color: 'var(--text-muted)', fontSize: 11, textAlign: 'center', padding: 16, lineHeight: 1.5,
+        }}>
+          {t('playscore.board_deferred')}
+        </div>
+      ) : (
+        <div style={{ flex: 1, minHeight: 0, display: 'flex' }}>
+          <Board title={`🧑 ${t('playscore.human_title')}`} entries={human} divider />
+          <Board title={`🤖 ${t('playscore.ai_title')}`} entries={ai} />
+        </div>
+      )}
     </div>
   )
 }

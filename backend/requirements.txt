@@ -123,3 +123,15 @@ ImageIO==2.37.3
 mujoco==3.9.0
 PyOpenGL==3.1.10
 zipp==4.1.0
+
+# --- Board-game stack (G6a — DeepMind OpenSpiel, turn-based self-play subsystem) ---
+# The 7th seam: 2-player, turn-based, perfect-info zero-sum games (Tic-Tac-Toe now → Connect Four /
+# chess / go later), routed to a dedicated subsystem (app/services/board_engine.py) via is_board_game,
+# NOT through gym make_env. OpenSpiel 1.6.15 ships an official Windows wheel (cp311) with light pure
+# deps (attrs + ml-collections; absl-py / numpy / scipy already pinned above) — it installs/imports
+# (`pyspiel`) and runs its built-in MCTS with no compiler and no GPU, so the G6a opponent is a
+# training-free MCTS on CPU. Neural self-play training is G6b. Keep `pygame-ce` only — OpenSpiel
+# pulls no pygame.
+attrs==26.1.0
+ml_collections==1.1.0
+open_spiel==1.6.15

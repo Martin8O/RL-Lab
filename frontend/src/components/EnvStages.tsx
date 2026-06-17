@@ -5,7 +5,9 @@
 // state layout in sync with the backend's client_state.
 
 import type { CSSProperties, RefObject } from 'react'
-import type { GridLayout } from '../api/types'
+import { useTranslation } from 'react-i18next'
+import type { BoardState, GridLayout } from '../api/types'
+import type { BoardGameMeta } from '../content/boardGames'
 import {
   MC_GOAL, MC_GROUND_PATH, MC_SURFACE_PATH, mcX, mcY,
   PEND_CX, PEND_CY, PEND_L, ACRO_CX, ACRO_CY, ACRO_L, ACRO_JOINT_Y,
@@ -265,6 +267,96 @@ export function SwarmStage({ envName, canvasRef, legend }: {
             <span style={it.ring ? ringStyle(it.color) : dot(it.color)} /> {it.label}
           </span>
         ))}
+      </div>
+    </div>
+  )
+}
+
+// ── Board games (OpenSpiel — Tic-Tac-Toe now, Connect Four / chess / go later) ───────────────
+// G6a. Unlike the physics/grid stages this is an HTML grid of cells (not SVG), because a board is
+// fundamentally clickable: legal empty cells on the human's turn are real <button>s (native focus +
+// keyboard + accessible names), occupied cells draw the piece glyph from the game's render metadata
+// (content/boardGames.ts), and the last move gets a ring. The board payload (cells/legal/turn/winner)
+// is fully game-agnostic; only `meta` (glyph → piece) is game-specific. The status line shows whose
+// turn it is; the result banner shows the honest win/draw/loss outcome (no continuous skill %).
+export function BoardStage({ envName, board, meta, humanTurn, onCellClick, statusText, banner }: {
+  envName: string
+  board: BoardState
+  meta: BoardGameMeta
+  humanTurn: boolean
+  onCellClick: (action: number) => void
+  statusText: string
+  banner: { text: string; kind: 'win' | 'draw' | 'loss' } | null
+}) {
+  const { t } = useTranslation()
+  const { rows, cols, cells, legal_actions, last_action, is_terminal } = board
+  const legal = new Set(legal_actions)
+  const cellPx = Math.max(48, Math.min(110, Math.floor(360 / Math.max(rows, cols, 1))))
+  const bannerColor =
+    banner?.kind === 'win' ? 'var(--success)' : banner?.kind === 'loss' ? 'var(--danger)' : 'var(--text-strong)'
+
+  const cellBox: CSSProperties = {
+    width: cellPx, height: cellPx, display: 'flex', alignItems: 'center', justifyContent: 'center',
+    background: 'var(--surface-2)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-default)',
+    padding: 0, margin: 0,
+  }
+
+  return (
+    <div role="group" aria-label={envName} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14 }}>
+      {/* Whose turn / the final result — leads the board so play always reads as labelled. */}
+      <div style={{
+        minHeight: 24, fontSize: 'var(--fs-sm)', fontWeight: 'var(--fw-semibold)',
+        color: banner ? bannerColor : 'var(--text-muted)', textAlign: 'center',
+      }}>
+        {banner ? banner.text : statusText}
+      </div>
+
+      <div style={{
+        display: 'grid', gap: 5,
+        gridTemplateColumns: `repeat(${cols}, ${cellPx}px)`,
+        gridTemplateRows: `repeat(${rows}, ${cellPx}px)`,
+        background: 'var(--surface-3)', padding: 6, borderRadius: 'var(--radius-md)',
+        boxShadow: 'var(--shadow-md)',
+      }}>
+        {cells.map((ch, i) => {
+          const r = Math.floor(i / cols)
+          const c = i % cols
+          const mark = ch.trim().toUpperCase()
+          const piece = meta.pieces[ch.trim().toLowerCase()]
+          const isLast = last_action === i
+          const ring = isLast ? `inset 0 0 0 3px ${piece?.color ?? 'var(--accent)'}` : undefined
+          const glyph = piece && (
+            <span aria-hidden style={{ fontSize: cellPx * 0.55, lineHeight: 1, color: piece.color, fontWeight: 800 }}>
+              {piece.glyph}
+            </span>
+          )
+          if (!is_terminal && humanTurn && legal.has(i)) {
+            return (
+              <button
+                key={i}
+                onClick={() => onCellClick(i)}
+                aria-label={t('board.cell_play', { row: r + 1, col: c + 1 })}
+                style={{ ...cellBox, cursor: 'pointer', boxShadow: ring, transition: 'var(--t-colors)' }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--accent-surface)'; e.currentTarget.style.borderColor = 'var(--accent-border)' }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--surface-2)'; e.currentTarget.style.borderColor = 'var(--border-default)' }}
+              >
+                {glyph}
+              </button>
+            )
+          }
+          return (
+            <div
+              key={i}
+              role="img"
+              aria-label={piece
+                ? t('board.cell_taken', { mark, row: r + 1, col: c + 1 })
+                : t('board.cell_empty', { row: r + 1, col: c + 1 })}
+              style={{ ...cellBox, boxShadow: ring }}
+            >
+              {glyph}
+            </div>
+          )
+        })}
       </div>
     </div>
   )

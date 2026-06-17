@@ -2,9 +2,10 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAppStore } from '../store/useAppStore'
 import { fetchCheckpoints, sendPlayAction, setFrameHandler, setPlayFrameHandler, setPreview, startPlay, stopPlay, watchPreview } from '../api/client'
-import type { AgentSprite, CheckpointMeta, GridLayout, PlayFrame, PreviewFrame, WorldEntity } from '../api/types'
+import type { AgentSprite, BoardState, CheckpointMeta, GridLayout, PlayFrame, PreviewFrame, WorldEntity } from '../api/types'
 import { keymapFor } from '../content/playKeymaps'
 import { DEFAULT_AGENT, DEFAULT_GRIDS, isGridEnv } from '../content/gridMaps'
+import { boardMetaFor } from '../content/boardGames'
 import PlayControls from './PlayControls'
 import WatchInfo from './WatchInfo'
 import SkillMeter from './SkillMeter'
@@ -15,7 +16,7 @@ import {
 } from './envGeometry'
 import {
   CartPoleStage, MountainCarStage, PendulumStage, AcrobotStage, LunarLanderStage, GridStage, SwarmStage,
-  type SwarmLegendItem,
+  BoardStage, type SwarmLegendItem,
 } from './EnvStages'
 
 const MIN_SPEED = 1
@@ -68,6 +69,9 @@ export default function EnvPreview() {
   const playState     = useAppStore((s) => s.playState)
   const playMode      = useAppStore((s) => s.playMode)
   const playSpeed     = useAppStore((s) => s.playSpeed)
+  const boardSide     = useAppStore((s) => s.boardSide)
+  const boardStrength = useAppStore((s) => s.boardStrength)
+  const playResult    = useAppStore((s) => s.playResult)
   const setPlayMode   = useAppStore((s) => s.setPlayMode)
   const applyPlayStatus = useAppStore((s) => s.applyPlayStatus)
 
@@ -104,13 +108,14 @@ export default function EnvPreview() {
   // "live" = frames are (or just were) flowing for this env.
   const live         = (visual && runLive) || playState === 'playing' || (playVisible && hasFrame) || (watching && hasFrame)
   // Which client-side renderer to use (else a server JPEG on the canvas).
-  const clientKind: 'cartpole' | 'mountaincar' | 'pendulum' | 'acrobot' | 'lunarlander' | 'grid' | 'mpe' | null =
+  const clientKind: 'cartpole' | 'mountaincar' | 'pendulum' | 'acrobot' | 'lunarlander' | 'grid' | 'mpe' | 'board' | null =
     selectedEnvId === 'cartpole' ? 'cartpole'
     : selectedEnvId === 'mountaincar' || selectedEnvId === 'mountaincarcontinuous' ? 'mountaincar'
     : selectedEnvId === 'pendulum' ? 'pendulum'
     : selectedEnvId === 'acrobot' ? 'acrobot'
     : selectedEnvId === 'lunarlander' ? 'lunarlander'
     : selectedEnv?.family === 'petting_zoo' ? 'mpe'  // multi-agent swarm canvas (G7a)
+    : selectedEnv?.family === 'board' ? 'board'      // OpenSpiel board renderer (G6a)
     : isGridEnv(selectedEnvId) ? 'grid'
     : null
   const clientRender = clientKind !== null
@@ -135,6 +140,9 @@ export default function EnvPreview() {
   // stages: the latest streamed board + agent position live in React state here, tagged with the env
   // it belongs to so a stale board never flashes after an env switch.
   const [gridFrame, setGridFrame] = useState<{ envId: string; grid: GridLayout; agent: number[] } | null>(null)
+  // Board games (G6a) re-render declaratively from the streamed BoardState (low-frequency turn-based
+  // moves), tagged with the env it belongs to so a stale board never flashes after an env switch.
+  const [boardFrame, setBoardFrame] = useState<{ envId: string; board: BoardState } | null>(null)
 
   // Sync persisted toggle/speed to the backend whenever it comes online (UI is source of truth).
   useEffect(() => {
@@ -318,6 +326,15 @@ export default function EnvPreview() {
         }
         return
       }
+      // Board games: declarative re-render from the streamed BoardState (turn-based, low-frequency).
+      if (clientKind === 'board') {
+        if (frame.board) {
+          const envId = selectedEnvId ?? ''
+          setHasFrame(true)
+          setBoardFrame({ envId, board: frame.board })
+        }
+        return
+      }
       // Toy Text grids: declarative re-render from the streamed board + agent (low-frequency moves).
       if (clientKind === 'grid') {
         if (frame.state) {
@@ -384,6 +401,10 @@ export default function EnvPreview() {
   // with no idle (CartPole), keep the last action.
   useEffect(() => {
     if (!(playState === 'playing' && playMode === 'human')) return
+    // Board games (G6a) are played by clicking a cell (BoardStage), not the keyboard — and the
+    // default keymap would map arrow keys to action 0/1, which the board loop would read as illegal
+    // cell clicks. So no keyboard wiring for a board env.
+    if (clientKind === 'board') return
     const keymap = keymapFor(selectedEnvId, envs.find((e) => e.id === selectedEnvId)?.family)
     const isFormField = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement | null)?.tagName
@@ -499,7 +520,7 @@ export default function EnvPreview() {
       window.removeEventListener('keydown', onDown)
       window.removeEventListener('keyup', onUp)
     }
-  }, [playState, playMode, selectedEnvId, envs])
+  }, [playState, playMode, selectedEnvId, envs, clientKind])
 
   // Fullscreen the stage box on demand; Esc (or the toggle again) exits. Track the actual
   // fullscreen element so the icon stays correct even when the user exits via Esc.
@@ -550,6 +571,46 @@ export default function EnvPreview() {
   const gridData = live && gridFrame && gridFrame.envId === selectedEnvId ? gridFrame : null
   const gridBoard = gridData?.grid ?? DEFAULT_GRIDS[selectedEnvId ?? ''] ?? DEFAULT_GRIDS.frozenlake
   const gridAgent = (gridData?.agent?.length ? gridData.agent : DEFAULT_AGENT[selectedEnvId ?? '']) ?? [0, 0]
+
+  // Board game (G6a) to draw: the live streamed ply if it belongs to this env, else the idle board.
+  const boardMeta = boardMetaFor(selectedEnvId)
+  const liveBoard = boardFrame && boardFrame.envId === selectedEnvId ? boardFrame.board : null
+  const board = liveBoard ?? boardMeta?.idle ?? null
+  const boardPlaying = playState === 'playing'
+  // It's the human's turn when a human session is live and the board is waiting on the human's side.
+  const boardHumanTurn =
+    boardPlaying && playMode === 'human' && !!board && !board.is_terminal && board.current_player === boardSide
+  // The "vs <difficulty> AI" label faced — from the persisted selection (steady through a game).
+  const aiLevelLabel = t(`play.diff_${boardStrength}`)
+  // Whose-turn / result text for the board's status line + banner (honest W/D/L, no skill %).
+  let boardStatus = t('board.pick_side')
+  let boardBanner: { text: string; kind: 'win' | 'draw' | 'loss' } | null = null
+  if (clientKind === 'board' && board) {
+    const markFor = (player: number) =>
+      Object.values(boardMeta?.pieces ?? {}).find((p) => p.player === player)?.glyph ?? `#${player + 1}`
+    const ended = board.is_terminal || playState === 'finished'
+    if (ended) {
+      if (playMode === 'human') {
+        const won = board.winner === boardSide
+        const lost = board.winner !== null && board.winner !== boardSide
+        const kind = won ? 'win' : lost ? 'loss' : 'draw'
+        boardBanner = { kind, text: t(`board.result_${kind}`, { level: aiLevelLabel }) }
+      } else {
+        boardBanner = board.winner === null
+          ? { kind: 'draw', text: t('board.result_draw_watch') }
+          : { kind: 'draw', text: t('board.result_winner', { mark: markFor(board.winner) }) }
+      }
+    } else if (boardPlaying) {
+      boardStatus = playMode === 'human'
+        ? (boardHumanTurn ? t('board.your_move') : t('board.ai_thinking'))
+        : t('board.watching', { mark: markFor(board.current_player) })
+    }
+  }
+  // Use the just-finished result's outcome (carries the authoritative label) when present.
+  if (clientKind === 'board' && playState === 'finished' && playResult?.outcome && playMode === 'human') {
+    boardBanner = { kind: playResult.outcome, text: t(`board.result_${playResult.outcome}`, { level: aiLevelLabel }) }
+  }
+  const onBoardCellClick = (action: number) => { if (boardHumanTurn) sendPlayAction(action) }
 
   return (
     <section style={{
@@ -648,6 +709,12 @@ export default function EnvPreview() {
               <AcrobotStage envName={envName} link1Ref={acroLink1Ref} link2Ref={acroLink2Ref} />
             ) : clientKind === 'grid' ? (
               <GridStage envName={envName} grid={gridBoard} agent={gridAgent} />
+            ) : clientKind === 'board' && board && boardMeta ? (
+              <BoardStage
+                envName={envName} board={board} meta={boardMeta}
+                humanTurn={boardHumanTurn} onCellClick={onBoardCellClick}
+                statusText={boardStatus} banner={boardBanner}
+              />
             ) : clientKind === 'mpe' ? (
               <SwarmStage
                 envName={envName} canvasRef={swarmCanvasRef}
@@ -660,7 +727,7 @@ export default function EnvPreview() {
                 groundRef={llGroundRef} surfaceRef={llSurfaceRef}
               />
             )}
-            {!live && (
+            {!live && clientKind !== 'board' && (
               <span style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-sm)', textAlign: 'center', maxWidth: 360 }}>
                 {hint}
               </span>
@@ -741,7 +808,7 @@ export default function EnvPreview() {
           {isFullscreen ? CompressGlyph : ExpandGlyph}
         </button>
 
-        {playState === 'playing' && playMode === 'human' && (
+        {playState === 'playing' && playMode === 'human' && clientKind !== 'board' && (
           <div style={{
             position: 'absolute', top: 12, left: 12,
             padding: '4px 10px', borderRadius: 'var(--radius-pill)',

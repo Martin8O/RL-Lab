@@ -21,6 +21,29 @@ from app.schemas.skill import SkillRating
 # Who controls the agent: a human at the keyboard, or a loaded checkpoint playing itself.
 PlayMode = Literal["human", "ai"]
 PlayState = Literal["idle", "playing", "finished", "stopped", "error"]
+# Board-game (G6a) AI opponent strength → MCTS simulation count (see board_engine.STRENGTH_SIMS).
+BoardStrength = Literal["easy", "medium", "hard"]
+
+
+class BoardState(BaseModel):
+    """One ply of an OpenSpiel board game (G6a), streamed inside a ``play_frame``.
+
+    Built from the **generic** ``pyspiel.State`` API (see ``app.services.board_engine``), so it
+    carries Tic-Tac-Toe today and Connect Four / chess / go later with no contract change. The
+    client renderer (``content/boardGames.ts`` + ``BoardStage``) interprets the per-cell glyphs.
+    """
+
+    # Row-major board glyphs: "." empty, "x"/"o" for Tic-Tac-Toe, etc. (the renderer maps them).
+    cells: list[str]
+    rows: int
+    cols: int
+    # Action indices that are legal for the player to move now (empty once the game is over). The
+    # client highlights these on the human's turn and rejects clicks on any other cell.
+    legal_actions: list[int]
+    current_player: int  # whose turn (0 = first player; <0 at a terminal/chance node)
+    last_action: int | None  # the action just applied (for a "last move" highlight); None at start
+    is_terminal: bool
+    winner: int | None  # winning player index, or None for a draw / a game still in progress
 
 
 class PlayConfig(BaseModel):
@@ -43,6 +66,10 @@ class PlayConfig(BaseModel):
     seed: int | None = None
     speed: float = 1.0
     idle_action: int | float | list[float] | None = None
+    # Board games (G6a) only: which player the human controls (0 = first to move) and how strong the
+    # MCTS opponent is. Ignored by every other env. ``mode="ai"`` on a board env is an AI-vs-AI watch.
+    side: int = 0
+    ai_strength: BoardStrength = "medium"
 
 
 class PlaySpeedRequest(BaseModel):
@@ -60,7 +87,11 @@ class PlayResult(BaseModel):
     mode: PlayMode
     score: float
     steps: int
-    rating: SkillRating
+    # Continuous-score envs (CartPole, …) carry a skill rating; board games (G6a) are 3-valued
+    # (win/draw/loss vs an AI), not a continuous return, so they carry ``outcome`` and leave
+    # ``rating`` null — the UI shows a W/D/L card instead of the misleading continuous skill %.
+    rating: SkillRating | None = None
+    outcome: Literal["win", "draw", "loss"] | None = None
 
 
 class PlayStatus(BaseModel):
@@ -101,6 +132,8 @@ class PlayFrame(BaseModel):
     terrain: list[list[float]] | None = None
     # Static board layout for a grid-world (Toy Text), so the client can draw the board (None elsewhere).
     grid: GridLayout | None = None
+    # Board-game state (G6a) for the client-side board renderer; None for every non-board env.
+    board: BoardState | None = None
 
 
 class PlayActionMessage(BaseModel):

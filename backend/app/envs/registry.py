@@ -1659,6 +1659,57 @@ _MUJOCO_GAMES: list[
 for _mj_row in _MUJOCO_GAMES:
     register(_mujoco_spec(*_mj_row))
 
+
+# ---------------------------------------------------------------------------
+# Board games (G6a — OpenSpiel turn-based self-play subsystem, ADR-050). The 7th seam: a
+# 2-player, turn-based, perfect-info, zero-sum game with legal-move masking and self-play —
+# OpenSpiel's pyspiel.State API, NOT a gym.Env. A board row is a discoverable picker entry but
+# is **routed to app/services/board_engine.py via is_board_game** (mirroring is_multi_agent for
+# PettingZoo), so it never goes through app.envs.factory.make_env. Only Tic-Tac-Toe ships in
+# G6a, human-playable vs a training-free MCTS opponent; the neural self-play trainer is G6b, so
+# train_implemented=False (the Train lane shows a "self-play coming later" note via the
+# not_implemented_board gate reason). obs_type="vector" is an inert tag here (the
+# observation_tensor IS a flat vector, but make_env never runs for a board env);
+# supported_algos=["ppo"] is the simple_tag precedent — competitive self-play is surfaced as
+# "ppo" and the manager will route board+ppo → the board self-play trainer in G6b (the parallel
+# to is_competitive_ma → train_tag). hyperparams={"ppo": {}} keeps the AlgoSwitch/store happy
+# (no tunables render while gated); default_total_timesteps is a placeholder (unused while gated).
+# ---------------------------------------------------------------------------
+
+register(
+    EnvSpec(
+        id="tictactoe",
+        gym_id="tic_tac_toe",  # the OpenSpiel short name (resolved by app.services.board_engine)
+        display_name=Bilingual(en="Tic-Tac-Toe", cz="Piškvorky 3×3"),
+        description=Bilingual(
+            en="The classic 3×3 game: take turns placing your mark and try to get three in a row. "
+            "Played here against a built-in AI that searches ahead (Monte-Carlo Tree Search) — pick a "
+            "side and a difficulty. With perfect play on both sides every game is a draw, which makes it "
+            "the perfect, testable first board game. Self-play *training* arrives in a later step.",
+            cz="Klasická hra 3×3: střídavě pokládáte své značky a snažíte se dostat tři v řadě. Tady "
+            "hrajete proti vestavěné AI, která prohledává tahy dopředu (Monte-Carlo stromové prohledávání) "
+            "— vyberte si stranu a obtížnost. Při dokonalé hře obou stran je každá partie remíza, což z ní "
+            "dělá ideální, ověřitelnou první deskovou hru. Trénink self-play přijde v dalším kroku.",
+        ),
+        family="board",
+        obs_type="vector",  # inert tag — board games are routed, never made via make_env
+        action_space="discrete",  # Discrete(9): place a mark in one of the nine cells
+        supported_algos=["ppo"],  # self-play surfaced as "ppo" (simple_tag precedent); trainer = G6b
+        hyperparams={"ppo": {}},  # no tunables render while training is gated; keeps AlgoSwitch valid
+        solved_score=1.0,  # zero-sum win = +1 (the meter is replaced by a W/D/L card for board games)
+        min_score=-1.0,  # zero-sum loss = −1
+        default_total_timesteps=100_000,  # placeholder — unused while train_implemented=False (G6b)
+        play_step_scale=1,
+        floor_scales_with_steps=False,
+        turn_based=True,  # one move per click; the board subsystem drives the turn loop
+        human_playable=True,  # play a side vs the MCTS AI now (training-free)
+        competitive=True,  # 2-player zero-sum → board self-play trainer (G6b), like simple_tag
+        difficulty="beginner",
+        hw_requirement="cpu",  # MCTS + (later) small-game self-play need no GPU
+        train_implemented=False,  # neural self-play trainer = G6b; Train lane gated until then
+    )
+)
+
 # Hopper and Walker2d render at 125 fps and fall fast, so even with human play capped at the 30 fps
 # frame rate a person gets only ~8 s before the topple — too short to actually play. Stretch their
 # human-play wall-clock ~5× (the user's request) so there is real time to react; the other MuJoCo

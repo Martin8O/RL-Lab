@@ -6,6 +6,8 @@ import { fetchCheckpoints, startPlay, stopPlay, updatePlaySpeed } from '../api/c
 import type { CheckpointMeta } from '../api/types'
 import { keymapFor } from '../content/playKeymaps'
 import PlayInstructions from './PlayInstructions'
+import ParamInfo from './ParamInfo'
+import type { BoardStrength } from '../api/types'
 
 const PLAY_SPEEDS = [0.1, 0.15, 0.25, 0.5, 1, 2, 4]
 
@@ -36,12 +38,19 @@ export default function PlayControls() {
   const setPlayCheckpointId = useAppStore((s) => s.setPlayCheckpointId)
   const setPlayCheckpointLabel = useAppStore((s) => s.setPlayCheckpointLabel)
   const applyPlayStatus  = useAppStore((s) => s.applyPlayStatus)
+  const boardSide        = useAppStore((s) => s.boardSide)
+  const boardStrength    = useAppStore((s) => s.boardStrength)
+  const setBoardSide     = useAppStore((s) => s.setBoardSide)
+  const setBoardStrength = useAppStore((s) => s.setBoardStrength)
 
   const [checkpoints, setCheckpoints] = useState<CheckpointMeta[]>([])
   const [error, setError] = useState<string | null>(null)
 
   const env          = envs.find((e) => e.id === selectedEnvId)
   const humanPlayable = env?.human_playable ?? false
+  // Board games (G6a): the "AI" side is a built-in MCTS (no checkpoint), so "AI plays" is an
+  // AI-vs-AI watch and the controls swap the checkpoint picker for side + difficulty selectors.
+  const isBoard      = env?.family === 'board'
   const playing      = playState === 'playing'
   const trainLive    = trainState === 'running' || trainState === 'paused' || trainState === 'stopping'
   // Checkpoints that can actually be played here (same env; any algo works via the AI policy).
@@ -64,7 +73,9 @@ export default function PlayControls() {
   const ready     = backendStatus === 'online' && !trainLive
   const canHuman  = ready && humanPlayable
   const aiReady   = !!playCheckpointId && envCheckpoints.length > 0
-  const canAi     = ready && aiReady
+  // Board "AI plays" = watch the built-in MCTS play itself → no checkpoint needed; every other env
+  // needs a loaded checkpoint for AI play.
+  const canAi     = ready && (isBoard || aiReady)
 
   // Two explicit actions instead of a Play button + a who-plays dropdown: you Play, or the AI
   // plays by itself. The store's playMode (skill-meter label + keyboard wiring) is set per action.
@@ -73,7 +84,7 @@ export default function PlayControls() {
     setPlayMode(mode)
     // Remember which model the AI plays so its leaderboard identity is known on finish
     // (the checkpoint label already encodes algo + size, so use it verbatim).
-    const ckpt = mode === 'ai'
+    const ckpt = mode === 'ai' && !isBoard
       ? envCheckpoints.find((c) => c.id === playCheckpointId) ?? null
       : null
     setPlayCheckpointLabel(ckpt ? ckpt.label : null)
@@ -81,15 +92,21 @@ export default function PlayControls() {
       const status = await startPlay({
         env_id: selectedEnvId ?? 'cartpole',
         mode,
-        checkpoint_id: mode === 'ai' ? playCheckpointId : null,
+        // Board games have no checkpoint (the AI is a built-in MCTS); every other env's AI loads one.
+        checkpoint_id: mode === 'ai' && !isBoard ? playCheckpointId : null,
         // Human play: a fresh random seed each game, so envs with a randomized scene (LunarLander's
         // moon terrain) vary like the training preview does — a fixed seed made every game identical.
-        // AI play keeps the configured seed so a checkpoint demo stays reproducible.
+        // AI play keeps the configured seed so a checkpoint demo stays reproducible. For board games
+        // this also varies the MCTS opponent each human game while keeping the AI-vs-AI watch a
+        // reproducible demo (the play convention).
         seed: mode === 'human' ? null : seed,
         speed: playSpeed,
         // Hold the env's "do nothing" until a key is pressed (so MountainCar/Acrobot don't get
         // shoved by the default action 0). null for CartPole, which has no idle; 0 (NOOP) for Atari.
         idle_action: keymapFor(selectedEnvId, env?.family).idleAction,
+        // Board games (G6a): which side the human takes + the MCTS opponent strength. Ignored elsewhere.
+        side: boardSide,
+        ai_strength: boardStrength,
       })
       applyPlayStatus(status)
     } catch (e) {
@@ -156,11 +173,11 @@ export default function PlayControls() {
 
           {howToPlay}
 
-          {/* AI plays by itself */}
+          {/* AI plays by itself (board: an AI-vs-AI watch, no checkpoint needed) */}
           <button
             onClick={() => handlePlay('ai')}
             disabled={!canAi}
-            title={trainLive ? t('play.busy_training') : !aiReady ? t('play.no_checkpoints') : undefined}
+            title={trainLive ? t('play.busy_training') : (!isBoard && !aiReady) ? t('play.no_checkpoints') : undefined}
             style={{
               display: 'inline-flex', alignItems: 'center', gap: 6,
               height: 'var(--control-sm)', padding: '0 12px', borderRadius: 'var(--radius-md)',
@@ -171,11 +188,39 @@ export default function PlayControls() {
               opacity: canAi ? 1 : 0.5, transition: 'var(--t-colors)',
             }}
           >
-            <span aria-hidden>🤖</span> {t('play.ai_play')}
+            <span aria-hidden>🤖</span> {isBoard ? t('play.watch_ai') : t('play.ai_play')}
           </button>
 
-          {/* Model picker for the AI button (shown when checkpoints exist for this env) */}
-          {envCheckpoints.length > 0 ? (
+          {isBoard ? (
+            <>
+              {/* Board games (G6a): pick your side + the MCTS opponent strength (difficulty). */}
+              <label style={labelStyle}>
+                {t('play.board_side')}
+                <select
+                  value={boardSide}
+                  onChange={(e) => setBoardSide(parseInt(e.target.value, 10))}
+                  style={selectStyle}
+                >
+                  <option value={0}>{t('play.board_side_first')}</option>
+                  <option value={1}>{t('play.board_side_second')}</option>
+                </select>
+              </label>
+              <label style={labelStyle}>
+                {t('play.board_difficulty')}
+                <select
+                  value={boardStrength}
+                  onChange={(e) => setBoardStrength(e.target.value as BoardStrength)}
+                  style={selectStyle}
+                >
+                  <option value="easy">{t('play.diff_easy')}</option>
+                  <option value="medium">{t('play.diff_medium')}</option>
+                  <option value="hard">{t('play.diff_hard')}</option>
+                </select>
+              </label>
+              <ParamInfo paramId="board_difficulty" label={t('play.board_difficulty')} />
+            </>
+          ) : envCheckpoints.length > 0 ? (
+            /* Model picker for the AI button (shown when checkpoints exist for this env) */
             <label style={labelStyle}>
               {t('play.checkpoint')}
               <select

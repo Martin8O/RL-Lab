@@ -637,6 +637,7 @@ export default function Sidebar() {
         }}>
           {t(
             trainGatedReason === 'not_implemented_ma' ? 'sidebar.train_not_implemented_ma'
+            : trainGatedReason === 'not_implemented_board' ? 'sidebar.train_not_implemented_board'
             : trainGatedReason === 'not_implemented' ? 'sidebar.train_not_implemented'
             : 'sidebar.train_needs_gpu',
           )}

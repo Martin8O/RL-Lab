@@ -57,7 +57,8 @@
     "stopping": "Stopping…",
     "train_needs_gpu": "Training this game needs a GPU (available on the desktop). You can still play it by hand now — use the Play button below.",
     "train_not_implemented": "Training for this game isn't built yet — pixel-based games need the GPU (CnnPolicy) trainer that's coming in a later version. You can still play it by hand now — use the Play button below.",
-    "train_not_implemented_ma": "Training for this world is coming in a later step — each species needs its own brain. For now you can just watch the untrained world move (it isn't hand-playable — a swarm has no single driver)."
+    "train_not_implemented_ma": "Training for this world is coming in a later step — each species needs its own brain. For now you can just watch the untrained world move (it isn't hand-playable — a swarm has no single driver).",
+    "train_not_implemented_board": "Self-play training for board games is coming in a later step. For now, play against the built-in AI with the Play button below — pick a side and a difficulty."
   },
   "stats": {
     "progress": "Progress",
@@ -108,6 +109,7 @@
     "start": "Play vs AI",
     "play": "Play",
     "ai_play": "AI plays",
+    "watch_ai": "Watch AI vs AI",
     "stop": "Stop",
     "mode": "Mode",
     "human": "You play",
@@ -115,6 +117,13 @@
     "checkpoint": "Model",
     "no_checkpoints": "Save a checkpoint to watch the AI",
     "speed": "Speed",
+    "board_side": "Your side",
+    "board_side_first": "Go first (✕)",
+    "board_side_second": "Go second (◯)",
+    "board_difficulty": "Difficulty",
+    "diff_easy": "Easy",
+    "diff_medium": "Medium",
+    "diff_hard": "Hard",
     "how_to_play": "How to play",
     "busy_training": "Stop training first to play",
     "not_playable": "This environment isn't human-playable",
@@ -125,6 +134,20 @@
     "goal": "Goal",
     "controls": "Controls",
     "tips": "Tips"
+  },
+  "board": {
+    "pick_side": "Pick a side and a difficulty, then press Play",
+    "your_move": "Your move — click a highlighted cell",
+    "ai_thinking": "AI is thinking…",
+    "watching": "Watching — {{mark}} to move",
+    "result_win": "You win! (vs {{level}} AI)",
+    "result_loss": "You lose (vs {{level}} AI)",
+    "result_draw": "Draw (vs {{level}} AI)",
+    "result_draw_watch": "Draw — perfect play on both sides",
+    "result_winner": "{{mark}} wins",
+    "cell_play": "Play row {{row}}, column {{col}}",
+    "cell_taken": "Row {{row}}, column {{col}}: {{mark}}",
+    "cell_empty": "Row {{row}}, column {{col}}: empty"
   },
   "watch": {
     "about": "What am I watching?",
@@ -148,7 +171,8 @@
     "save": "Save",
     "skip": "Skip",
     "best_human": "Best human: {{score}}",
-    "best_ai": "Best AI: {{score}}"
+    "best_ai": "Best AI: {{score}}",
+    "board_deferred": "Board games are scored win / draw / loss, not by points — leaderboards arrive with self-play training in a later step."
   },
   "chart": {
     "title": "Reward Chart",

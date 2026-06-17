@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type {
   Algo,
+  BoardStrength,
   EnvSkill,
   EnvSpec,
   EvolutionHyperparams,
@@ -159,6 +160,8 @@ interface AppState {
   playMode:        PlayMode   // E2: who plays — human at the keyboard ↔ AI watch
   playSpeed:       number     // E2: play-session pacing (0.1×–20×; slow-mo for humans)
   playerName:      string     // E2: last name used for a human leaderboard entry
+  boardSide:       number     // G6a: which side the human takes in a board game (0 = first player)
+  boardStrength:   BoardStrength  // G6a: the board MCTS opponent strength (easy/medium/hard)
 
   // ─ ephemeral (not persisted) ───────────────────────────────
   backendStatus:   BackendStatus
@@ -228,6 +231,8 @@ interface AppState {
   setPlayMode:         (m: PlayMode)                    => void
   setPlaySpeed:        (n: number)                      => void
   setPlayerName:       (name: string)                  => void
+  setBoardSide:        (side: number)                  => void
+  setBoardStrength:    (s: BoardStrength)              => void
   setPlayCheckpointId: (id: string | null)             => void
   setPlayCheckpointLabel: (label: string | null)       => void
   applyPlayStatus:     (s: PlayStatus)                  => void
@@ -258,6 +263,8 @@ export const useAppStore = create<AppState>()(
       playMode:        'human',
       playSpeed:       1,
       playerName:      '',
+      boardSide:       0,
+      boardStrength:   'medium',
 
       backendStatus:   'connecting',
       gpuAvailable:    false,
@@ -457,6 +464,8 @@ export const useAppStore = create<AppState>()(
       setPlayMode:         (playMode)         => set({ playMode }),
       setPlaySpeed:        (playSpeed)        => set({ playSpeed }),
       setPlayerName:       (playerName)       => set({ playerName }),
+      setBoardSide:        (boardSide)        => set({ boardSide }),
+      setBoardStrength:    (boardStrength)    => set({ boardStrength }),
       setPlayCheckpointId: (playCheckpointId) => set({ playCheckpointId }),
       setPlayCheckpointLabel: (playCheckpointLabel) => set({ playCheckpointLabel }),
       setPlayScores:       (playScores)       => set({ playScores }),
@@ -506,6 +515,8 @@ export const useAppStore = create<AppState>()(
         playMode:        s.playMode,
         playSpeed:       s.playSpeed,
         playerName:      s.playerName,
+        boardSide:       s.boardSide,
+        boardStrength:   s.boardStrength,
       }),
     },
   ),

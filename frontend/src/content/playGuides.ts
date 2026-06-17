@@ -113,6 +113,38 @@ export const PLAY_GUIDES: Record<string, PlayGuide> = {
     },
   },
 
+  // Board games (G6a) are clicked, not keyed, and are turn-based — the guide reflects that. The AI
+  // here is a training-free Monte-Carlo Tree Search; a trained neural opponent arrives in G6b.
+  tictactoe: {
+    goal: {
+      en: 'Get three of your marks in a row — across, down, or diagonally — before the AI does. You '
+        + 'play ✕ or ◯ (pick your side); the built-in AI takes the other. Tic-Tac-Toe is fully solved, '
+        + 'so with no mistakes on either side every game ends in a draw — against the stronger AI your '
+        + 'real aim is simply not to lose.',
+      cz: 'Získejte tři své značky v řadě — vodorovně, svisle nebo úhlopříčně — dřív než AI. Hrajete ✕ '
+        + 'nebo ◯ (vyberte si stranu); vestavěná AI hraje za druhého. Piškvorky 3×3 jsou zcela vyřešené, '
+        + 'takže bez chyb na obou stranách končí každá partie remízou — proti silnější AI je tedy vaším '
+        + 'skutečným cílem prostě neprohrát.',
+    },
+    controls: [
+      { keys: 'Click', action: { en: 'Place your mark on a highlighted empty cell', cz: 'Položte svou značku na zvýrazněné prázdné políčko' } },
+    ],
+    tips: {
+      en: 'This game is mouse-driven and turn-based — no keyboard. Before you start, pick your side '
+        + '(go first ✕ or second ◯) and a difficulty (the ? next to it explains how the AI thinks). '
+        + 'Opening in the centre or a corner is strongest; always block the AI the moment it has two in '
+        + 'a row, and watch for "forks" — a move that makes two threats at once. On Hard the AI never '
+        + 'slips, so play for the draw; drop to Easy for a real chance to win. Switch to "Watch AI vs '
+        + 'AI" to see two perfect players draw every time.',
+      cz: 'Hra se ovládá myší a je tahová — žádná klávesnice. Než začnete, vyberte si stranu (začínáte ✕, '
+        + 'nebo jste druhý ◯) a obtížnost (? vedle ní vysvětluje, jak AI přemýšlí). Nejsilnější je začít '
+        + 've středu nebo v rohu; jakmile má AI dvě v řadě, vždy ji zablokujte a hlídejte si „vidličky“ — '
+        + 'tah, který vytvoří dvě hrozby naráz. Na Těžké AI nikdy nechybuje, takže hrajte na remízu; na '
+        + 'Lehké máte reálnou šanci vyhrát. Přepnutím na „Sledovat AI vs AI“ uvidíte, jak dva dokonalí '
+        + 'hráči pokaždé remizují.',
+    },
+  },
+
   lunarlander: {
     goal: {
       en: 'Land the module gently on the pad between the two flags, upright and slow, with both '

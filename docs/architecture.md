@@ -109,7 +109,19 @@ typed seams need real code — see [`adding-an-environment.md`](adding-an-enviro
    *and* the preview streamer (`n_envs=1`) so obs/action shapes match (**G4b**). CarRacing's image trainer is G3c-train.
 3. **Action space** — discrete `int` vs continuous `box` (done for classic-control + multi-joint; CarRacing image-box *human* play landed; **Atari image AI-play landed in G4c / ADR-046** via `play_session._run_image_ai` over the `make_atari` vec env); image-box *training* is G3c-train.
 4. **Competitive play** — a `side` selector + a 2-agent env (Pong).
-5. **Board games** — a parallel turn-based/self-play subsystem (OpenSpiel), not a registry row.
+5. **Board games** (OpenSpiel, **foundation landed G6a / ADR-050**) — a 2-player, turn-based, perfect-info,
+   zero-sum game with legal-move masking + self-play is `pyspiel.State`, not a `gym.Env`, so a board row
+   (`family="board"`) is a discoverable picker entry **routed via `is_board_game` to `app/services/board_engine.py`**
+   (the parallel to `is_multi_agent`), never through `make_env`. The engine is pure `pyspiel`+numpy, no torch:
+   G6a's opponent is a **training-free MCTS**, so the neural self-play trainer is deferred to G6b
+   (`train_implemented=False`, gate note `not_implemented_board`). Board play **reuses the play lane**
+   (`play_session._run_board`: human-vs-MCTS via the turn-based pending-action path; `mode="ai"` = MCTS-vs-MCTS
+   watch); the contract grows additively (`BoardState` on `PlayFrame.board`, `side`/`ai_strength` on `PlayConfig`,
+   `outcome` + optional `rating` on `PlayResult`). The board is client-rendered (`clientKind="board"`, `BoardStage`);
+   only the renderer's glyph map (`content/boardGames.ts`) + the one catalog row are game-specific — engine/session/
+   contract are game-agnostic (a `connect_four` test drives the same functions). The 3-valued win/draw/loss outcome
+   replaces the continuous skill meter with an honest W/D/L banner; the play leaderboard is deferred. **G6a ships
+   Tic-Tac-Toe vs MCTS; the neural self-play trainer is G6b.**
 6. **Multi-agent** (PettingZoo, **landed G7a / ADR-038**) — N agents in one shared world (the parallel API),
    so *not* the single-agent `make_env` factory. A dedicated adapter (`app/services/ma_env.py`) builds the
    raw parallel env (preview/render) and the SuperSuit parameter-sharing **vec env** (one shared `MlpPolicy`

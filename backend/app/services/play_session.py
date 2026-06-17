@@ -19,7 +19,7 @@ the rest of the REST surface stay fast to boot.
 import asyncio
 import threading
 import time
-from typing import Any
+from typing import Any, Literal
 
 import numpy as np
 
@@ -42,6 +42,9 @@ _DEFAULT_RENDER_FPS = 30.0  # fallback if the env exposes no render_fps
 # Upper bound matches the preview.
 _MIN_SPEED = 0.1
 _MAX_SPEED = 20.0
+# Board games (G6a): wall-clock pause after an MCTS move so a human can follow the turn-based play
+# (the human's own click applies instantly). Scaled by the speed slider like every other pacing.
+_BOARD_MCTS_DELAY = 0.6
 
 
 class PlayError(RuntimeError):
@@ -110,6 +113,9 @@ class PlaySession:
         # for almost everything, >1 for fall-fast high-fps envs (MuJoCo Hopper/Walker2d) so a person
         # gets more real seconds before the topple. Applies to human mode only.
         self._human_play_slowdown = 1.0
+        # Board games (G6a): the human's side (0 = first player) + the MCTS opponent strength id.
+        self._side = 0
+        self._ai_strength = "medium"
         self._stop = False
 
     # -- wiring -----------------------------------------------------------------
@@ -131,8 +137,12 @@ class PlaySession:
                 f"Environment '{config.env_id}' is not human-playable"
             )
 
+        from app.services.board_engine import is_board_game
+
+        # Board games (G6a) are routed to the OpenSpiel subsystem: the AI is a training-free MCTS, not
+        # a checkpoint, so an "ai" board session is an AI-vs-AI *watch* that needs no policy load.
         predict: PredictFn | None = None
-        if config.mode == "ai":
+        if config.mode == "ai" and not is_board_game(spec):
             predict = self._load_ai_policy(config)
 
         with self._lock:
@@ -156,6 +166,9 @@ class PlaySession:
             self._box_low = self._box_high = self._box_shape = None
             self._play_step_scale = spec.play_step_scale
             self._human_play_slowdown = spec.human_play_slowdown
+            # Board games (G6a): which side the human takes + the MCTS opponent strength.
+            self._side = config.side
+            self._ai_strength = config.ai_strength
             self._step = 0
             self._score = 0.0
             self._result = None
@@ -241,6 +254,13 @@ class PlaySession:
         # image play needs no policy (the person supplies the action), so it stays on the raw make_env
         # + JPEG path below — untouched.
         spec = get_env(self._env_id) if self._env_id else None
+        # Board games (G6a) are a turn-based OpenSpiel subsystem, not a gym.Env — route both human
+        # (human vs MCTS) and ai (MCTS-vs-MCTS watch) to the dedicated board loop. Never make_env'd.
+        from app.services.board_engine import is_board_game
+
+        if is_board_game(spec):
+            self._run_board(spec, seed)
+            return
         if self._mode == "ai" and spec is not None and spec.obs_type == "image":
             self._run_image_ai(spec, seed)
             return
@@ -420,6 +440,127 @@ class PlaySession:
                 "image": image,
             }
         )
+
+    def _run_board(self, spec: Any, seed: int | None) -> None:
+        """Turn-based board loop (G6a) — drive an OpenSpiel ``pyspiel.State`` ply by ply.
+
+        ``mode="human"`` = the human (``self._side``) vs an MCTS opponent on the other side; the
+        human's move is the clicked legal action, taken via the existing turn-based pending-action
+        path (so ``submit_action`` / WS routing are reused). ``mode="ai"`` = an MCTS-vs-MCTS watch.
+        Each ply broadcasts the board payload; on terminal the zero-sum outcome is rated. The MCTS
+        seed follows the play convention: a fixed seed (AI watch) is a reproducible demo, ``None``
+        (human play) gives a varied opponent each game. Game-agnostic — no Tic-Tac-Toe specifics.
+        """
+        import numpy as np
+
+        from app.services import board_engine
+
+        try:
+            game = board_engine.load_game(spec.gym_id)
+        except Exception:  # noqa: BLE001 — a bad game must surface as state, not crash the thread
+            logger.exception("Board game load failed for %s", spec.gym_id)
+            self._finalize(0.0, 0, completed=False, error="Could not load board game")
+            return
+
+        sims = board_engine.strength_sims(self._ai_strength)
+        # Human controls one side in human mode; both sides are MCTS in an AI-vs-AI watch.
+        human_side = self._side if self._mode == "human" else None
+        # One MCTS bot per AI-controlled player (seed-offset so a self-play watch isn't symmetric).
+        bots: dict[int, board_engine.MctsOpponent] = {}
+        for player in range(game.num_players()):
+            if human_side is not None and player == human_side:
+                continue
+            bot_seed = None if seed is None else seed + player
+            bots[player] = board_engine.MctsOpponent(game, sims, bot_seed)
+        # A chance node sampler (dice etc.) — never hit by Tic-Tac-Toe, but keeps the loop general.
+        rng = np.random.default_rng(seed)
+        # Whose outcome to rate: the human's side in human play, else player 0's (a symmetric watch).
+        rating_player = human_side if human_side is not None else 0
+
+        last_action: int | None = None
+        step = 0
+        error: str | None = None
+        state: Any = None
+        try:
+            state = game.new_initial_state()
+            self._emit_board_frame(state, step, 0.0, last_action)  # show the empty board immediately
+            while not state.is_terminal() and not self._stopped():
+                if state.is_chance_node():  # general (backgammon dice…); TTT has none
+                    outcomes = state.chance_outcomes()
+                    action = int(rng.choice([a for a, _ in outcomes]))
+                elif human_side is not None and state.current_player() == human_side:
+                    pending = self._take_pending_action()
+                    if pending is None:
+                        time.sleep(0.03)  # wait for the human to click a cell
+                        continue
+                    action = int(pending)
+                    if action not in state.legal_actions():
+                        continue  # reject an illegal click; keep waiting for a legal one
+                else:
+                    action = bots[state.current_player()].step(state)
+                    # Pace AI moves so a human can follow them; the speed slider scales it. The
+                    # human's own move applies instantly (no sleep on that branch).
+                    time.sleep(_BOARD_MCTS_DELAY / self._current_speed())
+                state.apply_action(action)
+                last_action = action
+                step += 1
+                self._emit_board_frame(state, step, 0.0, last_action)
+        except Exception:  # noqa: BLE001 — never let a step fault crash the thread
+            logger.exception("Board play loop failed")
+            error = "Board session crashed"
+        self._finalize_board(state, step, rating_player, error=error)
+
+    def _emit_board_frame(self, state: Any, step: int, score: float, last_action: int | None) -> None:
+        """Broadcast one board ply as a play_frame carrying the BoardState payload (no JPEG)."""
+        from app.services import board_engine
+
+        self._broadcast(
+            {
+                "type": "play_frame",
+                "step": step,
+                "score": score,
+                "board": board_engine.board_payload(state, last_action),
+            }
+        )
+
+    def _finalize_board(
+        self, state: Any, steps: int, rating_player: int, *, error: str | None
+    ) -> None:
+        """Settle a finished board game — a 3-valued win/draw/loss outcome, not a skill rating."""
+        from app.services import board_engine
+
+        with self._lock:
+            env_id = self._env_id
+            mode = self._mode
+            stopped = self._stop
+        if error is not None:
+            with self._lock:
+                self._state = "error"
+                self._error = error
+            self._broadcast(self.status().model_dump())
+            return
+        if stopped:
+            return  # stop() already set + broadcast "stopped"; nothing to rate
+        label: Literal["win", "draw", "loss"]
+        if state is not None and state.is_terminal():
+            score, label = board_engine.outcome(state, rating_player)
+        else:
+            score, label = 0.0, "draw"
+        result = PlayResult(
+            env_id=env_id or "",
+            mode=mode or "human",
+            score=score,
+            steps=steps,
+            rating=None,  # board games show a W/D/L card, not the continuous skill meter
+            outcome=label,  # one of win/draw/loss (typed via board_engine.outcome)
+        )
+        with self._lock:
+            self._state = "finished"
+            self._step = steps
+            self._score = score
+            self._result = result
+        self._broadcast(result.model_dump())
+        self._broadcast(self.status().model_dump())
 
     def _choose_action(self, env: Any, obs: Any) -> Any:
         with self._lock:

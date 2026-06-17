@@ -45,6 +45,11 @@ export default function SkillMeter({ slot, overlay = false }: {
   // value, and its final value after it stops, so it won't snap back to an old play score. A
   // finished play result only lingers as feedback when no training has run this session (e.g. a
   // reconciled prior session on a fresh load).
+  // Board games (G6a) are 3-valued (win/draw/loss vs an AI), not a continuous return, so the gradient
+  // skill meter would be misleading — they show their own W/D/L banner in BoardStage instead. Suppress
+  // the meter entirely for the board family (in both the play and train slots).
+  if (envs.find((e) => e.id === envId)?.family === 'board') return null
+
   const playActive = playState === 'playing'
   const trainStarted = trainState !== 'idle'
   const playVisible = playActive || (!trainStarted && playState !== 'idle')

@@ -23,8 +23,10 @@ export interface RunControls {
    *  vector heavies un-gate on a GPU); `'not_implemented'` = image-obs CnnPolicy trainer not built yet
    *  (stays gated even on a GPU, G4b/G3c-train); `'not_implemented_ma'` = a watch-only multi-agent env
    *  whose per-species trainer isn't built yet (simple_tag, G7b) — not pixel-based and not hand-playable,
-   *  so it needs its own note; `null` = not gated. */
-  trainGatedReason: 'no_gpu' | 'not_implemented' | 'not_implemented_ma' | null
+   *  so it needs its own note; `'not_implemented_board'` = a board game whose self-play trainer isn't
+   *  built yet (G6b) — it IS hand-playable (vs the built-in AI), so its note points to the Play button;
+   *  `null` = not gated. */
+  trainGatedReason: 'no_gpu' | 'not_implemented' | 'not_implemented_ma' | 'not_implemented_board' | null
 }
 
 export function useRunControls(): RunControls {
@@ -57,12 +59,17 @@ export function useRunControls(): RunControls {
   // note ("pixel-based games … use the Play button") is doubly wrong here — it's vector, and there's
   // no Play button (a swarm has no single human driver) — so it gets its own note.
   const watchOnlyMa     = !!selectedEnv && selectedEnv.family === 'petting_zoo' && selectedEnv.human_playable === false
+  // A board game (G6a): its neural self-play trainer isn't built yet (G6b), but unlike the MA/image
+  // cases it IS hand-playable now (vs the built-in MCTS AI), so its gate note points to Play.
+  const isBoard         = !!selectedEnv && selectedEnv.family === 'board'
   // Competitive multi-agent (simple_tag) runs PPO self-play, so it carries the round schedule (G7b-2).
   const isSelfPlay      = !!selectedEnv && selectedEnv.family === 'petting_zoo' && selectedEnv.competitive === true
   const needsAbsentGpu  = !!selectedEnv && selectedEnv.hw_requirement === 'gpu' && !gpuAvailable
   const trainGated      = notImplemented || needsAbsentGpu
-  const trainGatedReason: 'no_gpu' | 'not_implemented' | 'not_implemented_ma' | null =
-    notImplemented ? (watchOnlyMa ? 'not_implemented_ma' : 'not_implemented') : needsAbsentGpu ? 'no_gpu' : null
+  const trainGatedReason: 'no_gpu' | 'not_implemented' | 'not_implemented_ma' | 'not_implemented_board' | null =
+    notImplemented
+      ? (watchOnlyMa ? 'not_implemented_ma' : isBoard ? 'not_implemented_board' : 'not_implemented')
+      : needsAbsentGpu ? 'no_gpu' : null
   const canRun          = !!selectedEnvId && envs.length > 0 && !trainGated
 
   // Apply the REST response's state to the store immediately, so the controls flip (Run → Pause/Stop,

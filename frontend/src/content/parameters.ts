@@ -93,6 +93,40 @@ const MUJOCO_LOSS: Bilingual = {
 }
 
 export const PARAM_INFO: Record<string, ParamInfo> = {
+  // Board games (G6a): the opponent's strength. Not a training hyperparameter — a play-time choice —
+  // but it ships the same info popup as every tunable (general + per-game + a ★ recommended value).
+  board_difficulty: {
+    general: {
+      en: '**How strong the AI opponent plays.** The built-in AI is a *Monte-Carlo Tree Search* (MCTS): '
+        + 'before each move it plays out many quick random games in its head and picks the move that wins '
+        + 'most often. Difficulty = how many of those look-ahead games it runs — **Easy** runs only a few '
+        + '(it misses things, so a beginner can win), **Hard** runs a lot (it plays essentially perfectly). '
+        + 'It learns nothing between games; it just searches harder. (A *trained* neural opponent arrives '
+        + 'in a later step.)',
+      cz: '**Jak silně hraje soupeřící AI.** Vestavěná AI je *Monte-Carlo stromové prohledávání* (MCTS): '
+        + 'před každým tahem si v hlavě rychle přehraje mnoho náhodných partií a vybere tah, který vyhrává '
+        + 'nejčastěji. Obtížnost = kolik takových partií dopředu si přehraje — **Lehká** jen pár (přehlédne '
+        + 'věci, takže začátečník může vyhrát), **Těžká** jich přehraje hodně (hraje prakticky dokonale). '
+        + 'Mezi partiemi se nic neučí, jen hledá důkladněji. (*Natrénovaný* neuronový soupeř přijde v '
+        + 'dalším kroku.)',
+    },
+    recommended: {
+      en: 'Start on **Medium** to get a feel for the game, drop to Easy for a confidence win, and try Hard '
+        + 'once you want a real test — against perfect play the best you can do is a draw.',
+      cz: 'Začněte na **Střední**, ať hru pochytíte, přepněte na Lehkou pro jisté vítězství a Těžkou '
+        + 'zkuste, až budete chtít opravdovou výzvu — proti dokonalé hře je nejlepší možný výsledek remíza.',
+    },
+    perEnv: {
+      tictactoe: {
+        en: 'Tic-Tac-Toe is fully "solved": with no mistakes every game ends in a draw. So on **Hard** the '
+          + 'AI never loses — your goal is to not lose either (force the draw). On **Easy** it searches so '
+          + 'little that it will sometimes hand you the win.',
+        cz: 'Piškvorky 3×3 jsou zcela „vyřešené“: bez chyb končí každá partie remízou. Na **Těžké** tedy AI '
+          + 'nikdy neprohraje — vaším cílem je také neprohrát (vynutit remízu). Na **Lehké** prohledává tak '
+          + 'málo, že vám občas vítězství daruje.',
+      },
+    },
+  },
   algorithm: {
     general: {
       en: '**How the agent learns.**\n**PPO** (reinforcement learning) — tweaks one neural network with gradients after each batch of play; steady and sample-efficient.\n**Neuroevolution** — keeps a whole population of networks, scores them, and breeds the best (mutation + crossover) each generation; simple, gradient-free, like "survival of the fittest".\n**Q-learning** — builds a plain table of "how good is each action in each state" and refines it from experience; the classic value-based method, available on the small grid-world games where you can literally watch the table fill in.',
