@@ -1727,6 +1727,52 @@ register(
     )
 )
 
+# Connect Four (G6c) — the SECOND board game, proving the subsystem is game-agnostic: a data row + a
+# renderer glyph map, no engine code (board_engine / play_session / trainer_board / preview all key off
+# the generic pyspiel API and resolve the game from gym_id). The one real difference vs Tic-Tac-Toe is
+# that a move is a COLUMN (7 actions over a 6×7 board), not a cell — handled in the renderer via a data
+# flag (content/boardGames.ts actionMode="column"), not here. It is a much bigger game (~10^13 states),
+# so the board trainer scores/teaches it against the EASY MCTS (board_engine.BOARD_PROFILES, G6c) — the
+# net demonstrably learns to beat the weak search bot on a CPU budget, and the honest skill curve climbs
+# instead of sitting pinned at the loss floor — and its ★ budget is larger than TTT's.
+register(
+    EnvSpec(
+        id="connect_four",
+        gym_id="connect_four",  # the OpenSpiel short name (resolved by app.services.board_engine)
+        display_name=Bilingual(en="Connect Four", cz="Čtyři v řadě"),
+        description=Bilingual(
+            en="Drop discs into a 7-column, 6-row grid and try to line up four of your colour — "
+            "horizontally, vertically or diagonally — before the AI does. Play against a built-in AI "
+            "that searches ahead (Monte-Carlo Tree Search) — pick a side and a difficulty — or **train "
+            "your own neural net** to play (it learns by playing the search AI) and then face it. A "
+            "bigger, deeper game than Tic-Tac-Toe, so the AI's tactics really show.",
+            cz="Vhazujte žetony do mřížky o 7 sloupcích a 6 řadách a snažte se spojit čtyři své barvy "
+            "v řadě — vodorovně, svisle nebo úhlopříčně — dřív než AI. Hrajte proti vestavěné AI, která "
+            "prohledává tahy dopředu (Monte-Carlo stromové prohledávání) — vyberte si stranu a obtížnost "
+            "— nebo si **natrénujte vlastní neuronovou síť** (učí se hrou proti prohledávací AI) a pak se "
+            "jí postavte. Větší a hlubší hra než piškvorky, takže taktika AI opravdu vynikne.",
+        ),
+        family="board",
+        obs_type="vector",  # inert tag — board games are routed, never made via make_env
+        action_space="discrete",  # Discrete(7): drop a disc into one of the seven columns
+        supported_algos=["ppo"],  # surfaced as "ppo"; routed to the board trainer by is_board_game
+        hyperparams=_board_hyperparams(),  # standard PPO knobs (ent_coef ★ 0.01); rounds is internal
+        # Same eval-vs-reference-MCTS ∈ [−1, 1] chart scale as TTT (solved = +1, min = −1); the trainer
+        # scores Connect Four against the EASY MCTS (BOARD_PROFILES) so the curve is honest on CPU.
+        solved_score=1.0,
+        min_score=-1.0,
+        default_total_timesteps=200_000,  # ★ budget — a bigger game than TTT needs more steps (≈7 min CPU)
+        play_step_scale=1,
+        floor_scales_with_steps=False,
+        turn_based=True,  # one move per click; the board subsystem drives the turn loop
+        human_playable=True,  # play a side vs the MCTS AI or your trained net
+        competitive=True,  # 2-player zero-sum → routed to the board trainer, like simple_tag
+        difficulty="intermediate",  # a deeper game than the beginner TTT
+        hw_requirement="cpu",  # MCTS + the MaskablePPO board trainer both run on CPU (no GPU gate)
+        train_implemented=True,  # the same game-agnostic neural board trainer (MaskablePPO vs MCTS, G6b)
+    )
+)
+
 # Hopper and Walker2d render at 125 fps and fall fast, so even with human play capped at the 30 fps
 # frame rate a person gets only ~8 s before the topple — too short to actually play. Stretch their
 # human-play wall-clock ~5× (the user's request) so there is real time to react; the other MuJoCo

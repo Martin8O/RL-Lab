@@ -66,6 +66,7 @@
   --viz-4: #f6c358;   /* amber  — secondary metric         */
   --viz-5: #c08cff;   /* violet — comparison run           */
   --viz-6: #4ec5f0;   /* cyan   — comparison run           */
+  --goal:  #e3b341;   /* gold   — the "solved" goal line on the reward chart */
   --viz-1-soft: rgba(124, 139, 255, 0.16);
   --viz-2-soft: rgba(52, 214, 165, 0.16);
   --viz-3-soft: rgba(251, 122, 142, 0.16);
@@ -133,6 +134,7 @@
   --viz-4: #c2820a;
   --viz-5: #8b3fd6;
   --viz-6: #1499c7;
+  --goal:  #b8860b;   /* gold (darker for light theme) */
   --viz-1-soft: rgba(86, 95, 179, 0.12);
   --viz-2-soft: rgba(14, 159, 110, 0.12);
   --viz-3-soft: rgba(224, 54, 79, 0.12);

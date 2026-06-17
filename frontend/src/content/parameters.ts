@@ -125,6 +125,16 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
           + 'nikdy neprohraje — vaším cílem je také neprohrát (vynutit remízu). Na **Lehké** prohledává tak '
           + 'málo, že vám občas vítězství daruje.',
       },
+      connect_four: {
+        en: 'Connect Four is a much bigger game than Tic-Tac-Toe, so difficulty matters more here. On '
+          + '**Easy** the AI searches only a little and makes real mistakes you can punish. On **Hard** it '
+          + 'looks much further ahead and rarely slips — expect a genuine fight. **Medium** is a balanced '
+          + 'first test.',
+        cz: 'Čtyři v řadě jsou mnohem větší hra než piškvorky, takže obtížnost tu hraje větší roli. Na '
+          + '**Lehké** AI prohledává jen málo a dělá skutečné chyby, které můžete potrestat. Na **Těžké** '
+          + 'vidí mnohem dál a chybuje zřídka — čekejte opravdový souboj. **Střední** je vyvážená první '
+          + 'zkouška.',
+      },
     },
   },
   algorithm: {
@@ -1189,6 +1199,25 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
   // ── Chart concepts (B5 follow-up) ─────────────────────────────────────────
   // The reward/loss/fitness tabs and the Smooth control. These describe what a
   // curve means rather than a tunable, so most omit recommended/range.
+
+  // The gold "Goal" line on the reward chart (G6c follow-up) — what "solved" means + why a curve can
+  // sit far below it while still making real progress (board games' −1…+1 scale is the key case).
+  goal: {
+    general: {
+      en: "**The gold line marks \"solved\"** — the score the agent is aiming for, the same target the skill meter calls 100%. The curve climbs toward it, so the gap between the curve and this line is how much there still is to learn.\nHow high \"solved\" sits depends on the game (CartPole 500, LunarLander 200, board games +1). A curve far below the line isn't broken — some games have a very high ceiling.",
+      cz: '**Zlatá čára označuje „vyřešeno“** — skóre, ke kterému agent míří; je to stejný cíl, který měřič dovednosti označuje jako 100 %. Křivka k němu stoupá, takže mezera mezi křivkou a touto čárou ukazuje, kolik se ještě dá naučit.\nJak vysoko „vyřešeno“ leží, závisí na hře (CartPole 500, LunarLander 200, deskové hry +1). Křivka hluboko pod čárou neznamená chybu — některé hry mají velmi vysoký strop.',
+    },
+    perEnv: {
+      tictactoe: {
+        en: "For board games the score is how the net does against the reference AI: **−1** = loses every game, **0** = draws every game, **+1** = wins every game. \"Solved\" is +1, but Tic-Tac-Toe is a forced draw with good play, so a well-trained net realistically plateaus near **0 (draws)** — climbing from −0.9 toward 0 is already mastery, even though it stays well below the +1 line.",
+        cz: 'U deskových her je skóre to, jak si síť vede proti referenční AI: **−1** = prohraje každou partii, **0** = každou remizuje, **+1** = každou vyhraje. „Vyřešeno“ je +1, ale piškvorky jsou při dobré hře vynucená remíza, takže dobře natrénovaná síť reálně uvázne kolem **0 (remízy)** — posun z −0,9 k 0 už je mistrovství, i když zůstává hluboko pod čárou +1.',
+      },
+      connect_four: {
+        en: "Score = how the net does vs the reference AI: **−1** loses all, **0** draws all, **+1** wins all (\"solved\"). A fresh net already scores around −0.6 (it wins a few by luck), then climbs as it learns. Beating the search AI *every* game (+1) is a very high bar, so expect the curve to head toward 0 and above — well below +1 is still real, hard-won skill.",
+        cz: 'Skóre = jak si síť vede proti referenční AI: **−1** vše prohraje, **0** vše remizuje, **+1** vše vyhraje („vyřešeno“). Čerstvá síť má hned kolem −0,6 (pár partií vyhraje náhodou), pak stoupá, jak se učí. Porazit prohledávací AI v *každé* partii (+1) je velmi vysoká laťka, takže čekejte, že křivka zamíří k 0 a výš — i hluboko pod +1 je to skutečná, těžce nabytá dovednost.',
+      },
+    },
+  },
 
   reward: {
     general: {

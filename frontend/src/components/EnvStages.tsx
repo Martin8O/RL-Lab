@@ -286,7 +286,9 @@ export function BoardStage({ envName, board, meta, humanTurn, onCellClick, statu
   humanTurn: boolean
   onCellClick: (action: number) => void
   statusText: string
-  banner: { text: string; kind: 'win' | 'draw' | 'loss' } | null
+  // `mark` colours the winner's piece in the banner — for games whose two players share one glyph
+  // (Connect Four: both '●', only the colour differs), "● wins" would otherwise be unreadable.
+  banner: { text: string; kind: 'win' | 'draw' | 'loss'; mark?: { glyph: string; color: string } } | null
 }) {
   const { t } = useTranslation()
   const { rows, cols, cells, legal_actions, last_action, is_terminal } = board
@@ -294,6 +296,32 @@ export function BoardStage({ envName, board, meta, humanTurn, onCellClick, statu
   const cellPx = Math.max(48, Math.min(110, Math.floor(360 / Math.max(rows, cols, 1))))
   const bannerColor =
     banner?.kind === 'win' ? 'var(--success)' : banner?.kind === 'loss' ? 'var(--danger)' : 'var(--text-strong)'
+
+  // Column games (Connect Four, G6c): a move is a column drop, so a cell's action is its column. Cell
+  // games (Tic-Tac-Toe): action == cell index. No HOVER highlighting at all — by request the board is
+  // plain; a legal cell is simply a clickable button (cursor only). The one highlight kept is a ring on
+  // the *last move played* (a useful, single-cell marker the user asked to keep).
+  const columnMode = meta.actionMode === 'column'
+  const actionOf = (i: number) => (columnMode ? i % cols : i)
+
+  // The just-played disc to ring: in cell mode it is the last_action cell; in column mode it is the
+  // top-most filled cell of the last_action column (pieces stack from the bottom, so the most recent
+  // one sits at the smallest occupied row index).
+  const isFilled = (i: number) => {
+    const v = cells[i]?.trim() ?? ''
+    return v !== '' && v !== '.'
+  }
+  let lastCell: number | null = null
+  if (last_action !== null) {
+    if (columnMode) {
+      for (let r = 0; r < rows; r++) {
+        const idx = r * cols + last_action
+        if (isFilled(idx)) { lastCell = idx; break }
+      }
+    } else {
+      lastCell = last_action
+    }
+  }
 
   const cellBox: CSSProperties = {
     width: cellPx, height: cellPx, display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -307,7 +335,11 @@ export function BoardStage({ envName, board, meta, humanTurn, onCellClick, statu
       <div style={{
         minHeight: 24, fontSize: 'var(--fs-sm)', fontWeight: 'var(--fw-semibold)',
         color: banner ? bannerColor : 'var(--text-muted)', textAlign: 'center',
+        display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
       }}>
+        {banner?.mark && (
+          <span aria-hidden style={{ color: banner.mark.color, fontWeight: 800 }}>{banner.mark.glyph}</span>
+        )}
         {banner ? banner.text : statusText}
       </div>
 
@@ -321,24 +353,28 @@ export function BoardStage({ envName, board, meta, humanTurn, onCellClick, statu
         {cells.map((ch, i) => {
           const r = Math.floor(i / cols)
           const c = i % cols
+          const action = actionOf(i)
           const mark = ch.trim().toUpperCase()
           const piece = meta.pieces[ch.trim().toLowerCase()]
-          const isLast = last_action === i
-          const ring = isLast ? `inset 0 0 0 3px ${piece?.color ?? 'var(--accent)'}` : undefined
+          const ring = lastCell === i ? `inset 0 0 0 3px ${piece?.color ?? 'var(--accent)'}` : undefined
           const glyph = piece && (
             <span aria-hidden style={{ fontSize: cellPx * 0.55, lineHeight: 1, color: piece.color, fontWeight: 800 }}>
               {piece.glyph}
             </span>
           )
-          if (!is_terminal && humanTurn && legal.has(i)) {
+          const playable = !is_terminal && humanTurn && legal.has(action)
+          // In column mode the landing spot is an empty cell, so the empty cells of a legal column are
+          // the buttons; in cell mode the legal (empty) cell itself is the button — as before.
+          const isButton = playable && (columnMode ? !piece : true)
+          if (isButton) {
             return (
               <button
                 key={i}
-                onClick={() => onCellClick(i)}
-                aria-label={t('board.cell_play', { row: r + 1, col: c + 1 })}
-                style={{ ...cellBox, cursor: 'pointer', boxShadow: ring, transition: 'var(--t-colors)' }}
-                onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--accent-surface)'; e.currentTarget.style.borderColor = 'var(--accent-border)' }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--surface-2)'; e.currentTarget.style.borderColor = 'var(--border-default)' }}
+                onClick={() => onCellClick(action)}
+                aria-label={columnMode
+                  ? t('board.cell_drop', { col: c + 1 })
+                  : t('board.cell_play', { row: r + 1, col: c + 1 })}
+                style={{ ...cellBox, cursor: 'pointer', boxShadow: ring }}
               >
                 {glyph}
               </button>

@@ -145,6 +145,38 @@ export const PLAY_GUIDES: Record<string, PlayGuide> = {
     },
   },
 
+  // Connect Four (G6c) — clicked, turn-based, played by COLUMN (the disc drops to the lowest empty
+  // row). Same training-free MCTS AI as Tic-Tac-Toe, or your own trained net. A bigger, deeper game.
+  connect_four: {
+    goal: {
+      en: 'Be the first to line up four of your discs in a row — horizontally, vertically or '
+        + 'diagonally — on the 7-column, 6-row board. You play one colour (pick your side); the '
+        + 'built-in AI takes the other. Discs always fall to the lowest empty slot in the column you '
+        + 'choose, so think a move or two ahead and block the AI before it reaches four.',
+      cz: 'Buďte první, kdo spojí čtyři své žetony v řadě — vodorovně, svisle nebo úhlopříčně — na '
+        + 'desce se 7 sloupci a 6 řadami. Hrajete jednu barvu (vyberte si stranu); vestavěná AI hraje '
+        + 'druhou. Žetony vždy padají na nejnižší volné místo ve zvoleném sloupci, takže myslete o tah '
+        + 'dva dopředu a zablokujte AI dřív, než dosáhne čtyř.',
+    },
+    controls: [
+      { keys: 'Click', action: { en: 'Drop your disc into a highlighted column', cz: 'Vhoďte svůj žeton do zvýrazněného sloupce' } },
+    ],
+    tips: {
+      en: 'This game is mouse-driven and turn-based — no keyboard. Click anywhere in a column to drop '
+        + 'your disc; it falls to the bottom. Before you start, pick your side and a difficulty (the ? '
+        + 'explains how the AI thinks). The centre column is the strongest opening — it touches the most '
+        + 'winning lines. Always watch for the AI getting three in a row with an open end, and look for '
+        + '"double threats" (two ways to win at once) that the AI can only block one of. Drop to Easy for '
+        + 'a real chance to win; switch to "Watch AI vs AI" to see two searchers battle it out.',
+      cz: 'Hra se ovládá myší a je tahová — žádná klávesnice. Klikněte kamkoli do sloupce a žeton spadne '
+        + 'dolů. Než začnete, vyberte si stranu a obtížnost (? vysvětluje, jak AI přemýšlí). Nejsilnější '
+        + 'zahájení je prostřední sloupec — protíná nejvíce vítězných linií. Vždy hlídejte, jestli AI '
+        + 'nemá tři v řadě s volným koncem, a hledejte „dvojité hrozby“ (dvě možnosti výhry naráz), z '
+        + 'nichž AI ubrání jen jednu. Na Lehké máte reálnou šanci vyhrát; přepnutím na „Sledovat AI vs '
+        + 'AI“ uvidíte souboj dvou prohledávačů.',
+    },
+  },
+
   lunarlander: {
     goal: {
       en: 'Land the module gently on the pad between the two flags, upright and slow, with both '

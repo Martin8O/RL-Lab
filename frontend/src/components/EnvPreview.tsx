@@ -588,13 +588,25 @@ export default function EnvPreview() {
   const vsNet = clientKind === 'board' && !!playActiveCheckpoint
   const aiLevelLabel = vsNet ? t('board.level_net') : t(`play.diff_${boardStrength}`)
   // Whose-turn / result text for the board's status line + banner (honest W/D/L, no skill %).
+  type BoardBanner = { text: string; kind: 'win' | 'draw' | 'loss'; mark?: { glyph: string; color: string } }
   let boardStatus = t('board.pick_side')
-  let boardBanner: { text: string; kind: 'win' | 'draw' | 'loss' } | null = null
+  let boardBanner: BoardBanner | null = null
   if (clientKind === 'board' && board) {
-    const markFor = (player: number) =>
-      Object.values(boardMeta?.pieces ?? {}).find((p) => p.player === player)?.glyph ?? `#${player + 1}`
-    const inPlay = playState === 'playing' || playState === 'finished'
-    if (inPlay) {
+    const pieceFor = (player: number) => Object.values(boardMeta?.pieces ?? {}).find((p) => p.player === player)
+    const markFor = (player: number) => pieceFor(player)?.glyph ?? `#${player + 1}`
+    // Watch / training winner banner: a colour-coded mark + "<mark> wins". The colour is what tells the
+    // two players apart in same-glyph games (Connect Four), where "● wins" alone is unreadable.
+    const winnerBanner = (winner: number | null): BoardBanner =>
+      winner === null
+        ? { kind: 'draw', text: t('board.result_draw_watch') }
+        : { kind: 'draw', text: t('board.player_wins'),
+            mark: { glyph: markFor(winner), color: pieceFor(winner)?.color ?? 'var(--text-strong)' } }
+    if (runLive) {
+      // Training preview (self-play) takes precedence over any *stale* finished play session, so a
+      // previous game's result never hangs on the board while the net is training.
+      boardStatus = t('board.training')
+      if (board.is_terminal) boardBanner = winnerBanner(board.winner)
+    } else if (playState === 'playing' || playState === 'finished') {
       const ended = board.is_terminal || playState === 'finished'
       if (ended) {
         if (playMode === 'human') {
@@ -603,28 +615,18 @@ export default function EnvPreview() {
           const kind = won ? 'win' : lost ? 'loss' : 'draw'
           boardBanner = { kind, text: t(`board.result_${kind}`, { level: aiLevelLabel }) }
         } else {
-          boardBanner = board.winner === null
-            ? { kind: 'draw', text: t('board.result_draw_watch') }
-            : { kind: 'draw', text: t('board.result_winner', { mark: markFor(board.winner) }) }
+          boardBanner = winnerBanner(board.winner)
         }
       } else if (boardPlaying) {
         boardStatus = playMode === 'human'
           ? (boardHumanTurn ? t('board.your_move') : t('board.ai_thinking'))
           : t('board.watching', { mark: markFor(board.current_player) })
       }
-    } else if (runLive) {
-      // Training: the preview self-plays the learning net (G6b) — show a "watching it learn" status,
-      // plus the result of each finished self-play game as it streams.
-      boardStatus = t('board.training')
-      if (board.is_terminal) {
-        boardBanner = board.winner === null
-          ? { kind: 'draw', text: t('board.result_draw_watch') }
-          : { kind: 'draw', text: t('board.result_winner', { mark: markFor(board.winner) }) }
-      }
     }
   }
-  // Use the just-finished result's outcome (carries the authoritative label) when present.
-  if (clientKind === 'board' && playState === 'finished' && playResult?.outcome && playMode === 'human') {
+  // Use the just-finished result's outcome (the authoritative label) when present — but never while a
+  // training run is live (a stale play result must not override the training status).
+  if (!runLive && clientKind === 'board' && playState === 'finished' && playResult?.outcome && playMode === 'human') {
     boardBanner = { kind: playResult.outcome, text: t(`board.result_${playResult.outcome}`, { level: aiLevelLabel }) }
   }
   const onBoardCellClick = (action: number) => { if (boardHumanTurn) sendPlayAction(action) }

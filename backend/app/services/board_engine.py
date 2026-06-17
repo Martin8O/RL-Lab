@@ -22,7 +22,7 @@ training_manager) — the same discipline as ``ma_env``.
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any, Literal, NamedTuple
 
 if TYPE_CHECKING:  # only for type hints — never imported at runtime on the light paths
     from app.envs.registry import EnvSpec
@@ -37,6 +37,37 @@ MaskedPredictFn = Callable[[Any, Any], int]
 # — the TTT correctness invariant). Keyed by the play-config ``ai_strength``.
 STRENGTH_SIMS: dict[str, int] = {"easy": 10, "medium": 80, "hard": 400}
 _DEFAULT_STRENGTH = "medium"
+
+
+class BoardProfile(NamedTuple):
+    """Per-game training/eval strength (G6c) — the one number that has to vary with game size.
+
+    ``eval_strength`` is the *fixed reference MCTS* the live skill curve (``ep_rew_mean``) is measured
+    against; ``teacher_start``/``teacher_end`` bound the easy→… curriculum the net trains against.
+    """
+
+    eval_strength: str  # the beatable yardstick the learning chart is scored against
+    teacher_start: str  # MCTS strength on the first round …
+    teacher_end: str  # … ramping to this on the last round (a gentle curriculum)
+
+
+# Tic-Tac-Toe is tiny (5 478 states): a net reaches the *medium* MCTS's level (drawing) in ~80–100k
+# steps, so it both trains against and is scored against medium. Connect Four is a vastly bigger game
+# (~10^13 states): on a CPU budget the net learns to beat the *easy* search bot but not the medium one
+# (verified — eval-vs-easy climbs −0.6→+0.6 over ~90k steps, while eval-vs-medium stays ≈−0.9). So it
+# is both taught by and scored against EASY — scoring it vs medium would pin the honest skill curve at
+# the loss floor while the net is genuinely improving. Unlisted games fall back to the TTT profile.
+# Keyed by the OpenSpiel short name (``gym_id``); the renderer/contract stay fully game-agnostic.
+BOARD_PROFILES: dict[str, BoardProfile] = {
+    "tic_tac_toe": BoardProfile(eval_strength="medium", teacher_start="easy", teacher_end="medium"),
+    "connect_four": BoardProfile(eval_strength="easy", teacher_start="easy", teacher_end="easy"),
+}
+_DEFAULT_PROFILE = BOARD_PROFILES["tic_tac_toe"]
+
+
+def board_profile(gym_id: str) -> BoardProfile:
+    """The per-game training/eval strength profile (defaults to the Tic-Tac-Toe profile)."""
+    return BOARD_PROFILES.get(gym_id, _DEFAULT_PROFILE)
 
 
 def is_board_game(spec: EnvSpec | None) -> bool:

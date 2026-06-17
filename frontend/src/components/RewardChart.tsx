@@ -105,10 +105,26 @@ function lastPoint(s: Series): { x: number; y: number } | null {
 // A vertical "solved" marker: where a compared run first hit 100% of the goal.
 interface SolvedMarker { x: number; color: string; label: string }
 
+// The horizontal "goal" line (the env's solved score): a gold dashed line so you can see how far
+// the curve still has to climb. Included in the Y-domain so it's always visible, even before the
+// curve reaches it.
+interface GoalLine { value: number; label: string }
+
+// The chart's y-domain: always spans at least [0, 1], stretched to fit the data and the goal line
+// (so the goal is always on-screen). Shared by LineChart and the parent's HTML "Goal" label overlay,
+// so the label sits exactly on the gold line.
+function chartYDomain(series: Series[], goalY?: number): { min: number; max: number } {
+  const ys: number[] = []
+  for (const s of series) for (const v of s.values) if (v !== null && v !== undefined) ys.push(v)
+  const min = Math.min(0, ...(ys.length ? ys : [0]), ...(goalY != null ? [goalY] : []))
+  const max = Math.max(1, ...(ys.length ? ys : [1]), ...(goalY != null ? [goalY] : []))
+  return { min, max }
+}
+
 // Multi-series chart: each series carries its own x[], so live data and overlaid past runs
 // (with different step/generation ranges) share one auto-scaled domain.
-function LineChart({ series, markers = [], width, height, xFmt, ariaLabel }: {
-  series: Series[]; markers?: SolvedMarker[]; width: number; height: number; xFmt: (v: number) => string; ariaLabel: string
+function LineChart({ series, markers = [], goal, width, height, xFmt, ariaLabel }: {
+  series: Series[]; markers?: SolvedMarker[]; goal?: GoalLine; width: number; height: number; xFmt: (v: number) => string; ariaLabel: string
 }) {
   const allX: number[] = []
   const allY: number[] = []
@@ -121,8 +137,9 @@ function LineChart({ series, markers = [], width, height, xFmt, ariaLabel }: {
   const chartW = width  - PAD.l - PAD.r
   const chartH = height - PAD.t - PAD.b
 
-  const yMin = allY.length ? Math.min(0, ...allY) : 0
-  const yMax = allY.length ? Math.max(1, ...allY) : 1
+  // Fold the goal value into the domain so the gold line (and the headroom up to it) always shows.
+  const goalY = goal?.value
+  const { min: yMin, max: yMax } = chartYDomain(series, goalY)
   const yRange = yMax - yMin || 1
 
   const xMin = Math.min(...allX)
@@ -171,6 +188,14 @@ function LineChart({ series, markers = [], width, height, xFmt, ariaLabel }: {
           {xFmt(v)}
         </text>
       ))}
+
+      {/* Goal line: the env's "solved" score as a gold dashed rule, so you can see how far the curve
+          still has to climb. Drawn above the grid, below the data lines. Its label is an HTML overlay
+          (positioned by the parent) so it sits on the Y axis and is never clipped. */}
+      {goal && goalY != null && (
+        <line x1={PAD.l} y1={toY(goalY)} x2={PAD.l + chartW} y2={toY(goalY)}
+          stroke="var(--goal)" strokeWidth={1.5} strokeDasharray="6 4" opacity={0.9} />
+      )}
 
       {/* Area fill under the main smoothed line (behind the strokes) */}
       {series.map((s, i) => {
@@ -715,6 +740,22 @@ export default function RewardChart() {
       ? Math.max(0, Math.min(100, ((score - solveMin) / (solveMax - solveMin)) * 100))
       : null
 
+  // The gold "goal" line = the env's solved score, on the tabs whose y-axis IS a reward/fitness scale
+  // (not Loss, which has no solved target). Shows the user where the curve is heading.
+  const chartGoal =
+    (activeTab === 'reward' || activeTab === 'fitness') && solveMax > solveMin
+      ? { value: solveMax, label: t('chart.goal') }
+      : undefined
+  // Where the gold goal line sits in pixels (same y-scale as LineChart), so the HTML "Goal" label can
+  // be pinned to the Y axis just under it — readable and never clipped by the SVG edge.
+  const goalTopPx = (() => {
+    if (!chartGoal || size.h <= 0) return null
+    const chartH = size.h - PAD.t - PAD.b
+    if (chartH <= 0) return null
+    const { min, max } = chartYDomain(series, chartGoal.value)
+    return PAD.t + (1 - (chartGoal.value - min) / ((max - min) || 1)) * chartH
+  })()
+
   return (
     <section style={{
       flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden',
@@ -830,7 +871,22 @@ export default function RewardChart() {
         <HwStats />
         {hasChart ? (
           <>
-            <LineChart series={series} markers={markers} width={size.w} height={size.h} xFmt={xFmt} ariaLabel={t('chart.aria_label')} />
+            <LineChart series={series} markers={markers} goal={chartGoal} width={size.w} height={size.h} xFmt={xFmt} ariaLabel={t('chart.aria_label')} />
+            {/* "Goal" label pinned to the Y axis, just under the gold line, with an info popup that
+                explains what "solved" means (board games read on a −1…+1 scale, etc.). */}
+            {chartGoal && goalTopPx != null && (
+              <div style={{
+                position: 'absolute', top: goalTopPx + 3, left: PAD.l + 3,
+                display: 'inline-flex', alignItems: 'center', gap: 2, pointerEvents: 'none',
+              }}>
+                <span style={{
+                  fontSize: 10, fontWeight: 600, color: 'var(--goal)', fontFamily: 'var(--font-mono)',
+                }}>{chartGoal.label}</span>
+                <span style={{ pointerEvents: 'auto' }}>
+                  <ParamInfo paramId="goal" label={chartGoal.label} />
+                </span>
+              </div>
+            )}
             {activeTab === 'fitness' && (
               <div style={{
                 position: 'absolute', top: 6, left: PAD.l, display: 'flex', gap: 10,

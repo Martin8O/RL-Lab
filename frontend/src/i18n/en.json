@@ -139,7 +139,7 @@
   },
   "board": {
     "pick_side": "Pick a side and an opponent, then press Play",
-    "your_move": "Your move — click a highlighted cell",
+    "your_move": "Your move — click to play",
     "ai_thinking": "AI is thinking…",
     "watching": "Watching — {{mark}} to move",
     "training": "Training — watching the AI learn by self-play",
@@ -149,7 +149,9 @@
     "result_draw": "Draw (vs {{level}} AI)",
     "result_draw_watch": "Draw — perfect play on both sides",
     "result_winner": "{{mark}} wins",
+    "player_wins": "wins",
     "cell_play": "Play row {{row}}, column {{col}}",
+    "cell_drop": "Drop a disc into column {{col}}",
     "cell_taken": "Row {{row}}, column {{col}}: {{mark}}",
     "cell_empty": "Row {{row}}, column {{col}}: empty"
   },
@@ -182,6 +184,7 @@
     "title": "Reward Chart",
     "aria_label": "Training chart",
     "placeholder": "Start training to see the live chart",
+    "goal": "Goal",
     "tab_reward": "Reward",
     "tab_loss": "Loss",
     "tab_fitness": "Fitness",

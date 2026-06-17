@@ -40,9 +40,39 @@ def test_tictactoe_registered() -> None:
 
 def test_is_board_game_flag() -> None:
     assert board_engine.is_board_game(get_env("tictactoe")) is True
+    assert board_engine.is_board_game(get_env("connect_four")) is True  # G6c — the 2nd board game
     assert board_engine.is_board_game(get_env("cartpole")) is False
     assert board_engine.is_board_game(get_env("mpe_tag")) is False  # competitive but petting_zoo
     assert board_engine.is_board_game(None) is False
+
+
+def test_connect_four_registered() -> None:
+    """G6c — the SECOND board game ships as data + a renderer glyph map (no engine code): same family /
+    routing / trainability as Tic-Tac-Toe, only bigger (7 column actions over a 6×7 board)."""
+    spec = get_env("connect_four")
+    assert spec is not None, "connect_four not registered"
+    assert spec.gym_id == "connect_four"  # the OpenSpiel short name (resolved by board_engine)
+    assert spec.family == "board" and spec.action_space == "discrete"
+    assert spec.supported_algos == ["ppo"]  # routed to the board trainer by is_board_game
+    assert spec.human_playable is True and spec.competitive is True and spec.turn_based is True
+    assert spec.hw_requirement == "cpu" and spec.train_implemented is True  # CPU, trains like TTT
+    assert spec.min_score == -1.0 and spec.solved_score == 1.0  # same zero-sum chart scale
+
+
+def test_connect_four_listed_in_envs_api() -> None:
+    rows = client.get("/api/envs").json()
+    board = [r for r in rows if r["id"] == "connect_four"]
+    assert len(board) == 1 and board[0]["family"] == "board"
+
+
+def test_board_profile_is_game_tuned() -> None:
+    """G6c — the per-game training/eval profile: Tic-Tac-Toe trains/scores vs the medium MCTS, while the
+    far bigger Connect Four uses the beatable easy MCTS so its honest skill curve climbs (not flat at the
+    loss floor). Unlisted games fall back to the Tic-Tac-Toe profile."""
+    assert board_engine.board_profile("tic_tac_toe").eval_strength == "medium"
+    assert board_engine.board_profile("connect_four").eval_strength == "easy"
+    assert board_engine.board_profile("connect_four").teacher_end == "easy"
+    assert board_engine.board_profile("some_unlisted_game") == board_engine.board_profile("tic_tac_toe")
 
 
 def test_tictactoe_listed_in_envs_api() -> None:

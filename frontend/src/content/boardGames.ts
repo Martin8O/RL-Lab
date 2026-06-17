@@ -20,17 +20,27 @@ export interface BoardPiece {
 export interface BoardGameMeta {
   /** Map a (lower-cased) board glyph char → the piece to draw. Empty cells ("." / " ") are omitted. */
   pieces: Record<string, BoardPiece>
+  /**
+   * How a clicked cell maps to a game action (G6c). `'cell'` (default) — the action index *equals* the
+   * cell index, so a legal cell is directly clickable (Tic-Tac-Toe: 9 cells = 9 actions). `'column'` —
+   * the action is the cell's **column** and the piece drops to the lowest empty row (Connect Four: 7
+   * column-actions over a 6×7 board). The backend `BoardState` is identical either way; only this flag +
+   * `BoardStage`'s click/highlight maths differ. Everything else stays game-agnostic.
+   */
+  actionMode?: 'cell' | 'column'
   /** The idle board shown when the game is selected but no session is running. */
   idle: BoardState
 }
 
-function emptyBoard(rows: number, cols: number): BoardState {
+/** An empty idle board. `legalCount` is the number of legal actions to advertise (cells for `'cell'`
+ *  games, columns for `'column'` games) — only used to seed the idle render before the first frame. */
+function emptyBoard(rows: number, cols: number, legalCount: number = rows * cols): BoardState {
   const n = rows * cols
   return {
     cells: Array<string>(n).fill('.'),
     rows,
     cols,
-    legal_actions: Array.from({ length: n }, (_, i) => i),
+    legal_actions: Array.from({ length: legalCount }, (_, i) => i),
     current_player: 0,
     last_action: null,
     is_terminal: false,
@@ -47,6 +57,19 @@ export const BOARD_GAMES: Record<string, BoardGameMeta> = {
       o: { player: 1, glyph: '◯', color: 'var(--danger)' },
     },
     idle: emptyBoard(3, 3),
+  },
+  // Connect Four: glyph 'x' = player 0 (drops first), 'o' = player 1. Filled discs read as a Connect
+  // Four board. Both players use one glyph, so colour is the ONLY thing telling them apart — so we use
+  // two strongly-saturated, high-contrast hues (red vs cyan), NOT the pale --accent periwinkle, which
+  // at small disc size read as plain white. The action is the COLUMN (0–6), not the cell — actionMode
+  // 'column' tells BoardStage to map a clicked cell to its column and drop to the lowest empty row.
+  connect_four: {
+    pieces: {
+      x: { player: 0, glyph: '●', color: 'var(--danger)' },
+      o: { player: 1, glyph: '●', color: 'var(--viz-6)' },
+    },
+    actionMode: 'column',
+    idle: emptyBoard(6, 7, 7), // seven column-actions
   },
 }
 

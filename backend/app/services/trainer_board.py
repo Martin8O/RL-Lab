@@ -45,19 +45,19 @@ ProgressSink = Callable[[TrainingProgress], None]
 PredictPublisher = Callable[[Callable[[object], Any]], None]
 SnapshotSink = Callable[[CheckpointArtifact], None]
 
-# The reference opponent the live skill curve is measured against (a fixed, moderately strong MCTS),
-# and how many games per eval — cheap for a tiny game (sub-ms/move), enough to read a stable rate.
-_EVAL_SIMS = board_engine.STRENGTH_SIMS["medium"]
+# How many games per eval — cheap for these small games (sub-ms/move), enough to read a stable rate.
+# The eval *strength* and the training curriculum bounds are per-game (board_engine.board_profile, G6c):
+# Tic-Tac-Toe trains/scores vs medium; Connect Four (a far bigger game) vs easy, so its honest skill
+# curve climbs instead of sitting pinned at the loss floor.
 _EVAL_GAMES = 20
 
 
-def _train_sims(round_idx: int, rounds: int) -> int:
-    """Training-opponent strength for a round — a gentle **easy → medium** MCTS curriculum so the net
-    faces progressively stronger play (better final policy) without a slow, near-perfect bot from step 0."""
-    easy, med = board_engine.STRENGTH_SIMS["easy"], board_engine.STRENGTH_SIMS["medium"]
+def _train_sims(round_idx: int, rounds: int, start_sims: int, end_sims: int) -> int:
+    """Training-opponent strength for a round — a gentle **start → end** MCTS curriculum (per the game's
+    profile) so the net faces progressively stronger play without a slow, near-perfect bot from step 0."""
     if rounds <= 1:
-        return med
-    return int(round(easy + (med - easy) * round_idx / (rounds - 1)))
+        return end_sims
+    return int(round(start_sims + (end_sims - start_sims) * round_idx / (rounds - 1)))
 
 
 def _opponent_move(game: Any, sims: int, seed: int) -> Callable[[Any], int]:
@@ -90,12 +90,12 @@ def _build_model(config: TrainConfig, game: Any, opponent_move: Callable[[Any], 
     )
 
 
-def _load_model(config: TrainConfig, game: Any, resume_blob: bytes) -> Any:
+def _load_model(config: TrainConfig, game: Any, resume_blob: bytes, opp_sims: int) -> Any:
     """Rebuild MaskablePPO from a saved ``board.zip`` and attach a fresh env (the loop resets it per
     round, so the opponent here only needs to match the obs/action spaces). ``num_timesteps`` restored."""
     from sb3_contrib import MaskablePPO
 
-    env = board_engine.make_self_play_env(game, _opponent_move(game, _EVAL_SIMS, config.seed), config.seed)
+    env = board_engine.make_self_play_env(game, _opponent_move(game, opp_sims, config.seed), config.seed)
     return MaskablePPO.load(io.BytesIO(resume_blob), env=env, device="cpu")
 
 
@@ -141,10 +141,19 @@ def train_board(
     rounds = max(1, (config.self_play or SelfPlayHyperparams()).rounds)
     started_at = time.monotonic()
 
+    # Per-game strengths (G6c): the eval reference + the easy→… teacher curriculum bounds. Defaults to
+    # the Tic-Tac-Toe profile, so TTT training is byte-identical; Connect Four trains/scores vs easy.
+    profile = board_engine.board_profile(gym_id)
+    eval_sims = board_engine.STRENGTH_SIMS[profile.eval_strength]
+    start_sims = board_engine.STRENGTH_SIMS[profile.teacher_start]
+    end_sims = board_engine.STRENGTH_SIMS[profile.teacher_end]
+
     model = (
-        _load_model(config, game, resume_blob)
+        _load_model(config, game, resume_blob, eval_sims)
         if resume_blob is not None
-        else _build_model(config, game, _opponent_move(game, _train_sims(0, rounds), config.seed))
+        else _build_model(
+            config, game, _opponent_move(game, _train_sims(0, rounds, start_sims, end_sims), config.seed)
+        )
     )
     per_round = max(1, config.total_timesteps // rounds)
     # Resume-aware budget for the progress bar: where this run started + its budget (so a resumed run
@@ -154,7 +163,7 @@ def train_board(
     rollout = [0]  # rollout counter → the metrics frame's "iteration" (work-done index)
     last_eval = [
         board_engine.eval_vs_mcts(
-            board_engine.build_board_predict(model), game, _EVAL_SIMS, _EVAL_GAMES, config.seed
+            board_engine.build_board_predict(model), game, eval_sims, _EVAL_GAMES, config.seed
         )
     ]
 
@@ -212,7 +221,8 @@ def train_board(
                 break
             # Rebuild the env with this round's teacher (curriculum); reset the step counter only on a
             # fresh run's first round.
-            model.set_env(board_engine.make_self_play_env(game, _opponent_move(game, _train_sims(r, rounds), config.seed + r), config.seed + r))
+            sims = _train_sims(r, rounds, start_sims, end_sims)
+            model.set_env(board_engine.make_self_play_env(game, _opponent_move(game, sims, config.seed + r), config.seed + r))
             model.learn(
                 per_round,
                 callback=callback,
@@ -220,7 +230,7 @@ def train_board(
             )
             # Round boundary (quiescent): eval the snapshot, refresh the preview, snapshot the checkpoint.
             last_eval[0] = board_engine.eval_vs_mcts(
-                board_engine.build_board_predict(model), game, _EVAL_SIMS, _EVAL_GAMES, config.seed
+                board_engine.build_board_predict(model), game, eval_sims, _EVAL_GAMES, config.seed
             )
             publish()
             emit()

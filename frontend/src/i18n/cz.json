@@ -139,7 +139,7 @@
   },
   "board": {
     "pick_side": "Vyberte stranu a soupeře a stiskněte Hrát",
-    "your_move": "Váš tah — klikněte na zvýrazněné políčko",
+    "your_move": "Váš tah — klikněte a zahrajte",
     "ai_thinking": "AI přemýšlí…",
     "watching": "Sledujete — na tahu {{mark}}",
     "training": "Trénink — sledujete, jak se AI učí hrou sama proti sobě",
@@ -149,7 +149,9 @@
     "result_draw": "Remíza (proti AI {{level}})",
     "result_draw_watch": "Remíza — dokonalá hra na obou stranách",
     "result_winner": "Vyhrává {{mark}}",
+    "player_wins": "vyhrává",
     "cell_play": "Zahrát řádek {{row}}, sloupec {{col}}",
+    "cell_drop": "Vhodit žeton do sloupce {{col}}",
     "cell_taken": "Řádek {{row}}, sloupec {{col}}: {{mark}}",
     "cell_empty": "Řádek {{row}}, sloupec {{col}}: prázdné"
   },
@@ -182,6 +184,7 @@
     "title": "Graf odměn",
     "aria_label": "Tréninkový graf",
     "placeholder": "Spusťte trénink pro živý graf",
+    "goal": "Cíl",
     "tab_reward": "Odměna",
     "tab_loss": "Ztráta",
     "tab_fitness": "Fitness",
