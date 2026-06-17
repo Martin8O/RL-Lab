@@ -8,7 +8,9 @@ import {
   loadCheckpoint,
   saveCheckpoint,
 } from '../api/client'
-import type { CheckpointMeta } from '../api/types'
+import type { Algo, CheckpointMeta } from '../api/types'
+import { categoryLabel } from '../content/envCategories'
+import { formatCount } from '../format'
 
 // Compact Save / Load / Manage controls for the sidebar (under Run). The checkpoint *slots*
 // are no longer shown inline in the dashboard — Load opens a quick picker, Manage opens a full
@@ -24,9 +26,38 @@ function slotProgress(s: CheckpointMeta): { frac: number; text: string } {
     const frac = total > 0 ? (s.generation ?? 0) / total : 0
     return { frac, text: `gen ${s.generation ?? 0}/${total}` }
   }
-  const frac = s.total_timesteps > 0 ? s.timesteps / s.total_timesteps : 0
-  const k = (n: number) => (n >= 1000 ? `${Math.round(n / 1000)}k` : String(n))
-  return { frac, text: `${k(s.timesteps)}/${k(s.total_timesteps)}` }
+  if (s.algo === 'q_learning') {
+    // Q-learning is episodic: iteration = episodes elapsed, total_generations = episode budget.
+    const total = s.total_generations ?? 0
+    const frac = total > 0 ? (s.iteration ?? 0) / total : 0
+    return { frac, text: `${s.iteration ?? 0}/${total} ep` }
+  }
+  // The actual steps can slightly exceed the budget (a resumed run, or self-play's per-round rollout
+  // granularity), so the denominator is at least the numerator — never show "797k/500k".
+  const denom = Math.max(s.total_timesteps, s.timesteps)
+  const frac = denom > 0 ? s.timesteps / denom : 0
+  return { frac, text: `${formatCount(s.timesteps)}/${formatCount(denom)}` }
+}
+
+function algoLabel(t: (k: string) => string, algo: Algo): string {
+  if (algo === 'neuroevolution') return t('sidebar.algo_evo')
+  if (algo === 'q_learning') return t('sidebar.algo_q')
+  return t('sidebar.algo_ppo')
+}
+
+// % of the env's [min_score, solved_score] range the saved model reached (like the chart's skill %),
+// so a shaped env that starts negative still reads a meaningful fraction. null when unknown.
+function solvedPct(reward: number | null, min: number, solved: number): number | null {
+  if (reward == null || solved <= min) return null
+  return Math.max(0, Math.min(100, ((reward - min) / (solved - min)) * 100))
+}
+
+// Compact local save timestamp ("2026-06-17 14:32") from the slot's ISO created_at.
+function fmtSaveDate(iso: string): string {
+  const d = new Date(iso)
+  if (isNaN(d.getTime())) return ''
+  const p = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`
 }
 
 function ctrlBtn(primary: boolean): CSSProperties {
@@ -65,31 +96,50 @@ function SlotCard({ slot, manage, onLoad, onDelete }: {
   onDelete: (s: CheckpointMeta) => void
 }) {
   const { t } = useTranslation()
+  const locale = useAppStore((s) => s.locale)
+  const envs = useAppStore((s) => s.envs)
   const { frac, text } = slotProgress(slot)
+
+  // Headline = "Category · Game · Algo" (from the live env registry). The training amount lives only
+  // in the bottom-right "steps/total" now (no longer duplicated here). When the game name already
+  // contains its category (e.g. "MiniGrid Door Key" in the MiniGrid family), the category is dropped
+  // so it isn't shown twice.
+  const env = envs.find((e) => e.id === slot.env_id)
+  const category = env ? categoryLabel(env.family)[locale] : ''
+  const game = env ? env.display_name[locale] : slot.env_id
+  const showCategory = !!category && !game.toLowerCase().includes(category.toLowerCase())
+  const headline = [showCategory ? category : null, game, algoLabel(t, slot.algo)].filter(Boolean).join(' · ')
+  const pct = env ? solvedPct(slot.reward, env.min_score, env.solved_score) : null
+  const date = fmtSaveDate(slot.created_at)
+  const progressPct = Math.round(Math.min(1, frac) * 100)
 
   const meta = (
     <>
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 6 }}>
         <span style={{
-          fontSize: 12, fontWeight: 600, color: 'var(--text-strong)',
+          fontSize: 12, fontWeight: 600, color: 'var(--text-strong)', minWidth: 0,
           overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-        }} title={slot.label}>
-          {slot.label}
+        }} title={headline}>
+          {headline}
         </span>
-        {slot.reward != null && (
+        {pct != null && (
           <span style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--success)', flexShrink: 0 }}>
-            {slot.reward.toFixed(1)}
+            {Math.round(pct)}% {t('saveload.solved')}
           </span>
         )}
       </div>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6, marginTop: 3 }}>
-        <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>
-          {slot.algo === 'neuroevolution' ? t('sidebar.algo_evo') : t('sidebar.algo_ppo')} · {t('sidebar.seed')} {slot.seed}
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 6, marginTop: 3 }}>
+        <span style={{ fontSize: 10, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>
+          {t('sidebar.seed')} {slot.seed}{date && <span style={{ opacity: 0.7 }}> · {date}</span>}
         </span>
-        <span style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>{text}</span>
+        {/* steps/total (small, like the date) — % progress (blue, like the bar, sized like % solved) */}
+        <span style={{ flexShrink: 0, fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
+          <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{text}</span>
+          <span style={{ fontSize: 11, color: 'var(--accent)' }}> – {progressPct}% {t('saveload.progress')}</span>
+        </span>
       </div>
       <div style={{ height: 2, background: 'var(--border-default)', borderRadius: 1, marginTop: 5 }}>
-        <div style={{ width: `${Math.min(1, frac) * 100}%`, height: '100%', background: 'var(--accent)', borderRadius: 1 }} />
+        <div style={{ width: `${progressPct}%`, height: '100%', background: 'var(--accent)', borderRadius: 1 }} />
       </div>
     </>
   )
@@ -145,7 +195,7 @@ function Modal({ title, hint, onClose, children }: {
         onClick={(e) => e.stopPropagation()}
         role="dialog" aria-modal="true" aria-label={title}
         style={{
-          width: 'min(440px, 92vw)', maxHeight: '74vh', display: 'flex', flexDirection: 'column',
+          width: 'min(560px, 94vw)', maxHeight: '74vh', display: 'flex', flexDirection: 'column',
           background: 'var(--surface-1)', border: '1px solid var(--border-default)',
           borderRadius: 'var(--radius-xl)', boxShadow: 'var(--shadow-popover)', overflow: 'hidden',
         }}

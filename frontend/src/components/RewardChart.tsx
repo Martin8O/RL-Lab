@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { useAppStore } from '../store/useAppStore'
 import type { ChartTab } from '../store/useAppStore'
 import { skillScaleFor } from '../content/skill'
+import { formatCount } from '../format'
 import { fetchRuns, fetchRun, deleteRun } from '../api/client'
 import type { RunDetail, RunMeta } from '../api/types'
 import SkillMeter from './SkillMeter'
@@ -27,11 +28,7 @@ function computeEma(values: (number | null)[], alpha: number): (number | null)[]
 
 // ── Format helpers ───────────────────────────────────────────────────────────
 
-function fmtSteps(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
-  if (n >= 1_000)     return `${Math.round(n / 1_000)}k`
-  return String(n)
-}
+const fmtSteps = formatCount  // shared "use M past 1000k" formatter
 
 function fmtGen(n: number): string {
   return String(Math.round(n))
@@ -62,6 +59,7 @@ function niceTicks(min: number, max: number, count = 4): number[] {
 }
 
 function fmtTick(v: number): string {
+  if (Math.abs(v) >= 1_000_000) return `${(v / 1_000_000).toFixed(1)}M`
   if (Math.abs(v) >= 1000) return `${(v / 1000).toFixed(0)}k`
   if (v % 1 !== 0)         return v.toFixed(1)
   return String(v)
@@ -458,6 +456,8 @@ export default function RewardChart() {
   const lastEvolution   = useAppStore((s) => s.lastEvolution)
   const qLearningHistory = useAppStore((s) => s.qLearningHistory)
   const lastQLearning   = useAppStore((s) => s.lastQLearning)
+  const maHistory       = useAppStore((s) => s.maHistory)
+  const lastMa          = useAppStore((s) => s.lastMa)
   const selectedEnvId   = useAppStore((s) => s.selectedEnvId)
   const envs            = useAppStore((s) => s.envs)
   const emaAlpha        = useAppStore((s) => s.emaAlpha)
@@ -535,12 +535,33 @@ export default function RewardChart() {
   const win = <T,>(arr: T[]): T[] => (chartWindow > 0 ? arr.slice(-chartWindow) : arr)
   const accent = 'var(--accent)'
 
+  // Competitive multi-agent self-play (simple_tag, G7b-2): the reward tab draws TWO species lines
+  // (predators vs. prey) from the ecosystem frames instead of one. Colours match the swarm canvas
+  // (predators --danger red, prey --accent blue).
+  const chartEnv = envs.find((e) => e.id === selectedEnvId)
+  const isMa = algo === 'ppo' && chartEnv?.family === 'petting_zoo' && chartEnv?.competitive === true
+  const PRED_COLOR = 'var(--danger)'
+  const speciesVal = (m: typeof maHistory[number], role: string): number | null =>
+    m.species.find((s) => s.role === role)?.ep_rew_mean ?? null
+
   // Build the active tab's live series (each shares this tab's x[]). Assigned in every branch
   // of the exhaustive if/else below, so no initializer is needed.
   let liveSeries: Series[]
   let xFmt = fmtSteps
 
-  if (activeTab === 'reward' && algo === 'q_learning') {
+  if (activeTab === 'reward' && isMa) {
+    // Two co-evolving species: predator (headline) + prey, both x = cumulative env steps.
+    const v = win(maHistory)
+    const lx = v.map((m) => m.timesteps)
+    const pred = v.map((m) => speciesVal(m, 'adversary'))
+    const prey = v.map((m) => speciesVal(m, 'agent'))
+    liveSeries = [
+      { x: lx, values: pred, color: PRED_COLOR, width: 1, opacity: 0.25 },
+      { x: lx, values: computeEma(pred, emaAlpha), color: PRED_COLOR, width: 2, dot: true },
+      { x: lx, values: prey, color: accent, width: 1, opacity: 0.25 },
+      { x: lx, values: computeEma(prey, emaAlpha), color: accent, width: 2, dot: true },
+    ]
+  } else if (activeTab === 'reward' && algo === 'q_learning') {
     // Q-learning's learning curve: mean episode return per report, x = episode (its own unit).
     const v = win(qLearningHistory)
     const lx = v.map((q) => q.episode)
@@ -656,6 +677,21 @@ export default function RewardChart() {
     if (qLearningHistory.length >= 2) {
       const a = qLearningHistory[qLearningHistory.length - 2]
       const b = qLearningHistory[qLearningHistory.length - 1]
+      const dt = b.elapsed - a.elapsed
+      if (dt > 0) sps = (b.timesteps - a.timesteps) / dt
+    }
+  } else if (isMa) {
+    // Competitive self-play: progress = cumulative steps; the headline "score" is the predator return
+    // (its scale is the env's min/solved). The prey line + round caption live in the chart legend.
+    const m = lastMa
+    hasStats = !!m
+    trainPct = m && m.total_timesteps > 0 ? Math.min(100, (m.timesteps / m.total_timesteps) * 100) : null
+    score = m ? speciesVal(m, 'adversary') : null
+    steps = m?.timesteps
+    elapsed = m?.elapsed
+    if (maHistory.length >= 2) {
+      const a = maHistory[maHistory.length - 2]
+      const b = maHistory[maHistory.length - 1]
       const dt = b.elapsed - a.elapsed
       if (dt > 0) sps = (b.timesteps - a.timesteps) / dt
     }
@@ -803,6 +839,26 @@ export default function RewardChart() {
                 <LegendDot color="var(--viz-2)" label={t('chart.series_best')} />
                 <LegendDot color="var(--viz-1)" label={t('chart.series_avg')} />
                 <LegendDot color="var(--viz-3)" label={t('chart.series_worst')} />
+              </div>
+            )}
+            {/* Competitive self-play (simple_tag): predator/prey legend + which species is learning now. */}
+            {isMa && activeTab === 'reward' && (
+              <div style={{
+                position: 'absolute', top: 6, left: PAD.l, display: 'flex', gap: 10,
+                fontSize: 10, color: 'var(--text-muted)', alignItems: 'center', flexWrap: 'wrap',
+                maxWidth: '70%',
+              }}>
+                <LegendDot color={PRED_COLOR} label={t('species.predator')} />
+                <LegendDot color={accent} label={t('species.prey')} />
+                {lastMa && (
+                  <span style={{ fontFamily: 'var(--font-mono)' }}>
+                    {t('chart.ma_round', { n: lastMa.round, total: lastMa.total_rounds })}
+                    {' · '}
+                    {t('chart.ma_learning', {
+                      species: t(lastMa.learning_role === 'adversary' ? 'species.predator' : 'species.prey'),
+                    })}
+                  </span>
+                )}
               </div>
             )}
             {/* Overlaid past-run legend (dashed lines) */}

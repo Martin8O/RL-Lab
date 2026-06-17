@@ -52,6 +52,15 @@ class EnvSpec(BaseModel):
     # red (LunarLander begins ~-200 and a crash is ~-100), so the meter shows real progress
     # through the negative range instead of being pinned at 0% until the score turns positive.
     min_score: float = 0.0
+    # Competitive multi-agent only (simple_tag, G7b-2): the SECOND species' skill scale, so the
+    # two-line ecosystem chart can read each species against its own [floor, good] range. ``min_score``/
+    # ``solved_score`` are the **predator** (adversary) scale (the headline); these are the **prey**
+    # (agent) scale — a deep "frequently caught" floor and a "mostly escapes" good end (prey returns are
+    # negative). None for every single-species env. Competitive scales are inherently approximate (each
+    # species' raw return depends on how strong the opponent currently is), so these are reference lines,
+    # not exact skill — the two reward *curves* are the real signal.
+    prey_min_score: float | None = None
+    prey_solved_score: float | None = None
     # Recommended PPO training budget for this env (the ★ default in the sidebar). Harder envs
     # need far more steps than CartPole, so this is per-env data; the sidebar builds its step
     # dropdown as a ladder around this value (×0.2 … ×4) and the store seeds it on env switch.
@@ -1398,16 +1407,33 @@ for _mpe_row in _MPE_GAMES:
 # *different* obs sizes and *opposite* rewards: fast **predators** (``adversary`` — they share a
 # reward for touching the prey) chase a faster **prey** (``agent`` — penalised on contact), around
 # a couple of solid **obstacles**. That breaks SuperSuit's parameter-sharing bridge (it needs
-# identical spaces), so the trainer needs **per-species policies** — built in **G7b-2**. This first
-# step (G7b-1) registers the env as **watchable** (the existing swarm render already colours
-# ``adversary`` agents and ``obstacle`` landmarks) with training **gated off** until the per-species
-# trainer lands: ``train_implemented=False`` (the ADR-043 gate shows the CZ/EN "trainer coming" note)
-# and ``human_playable=False`` (a swarm has no single driver; competitive human play is G7b-3).
+# identical spaces), so the trainer learns **one shared policy per species** by **frozen-opponent
+# alternating self-play** — G7b-2, ``app.services.trainer_tag`` (ADR-048). Training is now built
+# (``train_implemented=True``); the run is still ``algo=="ppo"`` in the UI but routes to the
+# self-play trainer in the manager. ``human_playable=False`` stays (a swarm has no single human
+# driver; competitive human play is G7b-3).
 #
-# ``min_score`` / ``solved_score`` here are **provisional** (predator-side, the chart's eventual
-# focus) — unused while training is gated (no chart, no skill meter) and re-measured per-species in
-# G7b-2. ``competitive=True`` records the predator-vs-prey nature (data only; no UI wired to it yet).
+# ``min_score`` / ``solved_score`` are the **predator** (adversary) scale — the headline reward line;
+# ``prey_min_score`` / ``prey_solved_score`` are the **prey** (agent) scale (returns are negative —
+# a deep "caught" floor up to a "mostly escapes" near-0 good end). Measured from random-policy
+# rollouts (predator mean ≈ 3.6 / 16.7, prey mean ≈ −16 / −22 for 3v1 / 6v2); competitive scales are
+# inherently approximate (each species' raw return depends on how strong the *current* opponent is),
+# so they are chart reference lines, not exact skill — the two reward *curves* are the real signal.
 # ---------------------------------------------------------------------------
+
+
+def _self_play_hyperparams() -> dict[str, dict[str, HyperparamDef]]:
+    """The standard PPO knobs (one per-species net) plus the self-play ``rounds`` schedule (G7b-2).
+
+    simple_tag trains two shared policies by frozen-opponent alternating rounds (ADR-048); each
+    species' net is a normal ``MlpPolicy`` so it reuses the standard PPO block verbatim, and the only
+    extra tunable is how many times the two species alternate. ``rounds`` rides in the ``ppo`` block
+    because the run is still ``algo=="ppo"`` in the UI."""
+    hp = _standard_hyperparams()
+    hp["ppo"]["rounds"] = HyperparamDef(
+        type="int", default=8, recommended=8, min=2, max=20, step=1,
+    )
+    return hp
 
 
 def _mpe_tag_spec(
@@ -1419,21 +1445,23 @@ def _mpe_tag_spec(
     difficulty: Literal["beginner", "intermediate", "advanced"],
     min_score: float,
     solved_score: float,
+    prey_min_score: float,
+    prey_solved_score: float,
     default_total_timesteps: int,
     desc_en: str,
     desc_cz: str,
 ) -> EnvSpec:
-    """Build one Predator–Prey (simple_tag) EnvSpec — heterogeneous species, training-gated (G7b-1)."""
+    """Build one Predator–Prey (simple_tag) EnvSpec — heterogeneous species, per-species self-play (G7b-2)."""
     return EnvSpec(
         id=env_id,
         gym_id="simple_tag_v3",  # the mpe2 scenario module name (resolved by app.services.ma_env)
         display_name=Bilingual(en=display, cz=display),
         description=Bilingual(en=desc_en, cz=desc_cz),
         family="petting_zoo",
-        obs_type="vector",  # per-agent vector obs — but sizes DIFFER by species (16 vs 14), hence G7b-2
+        obs_type="vector",  # per-agent vector obs — sizes DIFFER by species (16 vs 14) → per-species nets
         action_space="discrete",  # Discrete(5): stay / left / right / down / up
-        supported_algos=["ppo"],  # per-species PPO (G7b-2); evo / Q-learning have no MA path
-        hyperparams=_standard_hyperparams(),
+        supported_algos=["ppo"],  # per-species PPO self-play (G7b-2); evo / Q-learning have no MA path
+        hyperparams=_self_play_hyperparams(),
         # PettingZoo parallel_env kwargs (consumed by ma_env.make_parallel_env). simple_tag takes
         # explicit species counts + obstacles instead of Simple Spread's single ``N``.
         make_kwargs={
@@ -1442,36 +1470,41 @@ def _mpe_tag_spec(
             "num_obstacles": n_obstacles,
             "max_cycles": 25,
             "continuous_actions": False,
+            # Observe the 2 NEAREST obstacles (zero-padded), so the obs size stays fixed (16/14) even
+            # though the obstacle count varies 2…6 per round/session — the variable-obstacle seam (G7b-2).
+            "num_landmark_neighbors": 2,
         },
-        solved_score=solved_score,  # provisional (predator-side); re-measured per-species in G7b-2
-        min_score=min_score,  # provisional; unused while training is gated
+        solved_score=solved_score,  # predator (adversary) scale — the headline reward line
+        min_score=min_score,  # predator floor (a do-nothing predator catches nothing ≈ 0)
+        prey_min_score=prey_min_score,  # prey "frequently caught" floor (returns are negative)
+        prey_solved_score=prey_solved_score,  # prey "mostly escapes" good end (near 0)
         default_total_timesteps=default_total_timesteps,
         play_step_scale=1,
         floor_scales_with_steps=False,
         human_playable=False,  # a swarm has no single human driver; competitive play is G7b-3
-        competitive=True,  # predators vs. prey (data only; no UI wired to it yet)
+        competitive=True,  # predators vs. prey → per-species self-play trainer (ADR-048)
         difficulty=difficulty,
         hw_requirement="cpu",  # small env; per-species PPO trains on CPU (the GPU desktop scales it)
-        train_implemented=False,  # per-species trainer not built yet (G7b-2) — watch-only for now
+        train_implemented=True,  # per-species frozen self-play trainer (G7b-2, trainer_tag.py)
     )
 
 
-# id, n_adversaries, n_good, n_obstacles, display, difficulty, min, solved, steps, desc EN, desc CZ
+# id, n_adversaries, n_good, n_obstacles, display, difficulty, pred_min, pred_solved, prey_min, prey_solved, steps, desc EN, desc CZ
 _MPE_TAG_GAMES: list[
-    tuple[str, int, int, int, str, Literal["beginner", "intermediate", "advanced"], float, float, int, str, str]
+    tuple[str, int, int, int, str, Literal["beginner", "intermediate", "advanced"], float, float, float, float, int, str, str]
 ] = [
-    ("mpe_tag", 3, 1, 2, "Predator–Prey (3 vs 1)", "intermediate", 0.0, 80.0, 500_000,
+    ("mpe_tag", 3, 1, 2, "Predator–Prey (3 vs 1)", "intermediate", 0.0, 80.0, -80.0, 0.0, 500_000,
      "Three cooperating predators chase a single, faster prey around a shared 2-D world dotted with "
      "two obstacles. The predators share a reward for every touch of the prey; the prey is penalised "
      "for being caught and for fleeing off-screen — so the two species learn opposite goals. The "
      "classic, accessible cousin of OpenAI's hide-and-seek and the gateway to emergent herding and "
-     "ambushing. (Watch-only for now — each species gets its own brain in the next step.)",
+     "ambushing. Each species trains its own shared brain by alternating self-play.",
      "Tři spolupracující predátoři honí jedinou, rychlejší kořist ve sdíleném 2-D světě se dvěma "
      "překážkami. Predátoři dostávají společnou odměnu za každý dotyk kořisti; kořist je trestána za "
      "chycení i za útěk mimo obrazovku — oba druhy se tak učí opačné cíle. Klasický a přístupný "
      "bratranec hry na schovávanou od OpenAI a brána ke vznikajícímu obkličování a léčkám. "
-     "(Zatím jen ke sledování — každý druh dostane vlastní „mozek“ v dalším kroku.)"),
-    ("mpe_tag_pack", 6, 2, 2, "Predator–Prey (6 vs 2)", "advanced", 0.0, 120.0, 1_000_000,
+     "Každý druh si střídavým self-play trénuje vlastní sdílený „mozek“."),
+    ("mpe_tag_pack", 6, 2, 2, "Predator–Prey (6 vs 2)", "advanced", 0.0, 120.0, -100.0, 0.0, 1_000_000,
      "The same predator–prey chase scaled up to a six-predator pack hunting two prey — richer pack "
      "coordination, more chances for the prey to split the hunters and escape, and a harder "
      "credit-assignment problem for both species. A vivid ecosystem to watch once each species has "

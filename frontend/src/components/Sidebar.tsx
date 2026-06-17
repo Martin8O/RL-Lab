@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { useAppStore } from '../store/useAppStore'
 import { useRunControls } from '../api/trainingControls'
 import type { Algo } from '../api/types'
+import { formatCount } from '../format'
 import ParamInfo from './ParamInfo'
 import SaveLoadControls from './SaveLoadControls'
 import EnvSelector from './EnvSelector'
@@ -274,17 +275,17 @@ function runBtn(kind: BtnKind, lg = false): CSSProperties {
 }
 
 // The step-budget dropdown is built per-env from the registry's default_total_timesteps: a
-// ladder of ×0.2 … ×4 around the recommended value, with ★ on the recommendation. So CartPole
-// (50k → 10k…200k) and LunarLander (500k → 100k…2M) each get an appropriate range.
-const STEP_FACTORS = [0.2, 0.5, 1, 2, 4]
+// ladder of ×0.2 … ×8 around the recommended value, with ★ on the recommendation. So CartPole
+// (50k → 10k…400k) and LunarLander (500k → 100k…4M) each get an appropriate range. The ×8 top rung
+// (= 2× the previous ×4 max) gives headroom for envs that keep improving past the default budget —
+// learning is rarely linear, so a hard game may need well beyond the recommended steps.
+const STEP_FACTORS = [0.2, 0.5, 1, 2, 4, 8]
 
 function stepsLadder(defaultSteps: number): number[] {
   return STEP_FACTORS.map((f) => Math.round((defaultSteps * f) / 1000) * 1000)
 }
 
-function formatSteps(n: number): string {
-  return n >= 1_000_000 ? `${n / 1_000_000}M` : `${Math.round(n / 1000)}k`
-}
+const formatSteps = formatCount  // shared "use M past 1000k" formatter
 
 // ── Sidebar ──────────────────────────────────────────────────────────────────
 
@@ -302,6 +303,8 @@ export default function Sidebar() {
   const setEvolutionParams = useAppStore((s) => s.setEvolutionParams)
   const qLearningParams = useAppStore((s) => s.qLearningParams)
   const setQLearningParams = useAppStore((s) => s.setQLearningParams)
+  const selfPlayParams  = useAppStore((s) => s.selfPlayParams)
+  const setSelfPlayParams = useAppStore((s) => s.setSelfPlayParams)
   const seed            = useAppStore((s) => s.seed)
   const setSeed         = useAppStore((s) => s.setSeed)
   const totalTimesteps  = useAppStore((s) => s.totalTimesteps)
@@ -361,6 +364,19 @@ export default function Sidebar() {
 
         {algo === 'ppo' && (
           <>
+            {/* Competitive multi-agent self-play (simple_tag, G7b-2): the round schedule — how many
+                times the two species alternate (predators learn vs. frozen prey, then prey vs. frozen
+                predators, …). Only simple_tag defines `rounds`, so it shows just for those envs. */}
+            {ppoDefs.rounds && (
+              <ParamSlider
+                id="rounds" label={t('sidebar.rounds')}
+                value={selfPlayParams.rounds}
+                min={ppoDefs.rounds.min!} max={ppoDefs.rounds.max!} step={ppoDefs.rounds.step!}
+                recommended={ppoDefs.rounds.recommended as number}
+                onChange={(v) => setSelfPlayParams({ rounds: Math.round(v) })}
+              />
+            )}
+
             {ppoDefs.learning_rate && (
               <ParamSlider
                 id="learning_rate" label={t('sidebar.learning_rate')}

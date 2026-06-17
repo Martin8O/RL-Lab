@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAppStore } from '../store/useAppStore'
-import { sendPlayAction, setFrameHandler, setPlayFrameHandler, setPreview, startPlay, stopPlay, watchPreview } from '../api/client'
-import type { AgentSprite, GridLayout, PlayFrame, PreviewFrame, WorldEntity } from '../api/types'
+import { fetchCheckpoints, sendPlayAction, setFrameHandler, setPlayFrameHandler, setPreview, startPlay, stopPlay, watchPreview } from '../api/client'
+import type { AgentSprite, CheckpointMeta, GridLayout, PlayFrame, PreviewFrame, WorldEntity } from '../api/types'
 import { keymapFor } from '../content/playKeymaps'
 import { DEFAULT_AGENT, DEFAULT_GRIDS, isGridEnv } from '../content/gridMaps'
 import PlayControls from './PlayControls'
@@ -15,6 +15,7 @@ import {
 } from './envGeometry'
 import {
   CartPoleStage, MountainCarStage, PendulumStage, AcrobotStage, LunarLanderStage, GridStage, SwarmStage,
+  type SwarmLegendItem,
 } from './EnvStages'
 
 const MIN_SPEED = 1
@@ -97,9 +98,8 @@ export default function EnvPreview() {
 
   const runLive      = trainState === 'running' || trainState === 'paused' || trainState === 'stopping'
   const playVisible  = playState !== 'idle'
-  // Multi-agent env whose per-species trainer isn't built yet (simple_tag, G7b): not playable and
-  // not trainable, but still *watchable* — we auto-stream a training-free random rollout (below).
-  const mpeWatchOnly = selectedEnv?.family === 'petting_zoo' && selectedEnv?.train_implemented === false
+  // Watch AI (G7b-2 follow-up): a multi-agent swarm can't be hand-played, but a *saved* model can be
+  // watched playing itself — `watching` is true while a checkpoint streams the trained ecosystem.
   const [watching, setWatching] = useState(false)
   // "live" = frames are (or just were) flowing for this env.
   const live         = (visual && runLive) || playState === 'playing' || (playVisible && hasFrame) || (watching && hasFrame)
@@ -114,6 +114,19 @@ export default function EnvPreview() {
     : isGridEnv(selectedEnvId) ? 'grid'
     : null
   const clientRender = clientKind !== null
+  // Swarm legend — colour-coded per env, matching drawSwarm (visual-labels rule): a competitive
+  // predator–prey world (simple_tag) shows Predators (red) / Prey (blue) / Obstacles (grey); the
+  // cooperative coverage world (simple_spread) shows Agents (blue dots) / Targets (open rings).
+  const swarmLegend: SwarmLegendItem[] = selectedEnv?.competitive
+    ? [
+        { color: 'var(--danger)', label: t('species.predator') },
+        { color: 'var(--accent)', label: t('species.prey') },
+        { color: 'var(--border-strong)', label: t('species.obstacles') },
+      ]
+    : [
+        { color: 'var(--accent)', label: t('envpreview.swarm_agents') },
+        { color: 'var(--text-muted)', label: t('envpreview.swarm_targets'), ring: true },
+      ]
   // Atari (image obs → server JPEG) gets a one-time, game-agnostic retro/CRT skin (scanlines + glow +
   // bezel) so all ~60 games read as deliberately retro instead of "tiny ugly pixels". A true vector
   // re-skin would need per-game object extraction, so this is the family-wide alternative (G4a follow-up).
@@ -130,38 +143,50 @@ export default function EnvPreview() {
     void setPreview({ visual: v, speed: s }).catch(() => {})
   }, [backendStatus])
 
-  // "Watch the ecosystem" (G7b): a not-yet-trainable multi-agent env (simple_tag) is neither
-  // playable nor trainable, so nothing would ever stream — auto-start a training-free preview
-  // (random rollout) while it's selected + Visual is on. The existing swarm frame pipeline draws
-  // it (predators red, prey blue, obstacles solid).
-  //
-  // Reconciler, not a naive start/stop: StrictMode double-invokes effects (mount→cleanup→mount) and
-  // each backend toggle is an async POST, so start-on-run / stop-on-cleanup calls race and can leave
-  // the singleton streamer stopped (the swarm never appears — the bug this fixes). We debounce to the
-  // *latest* desired env so the churn collapses into one call, and only send `stop` if WE started a
-  // watch (`watchStartedRef`) — otherwise reconciling a normal env would detach a live *training*
-  // preview, which shares the same streamer.
-  const watchWantRef = useRef<string | null>(null)
-  const watchStartedRef = useRef(false)
+  // Watch AI (G7b-2 follow-up): the saved checkpoints for THIS multi-agent env, picked in the footer
+  // bar. Refetched after a run reaches a terminal state (a fresh save may have appeared).
+  const isMaEnv = clientKind === 'mpe'
+  const [maCheckpoints, setMaCheckpoints] = useState<CheckpointMeta[]>([])
+  const [maCkpt, setMaCkpt] = useState<string>('')
   useEffect(() => {
-    // Block the auto-watch only while a play session is *actively* streaming (playState === 'playing'),
-    // NOT for terminal 'stopped'/'finished' states — a leftover stopped session (e.g. an earlier AI play
-    // of another env) must not keep the swarm from ever rendering. (MA envs aren't playable anyway.)
-    watchWantRef.current =
-      mpeWatchOnly && visual && backendStatus === 'online' && !runLive && playState !== 'playing' ? selectedEnvId : null
-    const id = window.setTimeout(() => {
-      const want = watchWantRef.current
-      if (want) {
-        watchStartedRef.current = true
-        void watchPreview(want, true).then(() => { if (watchWantRef.current === want) setWatching(true) }).catch(() => {})
-      } else if (watchStartedRef.current) {
-        watchStartedRef.current = false
-        setWatching(false)
-        void watchPreview('', false).catch(() => {})  // stop_watch ignores the id (detaches the streamer)
-      }
-    }, 50)
-    return () => window.clearTimeout(id)
-  }, [mpeWatchOnly, selectedEnvId, visual, backendStatus, runLive, playState])
+    // Only fetch for a multi-agent env; a stale list for a non-MA env is harmless (the footer that
+    // shows it only renders for clientKind 'mpe'), so no synchronous clear is needed here.
+    if (!isMaEnv || backendStatus !== 'online') return
+    void fetchCheckpoints().then((list) => {
+      const mine = list.filter((c) => c.env_id === selectedEnvId)
+      setMaCheckpoints(mine)
+      setMaCkpt((prev) => (mine.some((c) => c.id === prev) ? prev : (mine[0]?.id ?? '')))
+    }).catch(() => {})
+  }, [isMaEnv, selectedEnvId, backendStatus, trainState])
+
+  // The watch lifecycle. A ref mirrors `watching` so the env-switch / unmount cleanup can stop a
+  // lingering watch on the shared streamer without re-subscribing the effect to `watching`.
+  const watchStartedRef = useRef(false)
+  const startWatchAi = useCallback(async () => {
+    if (!selectedEnvId || !maCkpt) return
+    watchStartedRef.current = true
+    try { await watchPreview(selectedEnvId, true, maCkpt); setWatching(true) }
+    catch { watchStartedRef.current = false }
+  }, [selectedEnvId, maCkpt])
+  const stopWatchAi = useCallback(async () => {
+    watchStartedRef.current = false
+    setWatching(false)
+    try { await watchPreview('', false) } catch { /* ignore */ }
+  }, [])
+  // A starting training run (or a play session) takes over the shared streamer → reset the watch flag.
+  useEffect(() => {
+    if (watchStartedRef.current && (runLive || playState === 'playing')) {
+      watchStartedRef.current = false
+      setWatching(false)
+    }
+  }, [runLive, playState])
+  // Stop a lingering watch when leaving this env (or unmounting), so it doesn't keep streaming.
+  useEffect(() => () => {
+    if (watchStartedRef.current) {
+      watchStartedRef.current = false
+      void watchPreview('', false).catch(() => {})
+    }
+  }, [selectedEnvId])
 
   // One frame sink for both training-preview and play frames. A frame carries either client
   // -render state (CartPole → drive the SVG cart, no React render) or a JPEG (→ canvas).
@@ -626,7 +651,7 @@ export default function EnvPreview() {
             ) : clientKind === 'mpe' ? (
               <SwarmStage
                 envName={envName} canvasRef={swarmCanvasRef}
-                agentsLabel={t('envpreview.swarm_agents')} targetsLabel={t('envpreview.swarm_targets')}
+                legend={swarmLegend}
               />
             ) : (
               <LunarLanderStage
@@ -737,7 +762,16 @@ export default function EnvPreview() {
           Multi-agent envs can't be driven by a single human (G7a), so the play bar is replaced by a
           watch-only "What am I watching?" affordance — keeping the env explanation the play bar used
           to carry (its How-to-play guide) instead of leaving the swarm unlabelled. */}
-      {clientKind !== 'mpe' ? <PlayControls /> : <WatchInfo />}
+      {clientKind !== 'mpe' ? <PlayControls /> : (
+        <WatchInfo
+          checkpoints={maCheckpoints}
+          selected={maCkpt}
+          onSelect={setMaCkpt}
+          watching={watching}
+          onWatch={() => void startWatchAi()}
+          onStop={() => void stopWatchAi()}
+        />
+      )}
     </section>
   )
 }

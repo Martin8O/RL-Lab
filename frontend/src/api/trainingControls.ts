@@ -36,6 +36,7 @@ export function useRunControls(): RunControls {
   const hyperparams     = useAppStore((s) => s.hyperparams)
   const evolutionParams = useAppStore((s) => s.evolutionParams)
   const qLearningParams = useAppStore((s) => s.qLearningParams)
+  const selfPlayParams  = useAppStore((s) => s.selfPlayParams)
   const trainState      = useAppStore((s) => s.trainState)
   const gpuAvailable    = useAppStore((s) => s.gpuAvailable)
   const clearMetrics    = useAppStore((s) => s.clearMetrics)
@@ -56,6 +57,8 @@ export function useRunControls(): RunControls {
   // note ("pixel-based games … use the Play button") is doubly wrong here — it's vector, and there's
   // no Play button (a swarm has no single human driver) — so it gets its own note.
   const watchOnlyMa     = !!selectedEnv && selectedEnv.family === 'petting_zoo' && selectedEnv.human_playable === false
+  // Competitive multi-agent (simple_tag) runs PPO self-play, so it carries the round schedule (G7b-2).
+  const isSelfPlay      = !!selectedEnv && selectedEnv.family === 'petting_zoo' && selectedEnv.competitive === true
   const needsAbsentGpu  = !!selectedEnv && selectedEnv.hw_requirement === 'gpu' && !gpuAvailable
   const trainGated      = notImplemented || needsAbsentGpu
   const trainGatedReason: 'no_gpu' | 'not_implemented' | 'not_implemented_ma' | null =
@@ -80,6 +83,8 @@ export function useRunControls(): RunControls {
         // Each block is sent only for its own algorithm; null keeps the recorded config clean.
         evolution: algo === 'neuroevolution' ? evolutionParams : null,
         q_learning: algo === 'q_learning' ? qLearningParams : null,
+        // Competitive multi-agent self-play (simple_tag) is still algo "ppo" but carries the rounds.
+        self_play: isSelfPlay ? selfPlayParams : null,
       })
       setTrainState(status.state)
     } catch (err) {

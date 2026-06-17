@@ -21,6 +21,7 @@
     "title": "Parameters",
     "game_selector": "Game / Environment",
     "game_count": "Total games / environments available",
+    "total": "Total",
     "loading_envs": "Loading…",
     "algorithm": "Algorithm",
     "algo_ppo": "PPO",
@@ -36,6 +37,7 @@
     "n_hidden_layers": "Hidden Layers",
     "neurons_per_layer": "Neurons / Layer",
     "activation": "Activation",
+    "rounds": "Self-play Rounds",
     "population_size": "Population Size",
     "top_k_parents": "Top-K Parents",
     "mutation_rate": "Mutation Rate",
@@ -128,7 +130,12 @@
     "about": "What am I watching?",
     "title": "About {{env}}",
     "what_is_this": "What is this?",
-    "what_to_look_for": "What to look for"
+    "what_to_look_for": "What to look for",
+    "who_is_who": "Who's who",
+    "watch_ai": "Watch AI",
+    "stop": "Stop",
+    "pick_save": "Pick a saved model to watch",
+    "train_first": "Train and save a model to watch it play"
   },
   "playscore": {
     "title": "High Scores",
@@ -156,7 +163,17 @@
     "na_for_algo": "{{algo}} doesn't use the {{tab}} chart — see {{tabs}}",
     "series_best": "Best",
     "series_avg": "Gen avg",
-    "series_worst": "Worst"
+    "series_worst": "Worst",
+    "ma_round": "Round {{n}}/{{total}}",
+    "ma_learning": "learning: {{species}}"
+  },
+  "species": {
+    "predator": "Predators",
+    "prey": "Prey",
+    "obstacles": "Obstacles",
+    "predator_desc": "Slower hunters that share a reward for every touch of the prey — they learn to chase, corner and ambush.",
+    "prey_desc": "A faster runner, penalised for being caught — it learns to dodge, flee and use the space to escape.",
+    "obstacles_desc": "Fixed grey blocks scattered in the arena that both species must steer around."
   },
   "hwstats": {
     "cpu": "CPU",
@@ -220,7 +237,9 @@
     "pick_hint": "Pick a save to load",
     "moved_hint": "Save / load is in the sidebar, under the Run button",
     "saved": "Saved",
-    "loaded": "Loaded"
+    "loaded": "Loaded",
+    "solved": "solved",
+    "progress": "progress"
   },
   "runs": {
     "compare": "Compare",

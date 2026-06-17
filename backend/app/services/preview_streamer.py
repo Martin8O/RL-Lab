@@ -73,6 +73,10 @@ class PreviewStreamer:
         self._paused = False
         self._env_id: str | None = None
         self._predict: PredictFn | None = None
+        # Per-species {role -> predict} for competitive multi-agent self-play (simple_tag, G7b-2):
+        # each agent is driven by its own species' policy. None for every single-policy preview (where
+        # the one shared ``_predict`` drives every agent, e.g. cooperative simple_spread).
+        self._policies: dict[str, PredictFn] | None = None
 
     # -- wiring -----------------------------------------------------------------
 
@@ -112,6 +116,7 @@ class PreviewStreamer:
             self._paused = False
             self._env_id = env_id
             self._predict = None
+            self._policies = None
         self._ensure_loop()
         self._broadcast(self.state().model_dump())
 
@@ -148,6 +153,13 @@ class PreviewStreamer:
         """Publish the live model's predict fn; until then the loop uses random actions."""
         with self._lock:
             self._predict = predict
+            self._policies = None  # single-policy mode supersedes any per-species map
+
+    def set_policies(self, predicts: dict[str, PredictFn]) -> None:
+        """Publish a per-species {role -> predict} map (competitive self-play, simple_tag): the swarm
+        loop drives each agent with its own species' policy. Until then it uses random actions."""
+        with self._lock:
+            self._policies = dict(predicts)
 
     def set_paused(self, on: bool) -> None:
         """Freeze/unfreeze the preview in lock-step with training pause/resume, so a paused
@@ -160,6 +172,7 @@ class PreviewStreamer:
         with self._lock:
             self._run_active = False
             self._predict = None
+            self._policies = None
         self._broadcast(self.state().model_dump())
 
     # -- worker thread ----------------------------------------------------------
@@ -244,10 +257,21 @@ class PreviewStreamer:
         the client draws on a canvas. Like the single-agent loop it reads the policy *snapshot* the
         trainer publishes (numpy forward), never the live SB3 model (ADR-019).
         """
-        from app.services.ma_env import make_parallel_env
+        from app.envs.registry import get_env
+        from app.services.ma_env import (
+            _randomize_obstacles,
+            close_env,
+            make_parallel_env,
+            random_obstacle_count,
+        )
 
+        spec = get_env(env_id)
+        competitive = spec is not None and spec.competitive
+        rng = np.random.default_rng()
+        # simple_tag: a random obstacle count for this watch session + a re-rolled size/layout per episode.
+        obstacle_count = random_obstacle_count(rng) if competitive else None
         try:
-            env = make_parallel_env(env_id)
+            env = make_parallel_env(env_id, obstacle_count=obstacle_count)
         except Exception:  # noqa: BLE001 — a bad MA env must not crash anything
             logger.exception("Preview MA env creation failed for %s", env_id)
             return
@@ -262,6 +286,10 @@ class PreviewStreamer:
             while self._active_and_visual():
                 episode += 1
                 obs, _ = env.reset()
+                if competitive:  # re-roll obstacle sizes + non-overlapping positions each episode
+                    world = getattr(env.unwrapped, "world", None)
+                    if world is not None:
+                        _randomize_obstacles(world, getattr(env.unwrapped, "np_random", rng))
                 ep_reward = 0.0
                 step = 0
                 while env.agents and self._active_and_visual():
@@ -279,20 +307,26 @@ class PreviewStreamer:
                         self._emit_ma_frame(env, episode, step, ep_reward)
                     time.sleep(base_dt / self._current_speed())
         finally:
-            env.close()
+            close_env(env)  # serialize the global pygame.quit() against the trainer's MPE envs
 
     def _choose_ma_actions(self, env: Any, obs: dict[str, Any]) -> dict[str, Any]:
-        """One action per live agent: the shared policy applied to each agent's obs (random until
-        the trainer publishes a policy). A flaky predict falls back to a random action per-agent."""
+        """One action per live agent. Competitive self-play (simple_tag) publishes a per-species
+        {role -> predict} map, so each agent is driven by its own species' policy (predators by the
+        predator net, prey by the prey net); the cooperative case shares one ``_predict`` across all
+        agents. Random until the relevant policy is published; a flaky predict falls back to random."""
+        from app.services.ma_env import agent_role
+
         with self._lock:
             predict = self._predict
+            policies = dict(self._policies) if self._policies is not None else None
         actions: dict[str, Any] = {}
         for agent in env.agents:
-            if predict is None:
+            fn = policies.get(agent_role(agent)) if policies is not None else predict
+            if fn is None:
                 actions[agent] = env.action_space(agent).sample()
                 continue
             try:
-                actions[agent] = predict(obs[agent])
+                actions[agent] = int(fn(obs[agent]))
             except Exception:  # noqa: BLE001 — never let inference contention disturb the run
                 logger.debug("Preview MA predict failed; using random action", exc_info=True)
                 actions[agent] = env.action_space(agent).sample()

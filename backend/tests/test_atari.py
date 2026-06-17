@@ -123,20 +123,20 @@ def test_train_implemented_split_after_g4b() -> None:
     """After G4b the image-obs family splits: **Atari trains** (the CnnPolicy + AtariWrapper/frame-stack
     + CUDA seam is built), while **CarRacing stays gated** (its non-Atari image trainer is G3c-train).
     Every vector/discrete env — including the GPU-gated *vector* heavies (BipedalWalker/MuJoCo, MlpPolicy)
-    — trains too. ``train_implemented`` is False for exactly the not-yet-built trainers: the image
-    CarRacing (G3c-train) **and** the heterogeneous multi-agent ``simple_tag`` envs (their per-species
-    trainer is G7b-2 — registered watch-only first); a GPU box still keeps those gated via the backstop."""
-    not_yet = {"carracing", "mpe_tag", "mpe_tag_pack"}  # trainers not built yet (G3c-train, G7b-2)
+    and the competitive multi-agent ``simple_tag`` envs (per-species self-play, G7b-2) — trains too.
+    ``train_implemented`` is False for exactly the last not-yet-built trainer: the image CarRacing
+    (G3c-train); a GPU box still keeps it gated via the backstop."""
+    not_yet = {"carracing"}  # the only trainer not built yet (G3c-train — image CnnPolicy)
     for spec in list_envs():
         expected = spec.id not in not_yet
         assert spec.train_implemented is expected, (
             f"{spec.id}: train_implemented={spec.train_implemented} (obs_type={spec.obs_type})"
         )
-    # Spot-check both sides of the post-G4b split.
+    # Spot-check both sides of the split.
     assert get_env("pong").train_implemented is True  # type: ignore[union-attr]  # image, Atari trainer built (G4b)
     assert get_env("carracing").train_implemented is False  # type: ignore[union-attr]  # image, G3c-train pending
     assert get_env("bipedalwalker").train_implemented is True  # type: ignore[union-attr]
-    assert get_env("hopper").train_implemented is True  # type: ignore[union-attr]
+    assert get_env("mpe_tag").train_implemented is True  # type: ignore[union-attr]  # per-species self-play (G7b-2)
 
 
 def test_image_env_training_gated_even_with_a_gpu(monkeypatch: pytest.MonkeyPatch) -> None:

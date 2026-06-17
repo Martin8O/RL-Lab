@@ -160,6 +160,8 @@ function syncStoreFromStatus(status: TrainStatus): void {
   if (status.last_evolution) st.seedEvolution(status.last_evolution)
   // Same reconcile for Q-learning: repopulate the chart/stats + heatmap from the retained snapshot.
   if (status.last_q_learning) st.seedQLearning(status.last_q_learning, status.last_qtable)
+  // Same reconcile for competitive self-play (simple_tag): repopulate the two-line ecosystem chart.
+  if (status.last_ma_metrics) st.seedMa(status.last_ma_metrics)
 }
 
 /** React hook: opens the /ws connection and dispatches incoming frames. */
@@ -190,6 +192,8 @@ export function useTrainingWs(): void {
           useAppStore.getState().addEvolution(frame)
         } else if (frame.type === 'q_learning') {
           useAppStore.getState().addQLearning(frame)
+        } else if (frame.type === 'ma_metrics') {
+          useAppStore.getState().addMa(frame)
         } else if (frame.type === 'qtable') {
           useAppStore.getState().setQTable(frame)
         } else if (frame.type === 'highscore') {
@@ -367,13 +371,13 @@ export async function setPreview(config: PreviewConfig): Promise<PreviewState> {
   return res.json() as Promise<PreviewState>
 }
 
-/** Start/stop a training-free "watch the ecosystem" preview (G7b) — drives the streamer with a
- *  random rollout so a not-yet-trainable multi-agent env (simple_tag) is still watchable. */
-export async function watchPreview(envId: string, on: boolean): Promise<PreviewState> {
+/** Start/stop a training-free preview of a multi-agent env (G7b). With `checkpointId` it's **Watch AI**
+ *  — the saved model plays itself (both species' brains); without one, a random "watch the ecosystem". */
+export async function watchPreview(envId: string, on: boolean, checkpointId?: string | null): Promise<PreviewState> {
   const res = await fetch(`${API_BASE}/api/preview/watch`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ env_id: envId, on }),
+    body: JSON.stringify({ env_id: envId, on, checkpoint_id: checkpointId ?? null }),
   })
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
   return res.json() as Promise<PreviewState>

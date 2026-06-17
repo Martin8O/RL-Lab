@@ -53,8 +53,11 @@ and `last_q_learning` + `last_qtable` (Q-learning) so a reconnecting client repo
 |---|---|---|---|
 | GET | `/api/preview` | — | `PreviewState` |
 | POST | `/api/preview` | `PreviewConfig` (partial) | `PreviewState` |
+| POST | `/api/preview/watch` | `PreviewWatch` (`env_id`, `on`, `checkpoint_id?`) | `PreviewState` |
 
 Toggles the live visual (`visual`) and playback `speed` (clamped to `[1, 20]`). Decoupled from training.
+`/preview/watch` drives a training-free preview of a multi-agent env: with a `checkpoint_id` it is
+**Watch AI** (the saved `species.zip` plays itself — both species' brains); without one, a random rollout.
 
 ### Play vs AI (`/api/play`)
 | Method | Path | Body | Returns |
@@ -113,6 +116,7 @@ other text is echoed back as `{echo: <text>}` (the original A3 contract).
 | `evolution` | `EvolutionMetrics` | once per neuroevolution generation (Top-5 + mutation histogram) |
 | `q_learning` | `QLearningMetrics` | periodic tabular-Q report (x = `episode`; `ep_rew_mean` learning curve) |
 | `qtable` | `QTableFrame` | the live `[n_states × n_actions]` Q-table heatmap snapshot (decoupled, unlogged) |
+| `ma_metrics` | `MultiAgentMetrics` | competitive self-play (simple_tag, G7b-2): **both** species at once (`species[]` + `learning_role` + `round`/`total_rounds`) → the two-line ecosystem chart; `ep_rew_mean` mirrors the predator headline for high-score/archive |
 | `status` | `TrainStatus` | training lifecycle changes |
 | `frame` | `FrameMessage` | training-preview frame (server JPEG **or** client-render `state`) |
 | `preview` | `PreviewState` | preview settings changed |

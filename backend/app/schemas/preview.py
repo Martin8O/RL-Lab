@@ -104,8 +104,11 @@ class PreviewWatch(BaseModel):
     Drives the same streamer with **no** published policy → a random-action rollout, so a
     multi-agent env that is neither human-playable nor yet trainable (heterogeneous ``simple_tag``,
     whose per-species trainer lands in G7b-2) is still watchable as a moving swarm. ``on`` toggles
-    the watch; ``env_id`` names the env to render.
+    the watch; ``env_id`` names the env to render. ``checkpoint_id`` (optional) loads a saved model and
+    drives the watch with it — **Watch AI** for a non-playable multi-agent env (simple_tag): the saved
+    ecosystem plays itself (both species' trained brains). ``None`` → the random "watch the ecosystem".
     """
 
     env_id: str
     on: bool
+    checkpoint_id: str | None = None

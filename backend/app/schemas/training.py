@@ -43,6 +43,19 @@ class EvolutionHyperparams(BaseModel):
     episodes: int = 3
 
 
+class SelfPlayHyperparams(BaseModel):
+    """Tunable knobs for competitive multi-agent self-play (simple_tag, G7b-2).
+
+    The per-species PPO networks reuse :class:`PPOHyperparams` (one shared net per species, frozen
+    self-play, ADR-048). The only self-play-specific knob is ``rounds``: how many times the two
+    species alternate (each round = both species get one learning turn against the other's frozen
+    snapshot). More rounds = a deeper arms race but a longer run; the per-round budget is
+    ``total_timesteps / (rounds × n_species)``.
+    """
+
+    rounds: int = 8
+
+
 class QLearningHyperparams(BaseModel):
     """Tunable tabular Q-learning knobs (the 3rd algorithm, G2b).
 
@@ -77,6 +90,9 @@ class TrainConfig(BaseModel):
     hyperparams: PPOHyperparams = Field(default_factory=PPOHyperparams)
     evolution: EvolutionHyperparams | None = None
     q_learning: QLearningHyperparams | None = None
+    # Present only for competitive multi-agent self-play runs (simple_tag); None otherwise. The
+    # per-species PPO uses ``hyperparams``; this carries only the self-play round schedule (G7b-2).
+    self_play: SelfPlayHyperparams | None = None
 
 
 class TrainingMetrics(BaseModel):
@@ -227,6 +243,41 @@ class QTableFrame(BaseModel):
     table: QTable
 
 
+class SpeciesMetrics(BaseModel):
+    """One species' current learning stats inside a competitive self-play frame (simple_tag, G7b-2).
+
+    ``role`` is PettingZoo's species tag — ``"adversary"`` (predators) or ``"agent"`` (prey). The
+    return is per-agent (the shared net's mean episode return for that species). ``timesteps`` is the
+    species' own cumulative learned steps (it only grows during that species' learning turns).
+    """
+
+    role: str
+    ep_rew_mean: float | None
+    ep_len_mean: float | None
+    timesteps: int
+
+
+class MultiAgentMetrics(BaseModel):
+    """One competitive self-play frame, pushed over WS as {type:"ma_metrics", ...} (simple_tag, G7b-2).
+
+    Two species learn by alternating frozen-opponent rounds (ADR-048), so a single reward line can't
+    describe the run — this frame carries **both** species at once for the two-line "ecosystem" chart.
+    ``learning_role`` is whichever species is optimising right now (the other plays frozen this round).
+    ``ep_rew_mean`` mirrors the **predator** headline return so the generic run-history / high-score
+    paths (which read ``ep_rew_mean``) keep working without special-casing this frame.
+    """
+
+    type: Literal["ma_metrics"] = "ma_metrics"
+    round: int
+    total_rounds: int
+    learning_role: str
+    species: list[SpeciesMetrics]
+    ep_rew_mean: float | None  # predator (adversary) headline — drives high-score / archive
+    timesteps: int  # cumulative env steps across both species (the chart x-axis)
+    total_timesteps: int
+    elapsed: float
+
+
 class TrainStatus(BaseModel):
     """Lifecycle snapshot — returned by /api/train/* and pushed as {type:"status", ...}."""
 
@@ -248,4 +299,8 @@ class TrainStatus(BaseModel):
     # report. None for PPO / neuroevolution runs.
     last_q_learning: QLearningMetrics | None = None
     last_qtable: QTableFrame | None = None
+    # Latest competitive self-play frame (simple_tag), retained so a client connecting mid-run (or
+    # after one finishes) repopulates the two-line ecosystem chart without waiting for the next round.
+    # None for every single-policy run (PPO / neuroevolution / Q-learning).
+    last_ma_metrics: MultiAgentMetrics | None = None
     error: str | None = None

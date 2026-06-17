@@ -21,6 +21,7 @@
     "title": "Parametry",
     "game_selector": "Hra / Prostředí",
     "game_count": "Celkový počet dostupných her / prostředí",
+    "total": "Celkem",
     "loading_envs": "Načítání…",
     "algorithm": "Algoritmus",
     "algo_ppo": "PPO",
@@ -36,6 +37,7 @@
     "n_hidden_layers": "Skryté vrstvy",
     "neurons_per_layer": "Neurony / vrstva",
     "activation": "Aktivace",
+    "rounds": "Kola self-play",
     "population_size": "Velikost populace",
     "top_k_parents": "Top-K rodičů",
     "mutation_rate": "Míra mutace",
@@ -128,7 +130,12 @@
     "about": "Na co se dívám?",
     "title": "O prostředí {{env}}",
     "what_is_this": "Co to je?",
-    "what_to_look_for": "Čeho si všímat"
+    "what_to_look_for": "Čeho si všímat",
+    "who_is_who": "Kdo je kdo",
+    "watch_ai": "Sledovat AI",
+    "stop": "Zastavit",
+    "pick_save": "Vyber uložený model ke sledování",
+    "train_first": "Natrénuj a ulož model, ať ho můžeš sledovat hrát"
   },
   "playscore": {
     "title": "Nejlepší skóre",
@@ -156,7 +163,17 @@
     "na_for_algo": "{{algo}} nepoužívá graf {{tab}} — viz {{tabs}}",
     "series_best": "Nejlepší",
     "series_avg": "Průměr gen.",
-    "series_worst": "Nejhorší"
+    "series_worst": "Nejhorší",
+    "ma_round": "Kolo {{n}}/{{total}}",
+    "ma_learning": "učí se: {{species}}"
+  },
+  "species": {
+    "predator": "Predátoři",
+    "prey": "Kořist",
+    "obstacles": "Překážky",
+    "predator_desc": "Pomalejší lovci se sdílenou odměnou za každý dotek kořisti — učí se honit, zahnat do kouta a klást léčky.",
+    "prey_desc": "Rychlejší běžec trestaný za chycení — učí se uhýbat, prchat a využívat prostor k úniku.",
+    "obstacles_desc": "Pevné šedé bloky rozmístěné v aréně, kterým se oba druhy musí vyhýbat."
   },
   "hwstats": {
     "cpu": "CPU",
@@ -220,7 +237,9 @@
     "pick_hint": "Vyberte uložení, které chcete načíst",
     "moved_hint": "Uložit / načíst je v postranním panelu pod tlačítkem Spustit",
     "saved": "Uloženo",
-    "loaded": "Načteno"
+    "loaded": "Načteno",
+    "solved": "splněno",
+    "progress": "průběh"
   },
   "runs": {
     "compare": "Porovnat",

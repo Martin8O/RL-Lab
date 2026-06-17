@@ -55,6 +55,12 @@ export interface EnvSpec {
    *  (Atari, CarRacing): their CnnPolicy/GPU trainer isn't built (G4b/G3c-train), so training stays
    *  gated even on a GPU machine until that seam lands. Decouples "needs a GPU" from "trainer missing". */
   train_implemented: boolean
+  /** Competitive multi-agent only (simple_tag, G7b-2): the SECOND species' skill scale for the
+   *  two-line ecosystem chart. `min_score`/`solved_score` are the predator (headline) scale; these are
+   *  the prey scale (returns are negative — a deep "caught" floor up to a near-0 "escapes" good end).
+   *  null for every single-species env. */
+  prey_min_score?: number | null
+  prey_solved_score?: number | null
 }
 
 // --- System capabilities (G4a) ---------------------------------------------
@@ -111,6 +117,12 @@ export interface QLearningHyperparams {
   episodes: number
 }
 
+/** Competitive multi-agent self-play knobs (simple_tag, G7b-2). The per-species PPO nets reuse
+ *  PPOHyperparams; this carries only the round schedule (how many times the two species alternate). */
+export interface SelfPlayHyperparams {
+  rounds: number
+}
+
 export interface TrainConfig {
   env_id: string
   algo: Algo
@@ -121,6 +133,8 @@ export interface TrainConfig {
   evolution?: EvolutionHyperparams | null
   /** Present only for tabular Q-learning runs; null/omitted otherwise. */
   q_learning?: QLearningHyperparams | null
+  /** Present only for competitive multi-agent self-play runs (simple_tag); null/omitted otherwise. */
+  self_play?: SelfPlayHyperparams | null
 }
 
 /** WS frame: {type:"metrics", ...} pushed once per PPO rollout. */
@@ -231,6 +245,31 @@ export interface QTableFrame {
   table: QTable
 }
 
+/** One species' current learning stats inside a competitive self-play frame (simple_tag, G7b-2).
+ *  `role` is "adversary" (predators) or "agent" (prey); the return is per-agent (the shared net's
+ *  mean episode return); `timesteps` only grows during that species' learning turns. */
+export interface SpeciesMetrics {
+  role: string
+  ep_rew_mean: number | null
+  ep_len_mean: number | null
+  timesteps: number
+}
+
+/** WS frame: {type:"ma_metrics", ...} — one competitive self-play frame carrying BOTH species at
+ *  once (the two-line "ecosystem" chart). `learning_role` is whichever species is optimising now (the
+ *  other plays frozen this round). `ep_rew_mean` mirrors the predator headline (drives high-score). */
+export interface MultiAgentMetrics {
+  type: 'ma_metrics'
+  round: number
+  total_rounds: number
+  learning_role: string
+  species: SpeciesMetrics[]
+  ep_rew_mean: number | null
+  timesteps: number
+  total_timesteps: number
+  elapsed: number
+}
+
 // --- High scores (C2) ------------------------------------------------------
 // Mirrors backend/app/schemas/highscores.py — keep both sides in sync.
 
@@ -326,6 +365,9 @@ export interface TrainStatus {
    *  repopulate the chart / stats / heatmap on reconnect. null for PPO / neuroevolution runs. */
   last_q_learning: QLearningMetrics | null
   last_qtable: QTableFrame | null
+  /** Latest competitive self-play frame (simple_tag), retained so a late-joining client repopulates
+   *  the two-line ecosystem chart on reconnect. null for every single-policy run. */
+  last_ma_metrics: MultiAgentMetrics | null
   error: string | null
 }
 
@@ -558,6 +600,7 @@ export type TrainWsFrame =
   | EvolutionMetrics
   | QLearningMetrics
   | QTableFrame
+  | MultiAgentMetrics
   | TrainStatus
   | PreviewState
   | PreviewFrame

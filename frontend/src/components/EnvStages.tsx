@@ -225,19 +225,27 @@ function TaxiPieces({ agent, cx, cy }: {
 // (the `agents`/`world` frame fields). This component is just the canvas + a colour legend.
 export const SWARM_CANVAS_PX = 680  // square logical resolution; CSS scales it to fit the stage
 
-export function SwarmStage({ envName, canvasRef, agentsLabel, targetsLabel }: {
+// One swarm-legend entry: a colour swatch matching the actual canvas render + its label. `ring` draws
+// an open marker (simple_spread coverage targets); otherwise a filled dot (agents, predators, prey,
+// obstacles). Colours MUST match drawSwarm so the legend and the canvas read together (visual-labels rule).
+export interface SwarmLegendItem {
+  color: string
+  label: string
+  ring?: boolean
+}
+
+export function SwarmStage({ envName, canvasRef, legend }: {
   envName: string
   canvasRef: RefObject<HTMLCanvasElement | null>
-  agentsLabel: string
-  targetsLabel: string
+  legend: SwarmLegendItem[]
 }) {
   const dot = (color: string): CSSProperties => ({
     display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: color,
   })
-  const ring: CSSProperties = {
+  const ringStyle = (color: string): CSSProperties => ({
     display: 'inline-block', width: 10, height: 10, borderRadius: '50%',
-    border: '2px solid var(--text-muted)', boxSizing: 'border-box',
-  }
+    border: `2px solid ${color}`, boxSizing: 'border-box',
+  })
   return (
     <div style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
       <canvas
@@ -250,14 +258,13 @@ export function SwarmStage({ envName, canvasRef, agentsLabel, targetsLabel }: {
       />
       <div style={{
         display: 'flex', gap: 18, fontSize: 'var(--fs-label)', color: 'var(--text-muted)',
-        alignItems: 'center',
+        alignItems: 'center', flexWrap: 'wrap', justifyContent: 'center',
       }}>
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-          <span style={dot('var(--accent)')} /> {agentsLabel}
-        </span>
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-          <span style={ring} /> {targetsLabel}
-        </span>
+        {legend.map((it) => (
+          <span key={it.label} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            <span style={it.ring ? ringStyle(it.color) : dot(it.color)} /> {it.label}
+          </span>
+        ))}
       </div>
     </div>
   )

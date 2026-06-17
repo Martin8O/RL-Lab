@@ -3,14 +3,32 @@ import type { CSSProperties } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAppStore } from '../store/useAppStore'
 import { watchTipFor } from '../content/playGuides'
+import { formatCount } from '../format'
+import type { CheckpointMeta } from '../api/types'
 
-// Watch-only "What am I watching?" affordance (G7a follow-up). Watch-and-train envs with no single
-// human driver (the multi-agent swarm) hide the Play / How-to-play bar — taking the env explanation
-// with it. This restores it in the same footer slot: a button opening a modal that explains the env
-// (its registry description) and what to look for while it trains. Same modal chrome as PlayInstructions.
-export default function WatchInfo() {
+// Footer for a multi-agent env (no single human driver, so no Play bar). It carries **Watch AI** —
+// pick a saved model and watch the trained ecosystem play itself (both species' brains) — plus the
+// "What am I watching?" explainer (the env description + the colour-coded "who's who" legend). For an
+// env with no saves yet it just shows a "train + save first" hint beside the explainer (G7b-2).
+interface WatchInfoProps {
+  checkpoints: CheckpointMeta[]
+  selected: string
+  onSelect: (id: string) => void
+  watching: boolean
+  onWatch: () => void
+  onStop: () => void
+}
+
+// Compact label for the save picker: amount of training + when it was saved (MM-DD HH:MM).
+function ckptOptionLabel(c: CheckpointMeta): string {
+  const when = c.created_at.length >= 16 ? c.created_at.slice(5, 16).replace('T', ' ') : ''
+  return `${formatCount(c.timesteps)}${when ? ` · ${when}` : ''}`
+}
+
+export default function WatchInfo({ checkpoints, selected, onSelect, watching, onWatch, onStop }: WatchInfoProps) {
   const { t } = useTranslation()
   const [open, setOpen] = useState(false)
+  const hasCkpt = checkpoints.length > 0
 
   return (
     <div style={{
@@ -18,10 +36,48 @@ export default function WatchInfo() {
       background: 'var(--surface-1)', padding: '0 var(--space-3)', minHeight: 52,
       display: 'flex', alignItems: 'center', gap: 8,
     }}>
+      {/* Watch AI: a saved swarm playing itself (or a hint to train + save first) */}
+      {hasCkpt ? (
+        <>
+          <select
+            value={selected}
+            onChange={(e) => onSelect(e.target.value)}
+            disabled={watching}
+            aria-label={t('watch.pick_save')}
+            style={{
+              height: 'var(--control-sm)', maxWidth: 170, padding: '0 6px', cursor: watching ? 'default' : 'pointer',
+              background: 'var(--surface-2)', color: 'var(--text-strong)', fontSize: 'var(--fs-label)',
+              border: '1px solid var(--border-default)', borderRadius: 'var(--radius-md)',
+            }}
+          >
+            {checkpoints.map((c) => <option key={c.id} value={c.id}>{ckptOptionLabel(c)}</option>)}
+          </select>
+          <button
+            type="button"
+            onClick={watching ? onStop : onWatch}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 6,
+              height: 'var(--control-sm)', padding: '0 14px', cursor: 'pointer',
+              border: '1px solid transparent', borderRadius: 'var(--radius-md)',
+              fontSize: 'var(--fs-label)', fontWeight: 'var(--fw-semibold)', transition: 'var(--t-colors)',
+              background: watching ? 'var(--danger-surface)' : 'var(--accent)',
+              color: watching ? 'var(--danger)' : 'var(--accent-contrast)',
+            }}
+          >
+            {watching ? `■ ${t('watch.stop')}` : `▶ ${t('watch.watch_ai')}`}
+          </button>
+        </>
+      ) : (
+        <span style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)' }}>{t('watch.train_first')}</span>
+      )}
+
+      <div style={{ flex: 1, minWidth: 4 }} />
+
       <button
         type="button"
         onClick={() => setOpen(true)}
         title={t('watch.about')}
+        aria-label={t('watch.about')}
         style={{
           display: 'inline-flex', alignItems: 'center', gap: 7,
           height: 'var(--control-sm)', padding: '0 12px', cursor: 'pointer',
@@ -117,6 +173,17 @@ function WatchModal({ onClose }: { onClose: () => void }) {
               <p style={bodyText}>{env.description[locale]}</p>
             </Section>
           )}
+          {/* Colour-coded "who's who" for a competitive predator–prey world — markers match the swarm
+              canvas (red predators / blue prey / grey obstacles), one species per line (visual-labels rule). */}
+          {env?.competitive && (
+            <Section title={t('watch.who_is_who')}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
+                <LegendRow color="var(--danger)" term={t('species.predator')} desc={t('species.predator_desc')} />
+                <LegendRow color="var(--accent)" term={t('species.prey')} desc={t('species.prey_desc')} />
+                <LegendRow color="var(--border-strong)" term={t('species.obstacles')} desc={t('species.obstacles_desc')} />
+              </div>
+            </Section>
+          )}
           {tip && (
             <Section title={t('watch.what_to_look_for')}>
               <p style={bodyText}>{tip[locale]}</p>
@@ -129,6 +196,23 @@ function WatchModal({ onClose }: { onClose: () => void }) {
 }
 
 const bodyText: CSSProperties = { margin: 0, fontSize: 13, lineHeight: 1.5, color: 'var(--text)' }
+
+// One colour-coded legend line: a swatch matching the render + a bold term + its description, on its
+// own line — the "make labels visually attractive" rule (predators red / prey blue / obstacles grey).
+function LegendRow({ color, term, desc }: { color: string; term: string; desc: string }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+      <span aria-hidden style={{
+        flexShrink: 0, width: 11, height: 11, borderRadius: '50%', background: color,
+        display: 'inline-block', transform: 'translateY(1px)',
+      }} />
+      <span style={{ fontSize: 13, lineHeight: 1.5, color: 'var(--text)' }}>
+        <span style={{ fontWeight: 700, color: 'var(--text-strong)' }}>{term}</span>
+        {' — '}{desc}
+      </span>
+    </div>
+  )
+}
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (

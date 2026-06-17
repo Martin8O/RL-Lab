@@ -984,6 +984,28 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
     },
   },
 
+  rounds: {
+    general: {
+      en: '**Self-play rounds** — how many times the two species take turns learning.\nPredator and prey can\'t learn at the same time here, so training alternates: in each round the predators improve against a frozen copy of the current prey, then the prey improve against a frozen copy of the now-better predators. More rounds = a deeper back-and-forth arms race, but a longer run (the total step budget is split evenly across all the turns).',
+      cz: '**Kola self-play** — kolikrát se oba druhy vystřídají v učení.\nPredátor a kořist se tu nemůžou učit zároveň, takže se trénink střídá: v každém kole se predátoři zlepšují proti zmrazené kopii současné kořisti, pak se kořist zlepšuje proti zmrazené kopii teď už lepších predátorů. Víc kol = hlubší vzájemné „závody ve zbrojení“, ale delší běh (celkový rozpočet kroků se rozdělí rovnoměrně mezi všechny tahy).',
+    },
+    recommended: {
+      en: '8 is a good default — enough alternations to see both species visibly co-evolve. Raise it for a longer, deeper arms race; lower it for a quick look.',
+      cz: '8 je dobrá výchozí hodnota — dost střídání, aby bylo vidět, jak se oba druhy společně vyvíjejí. Zvyšte pro delší, hlubší závod; snižte pro rychlý náhled.',
+    },
+    range: '2 – 20',
+    perEnv: {
+      mpe_tag: {
+        en: 'Watch the two reward curves on the chart: the predators (red) should climb as they learn to corner the prey, while the prey (blue) tries to claw its score back up by escaping. Each round flips which curve is moving.',
+        cz: 'Sledujte dvě křivky odměny v grafu: predátoři (červená) by měli stoupat, jak se učí kořist zahnat do kouta, zatímco kořist (modrá) se snaží svou skóre vyšplhat zpět únikem. Každé kolo přepne, která křivka se hýbe.',
+      },
+      mpe_tag_pack: {
+        en: 'With a six-predator pack and two prey the coordination is richer, so a few more rounds (10–14) can help both species settle into stable hunting and evasion patterns.',
+        cz: 'Se šestičlennou smečkou predátorů a dvěma kořistmi je koordinace bohatší, takže pár kol navíc (10–14) může oběma druhům pomoci ustálit se ve stabilních vzorcích lovu a úniku.',
+      },
+    },
+  },
+
   generations: {
     general: {
       en: '**Breeding rounds** — the evolution equivalent of training length.\nEach generation scores the whole population, keeps the best, and breeds the next. More generations give more chances to refine, up to the point the task is mastered.',

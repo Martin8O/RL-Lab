@@ -17,10 +17,11 @@ import numpy as np
 from app.envs.registry import get_env, list_envs
 from app.main import app
 from app.schemas.preview import AgentSprite, WorldEntity
-from app.schemas.training import PPOHyperparams, TrainConfig
+from app.schemas.training import PPOHyperparams, SelfPlayHyperparams, TrainConfig
 from app.services import ma_env
 from app.services.train_control import TrainControl
 from app.services.trainer_ppo import train_ppo
+from app.services.trainer_tag import _load_models, train_tag
 from fastapi.testclient import TestClient
 
 client = TestClient(app)
@@ -148,22 +149,27 @@ def test_ppo_trains_on_mpe_via_supersuit_bridge() -> None:
     assert metrics[-1].timesteps >= 768
 
 
-# -- Predator–Prey (simple_tag) — heterogeneous species, watch-only first step (G7b-1) -------------
+# -- Predator–Prey (simple_tag) — heterogeneous species, per-species self-play (G7b-2) -------------
 
 MPE_TAG = ["mpe_tag", "mpe_tag_pack"]
 
 
-def test_mpe_tag_registered_watch_only() -> None:
+def test_mpe_tag_registered_trainable() -> None:
     for eid in MPE_TAG:
         spec = get_env(eid)
         assert spec is not None, f"{eid} not registered"
         assert spec.family == "petting_zoo"
         assert spec.gym_id == "simple_tag_v3"  # the mpe2 scenario module name
         assert spec.supported_algos == ["ppo"]
-        assert spec.competitive is True  # predators vs. prey
+        assert spec.competitive is True  # predators vs. prey → per-species self-play trainer (G7b-2)
         assert spec.human_playable is False  # a swarm has no single human driver (play is G7b-3)
-        assert spec.train_implemented is False  # per-species trainer not built yet (G7b-2)
+        assert spec.train_implemented is True  # frozen self-play trainer (G7b-2, trainer_tag.py)
         assert spec.hw_requirement == "cpu"
+        # The prey (second species) has its own skill scale for the two-line ecosystem chart.
+        assert spec.prey_min_score is not None and spec.prey_solved_score is not None
+        assert spec.prey_min_score < spec.prey_solved_score  # negative floor up to a near-0 good end
+        # The self-play round schedule is an exposed tunable (in the ppo block since algo stays "ppo").
+        assert "rounds" in spec.hyperparams["ppo"]
 
 
 def test_mpe_tag_make_kwargs_carry_species_counts() -> None:
@@ -198,14 +204,65 @@ def test_mpe_tag_is_heterogeneous_with_roles_and_obstacles() -> None:
         env.close()
 
 
-def test_mpe_tag_training_is_gated() -> None:
-    """train_implemented=False → the manager backstop rejects a training start (not a 5xx)."""
-    res = client.post(
-        "/api/train/start",
-        json={"env_id": "mpe_tag", "algo": "ppo", "seed": 0, "total_timesteps": 1000,
-              "hyperparams": {}},
+def test_make_species_vec_env_isolates_each_species() -> None:
+    """The per-species bridge exposes ONLY the learner species (homogeneous again → SuperSuit can
+    parameter-share it): 3 predators of obs 16, or 1 prey of obs 14 — the heterogeneity that needs
+    two policies. The opponent species is stepped by the frozen policy inside the wrapper."""
+    adv_vec = ma_env.make_species_vec_env("mpe_tag", "adversary")
+    try:
+        assert adv_vec.num_envs == 3  # 3 predators stacked as 3 sub-envs (parameter sharing)
+        assert adv_vec.observation_space.shape == (16,)
+        assert int(adv_vec.action_space.n) == 5
+    finally:
+        ma_env.close_env(adv_vec)
+    prey_vec = ma_env.make_species_vec_env("mpe_tag", "agent")
+    try:
+        assert prey_vec.num_envs == 1  # the single prey
+        assert prey_vec.observation_space.shape == (14,)  # DIFFERENT obs size → can't parameter-share
+    finally:
+        ma_env.close_env(prey_vec)
+
+
+def test_species_helpers() -> None:
+    assert ma_env.species_present("mpe_tag") == ["adversary", "agent"]  # predators first (headline)
+    assert ma_env.agent_role("adversary_2") == "adversary"
+    assert ma_env.agent_role("agent_0") == "agent"
+    assert ma_env.is_competitive_ma(get_env("mpe_tag")) is True
+    assert ma_env.is_competitive_ma(get_env("mpe_spread")) is False  # cooperative, not competitive
+    assert ma_env.is_competitive_ma(get_env("cartpole")) is False
+
+
+def test_train_tag_self_play_smoke() -> None:
+    """train_tag learns one shared policy per species by frozen-opponent alternating rounds, emitting a
+    two-species frame, publishing BOTH species' preview policies, and snapshotting a packed two-model
+    checkpoint that round-trips. The same path the manager uses for a competitive MA run, on CPU."""
+    frames: list = []
+    policy_pubs: list = []
+    snapshots: list = []
+    config = TrainConfig(
+        env_id="mpe_tag", algo="ppo", seed=0, total_timesteps=2000,
+        hyperparams=PPOHyperparams(n_steps=128, batch_size=64),
+        self_play=SelfPlayHyperparams(rounds=2),
     )
-    assert 400 <= res.status_code < 500
+    terminal = train_tag(
+        config, "simple_tag_v3", TrainControl(),
+        frames.append, policy_pubs.append, snapshots.append,
+    )
+    assert terminal == "finished"
+    assert frames, "no ecosystem metrics frames"
+    # Every frame carries BOTH species; both learning roles appear across the run (each gets a turn).
+    assert all({s.role for s in f.species} == {"adversary", "agent"} for f in frames)
+    assert {f.learning_role for f in frames} == {"adversary", "agent"}
+    assert all(set(p.keys()) == {"adversary", "agent"} for p in policy_pubs)  # both preview policies
+    # The packed checkpoint round-trips into two correctly-shaped models (16-obs predator, 14-obs prey).
+    assert snapshots and snapshots[-1].artifact_name == "species.zip"
+    models = _load_models(snapshots[-1].blob, config, ["adversary", "agent"])
+    try:
+        assert models["adversary"].observation_space.shape == (16,)
+        assert models["agent"].observation_space.shape == (14,)
+    finally:
+        for m in models.values():
+            ma_env.close_env(m.env)
 
 
 def test_preview_watch_endpoint_toggles_active() -> None:

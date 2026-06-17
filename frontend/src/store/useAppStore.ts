@@ -7,6 +7,7 @@ import type {
   EvolutionHyperparams,
   EvolutionMetrics,
   HighScore,
+  MultiAgentMetrics,
   PlayMode,
   PlayResult,
   PlayScores,
@@ -17,6 +18,7 @@ import type {
   QLearningMetrics,
   QTableFrame,
   HwStats,
+  SelfPlayHyperparams,
   TrainingMetrics,
   TrainingProgress,
   TrainState,
@@ -34,6 +36,8 @@ const PROGRESS_CAP = 10_800
 const EVOLUTION_CAP = 2_000
 // Q-learning reports ~300 frames per run; a generous cap covers several runs of history.
 const Q_LEARNING_CAP = 2_000
+// Self-play (simple_tag) emits a handful of ecosystem frames per round; a generous cap covers runs.
+const MA_CAP = 4_000
 
 const DEFAULT_HYPERPARAMS: PPOHyperparams = {
   learning_rate:   3e-4,
@@ -69,6 +73,11 @@ const DEFAULT_Q_PARAMS: QLearningHyperparams = {
   episodes:      5000,
 }
 
+// Matches the registry's ★ self-play block (simple_tag). `rounds` snaps from the registry on env switch.
+const DEFAULT_SELF_PLAY_PARAMS: SelfPlayHyperparams = {
+  rounds: 8,
+}
+
 // Per-env defaults: when the user picks a different game, the sidebar params + step budget snap
 // to *that* env's ★ recommended values from the registry (LunarLander wants very different
 // settings than CartPole). Falls back to the previous value for any param the env doesn't define.
@@ -78,19 +87,21 @@ function envDefaults(
     hyperparams: PPOHyperparams
     evolutionParams: EvolutionHyperparams
     qLearningParams: QLearningHyperparams
+    selfPlayParams: SelfPlayHyperparams
     totalTimesteps: number
   },
 ): {
   hyperparams: PPOHyperparams
   evolutionParams: EvolutionHyperparams
   qLearningParams: QLearningHyperparams
+  selfPlayParams: SelfPlayHyperparams
   totalTimesteps: number
 } | null {
   if (!spec) return null
   const ppo = spec.hyperparams?.ppo ?? {}
   const evo = spec.hyperparams?.neuroevolution ?? {}
   const ql = spec.hyperparams?.q_learning ?? {}
-  const num = (key: keyof PPOHyperparams | keyof EvolutionHyperparams | keyof QLearningHyperparams, block: Record<string, { recommended: number | string }>, fb: number) =>
+  const num = (key: string, block: Record<string, { recommended: number | string }>, fb: number) =>
     block[key] !== undefined ? Number(block[key].recommended) : fb
   return {
     hyperparams: {
@@ -120,6 +131,10 @@ function envDefaults(
       epsilon_decay: num('epsilon_decay', ql, prev.qLearningParams.epsilon_decay),
       episodes:      num('episodes', ql, prev.qLearningParams.episodes),
     },
+    // Self-play rounds rides in the ppo block (algo stays "ppo"); only simple_tag defines it.
+    selfPlayParams: {
+      rounds: Math.round(num('rounds', ppo, prev.selfPlayParams.rounds)),
+    },
     totalTimesteps: spec.default_total_timesteps || prev.totalTimesteps,
   }
 }
@@ -133,6 +148,7 @@ interface AppState {
   hyperparams:     PPOHyperparams
   evolutionParams: EvolutionHyperparams
   qLearningParams: QLearningHyperparams
+  selfPlayParams:  SelfPlayHyperparams   // G7b-2: competitive self-play round schedule (simple_tag)
   seed:            number
   totalTimesteps:  number
   emaAlpha:        number     // 1 = raw; 0.05 = heavy smoothing
@@ -159,6 +175,8 @@ interface AppState {
   qLearningHistory: QLearningMetrics[]  // per-report frames — feeds the reward chart (x=episode)
   lastQLearning:   QLearningMetrics | null
   lastQTable:      QTableFrame | null    // latest Q-table snapshot — feeds the heatmap panel
+  maHistory:       MultiAgentMetrics[]   // G7b-2: per-round ecosystem frames — the two-line chart
+  lastMa:          MultiAgentMetrics | null
   highScores:      Record<string, HighScore>  // all-time best per env id
 
   // ─ play vs AI (E2) ─────────────────────────────────────────
@@ -183,6 +201,7 @@ interface AppState {
   setHyperparams:     (h: Partial<PPOHyperparams>)      => void
   setEvolutionParams: (e: Partial<EvolutionHyperparams>) => void
   setQLearningParams: (q: Partial<QLearningHyperparams>) => void
+  setSelfPlayParams:  (s: Partial<SelfPlayHyperparams>) => void
   setSeed:            (s: number)                       => void
   setTotalTimesteps:  (n: number)                       => void
   setEmaAlpha:        (a: number)                       => void
@@ -199,6 +218,8 @@ interface AppState {
   addQLearning:       (q: QLearningMetrics)             => void
   setQTable:          (t: QTableFrame)                  => void
   seedQLearning:      (q: QLearningMetrics, t: QTableFrame | null) => void
+  addMa:              (m: MultiAgentMetrics)            => void
+  seedMa:             (m: MultiAgentMetrics)            => void
   setHighScore:       (hs: HighScore)                   => void
   setHighScores:      (list: HighScore[])               => void
   clearMetrics:       ()                                => void
@@ -226,6 +247,7 @@ export const useAppStore = create<AppState>()(
       hyperparams:     DEFAULT_HYPERPARAMS,
       evolutionParams: DEFAULT_EVOLUTION_PARAMS,
       qLearningParams: DEFAULT_Q_PARAMS,
+      selfPlayParams:  DEFAULT_SELF_PLAY_PARAMS,
       seed:            42,
       totalTimesteps:  50_000,
       emaAlpha:        0.3,
@@ -251,6 +273,8 @@ export const useAppStore = create<AppState>()(
       qLearningHistory: [],
       lastQLearning:   null,
       lastQTable:      null,
+      maHistory:       [],
+      lastMa:          null,
       highScores:      {},
 
       playState:        'idle',
@@ -292,6 +316,7 @@ export const useAppStore = create<AppState>()(
       setHyperparams:    (h)              => set((s) => ({ hyperparams: { ...s.hyperparams, ...h } })),
       setEvolutionParams:(e)              => set((s) => ({ evolutionParams: { ...s.evolutionParams, ...e } })),
       setQLearningParams:(q)              => set((s) => ({ qLearningParams: { ...s.qLearningParams, ...q } })),
+      setSelfPlayParams: (sp)             => set((s) => ({ selfPlayParams: { ...s.selfPlayParams, ...sp } })),
       setSeed:           (seed)           => set({ seed }),
       setTotalTimesteps: (n)              => set({ totalTimesteps: n }),
       setEmaAlpha:       (emaAlpha)       => set({ emaAlpha }),
@@ -388,6 +413,34 @@ export const useAppStore = create<AppState>()(
                 : Math.max(s.bestReward, q.ep_rew_mean),
         })),
 
+      // One frame per self-play round (simple_tag): append (capped), track the latest, fold the
+      // predator headline (ep_rew_mean) into the session-best like the other algorithms.
+      addMa: (m) =>
+        set((s) => ({
+          maHistory: [...s.maHistory, m].slice(-MA_CAP),
+          lastMa: m,
+          bestReward:
+            m.ep_rew_mean === null
+              ? s.bestReward
+              : s.bestReward === null
+                ? m.ep_rew_mean
+                : Math.max(s.bestReward, m.ep_rew_mean),
+        })),
+
+      // Late-join reconcile (mirrors seedQLearning): repopulate the ecosystem chart from the retained
+      // status snapshot. Only primes history when empty so a live frame isn't double-appended.
+      seedMa: (m) =>
+        set((s) => ({
+          lastMa: m,
+          maHistory: s.maHistory.length === 0 ? [m] : s.maHistory,
+          bestReward:
+            m.ep_rew_mean === null
+              ? s.bestReward
+              : s.bestReward === null
+                ? m.ep_rew_mean
+                : Math.max(s.bestReward, m.ep_rew_mean),
+        })),
+
       setHighScore:  (hs)   => set((s) => ({ highScores: { ...s.highScores, [hs.env_id]: hs } })),
       setHighScores: (list) =>
         set({ highScores: Object.fromEntries(list.map((hs) => [hs.env_id, hs])) }),
@@ -397,6 +450,7 @@ export const useAppStore = create<AppState>()(
           metricsHistory: [], progressHistory: [], lastProgress: null, bestReward: null,
           evolutionHistory: [], lastEvolution: null,
           qLearningHistory: [], lastQLearning: null, lastQTable: null,
+          maHistory: [], lastMa: null,
         }),
 
       // ─ play vs AI (E2) ────────────────────────────────────────
@@ -441,6 +495,7 @@ export const useAppStore = create<AppState>()(
         hyperparams:     s.hyperparams,
         evolutionParams: s.evolutionParams,
         qLearningParams: s.qLearningParams,
+        selfPlayParams:  s.selfPlayParams,
         seed:            s.seed,
         totalTimesteps:  s.totalTimesteps,
         emaAlpha:        s.emaAlpha,

@@ -17,6 +17,7 @@ from app.schemas.checkpoints import CheckpointMeta
 from app.schemas.training import (
     EvolutionMetrics,
     HwStatsFrame,
+    MultiAgentMetrics,
     QLearningMetrics,
     QTableFrame,
     TrainConfig,
@@ -28,6 +29,7 @@ from app.schemas.training import (
 from app.services.checkpoints import CheckpointArtifact, CheckpointStore, checkpoint_store
 from app.services.connection_manager import ConnectionManager, manager
 from app.services.highscores import HighScoreStore, highscores, make_meta
+from app.services.ma_env import is_competitive_ma
 from app.services.preview_streamer import preview_streamer
 from app.services.runs import RunStore, final_score, run_store, should_archive
 from app.services.system_info import gpu_available
@@ -89,6 +91,9 @@ class TrainingManager:
         # connecting after a finished run) sees the current chart/stats/heatmap immediately.
         self._last_q_learning: QLearningMetrics | None = None
         self._last_qtable: QTableFrame | None = None
+        # Latest competitive self-play frame (simple_tag, G7b-2), kept so a late-joining client sees
+        # the current two-line ecosystem chart immediately. None for every single-policy run.
+        self._last_ma_metrics: MultiAgentMetrics | None = None
         self._error: str | None = None
         # Latest model snapshot from the trainer + the run's metric frames — the raw material
         # "Save" persists into a checkpoint slot. Both reset when a fresh run launches.
@@ -149,6 +154,7 @@ class TrainingManager:
             self._last_evolution = None  # clear the previous run's evolution panels
             self._last_q_learning = None  # clear the previous run's Q-learning chart/stats
             self._last_qtable = None  # clear the previous run's heatmap
+            self._last_ma_metrics = None  # clear the previous run's ecosystem (self-play) chart
             self._error = None
             self._snapshot = None  # don't let a previous run's model be saved as this one's
             self._metrics_log = []
@@ -211,7 +217,10 @@ class TrainingManager:
         config = loaded.config
         # PPO continues the global step counter, so target an additional full budget on top of
         # where the checkpoint left off. Evolution continues by generation (handled in-trainer).
-        if config.algo == "ppo":
+        # Competitive self-play (simple_tag) is the exception: its budget is "rounds × per-round" and
+        # resume simply runs another full schedule, so it must NOT add the elapsed steps (that would
+        # inflate the per-round budget) — leave its total_timesteps as recorded.
+        if config.algo == "ppo" and not is_competitive_ma(spec):
             config = config.model_copy(
                 update={"total_timesteps": loaded.meta.timesteps + loaded.config.total_timesteps}
             )
@@ -313,6 +322,22 @@ class TrainingManager:
                     self._on_snapshot,
                     resume,
                 )
+            elif is_competitive_ma(get_env(config.env_id)):
+                # Heterogeneous, competitive multi-agent (simple_tag) → per-species frozen self-play
+                # (G7b-2, ADR-048). Still algo=="ppo" in the UI, but a different trainer: two shared
+                # policies (one per species) alternating against each other's frozen snapshot. Publishes
+                # BOTH species' preview policies and the two-line ecosystem metrics frame.
+                from app.services.trainer_tag import train_tag  # lazy: loads torch/SB3
+
+                terminal = train_tag(
+                    config,
+                    gym_id,
+                    control,
+                    self._emit_ma_metrics,
+                    self._publish_predicts,
+                    self._on_snapshot,
+                    resume,
+                )
             else:
                 from app.services.trainer_ppo import train_ppo  # lazy: loads torch/SB3
 
@@ -379,6 +404,12 @@ class TrainingManager:
         leader for neuroevolution) — never the live SB3 model, which would perturb training."""
         preview_streamer.set_policy(predict)
 
+    def _publish_predicts(self, predicts: dict[str, Callable[[object], object]]) -> None:
+        """Hand the preview a per-species {role -> predict} map for competitive self-play (simple_tag):
+        each agent is driven by its own species' decoupled snapshot, so the swarm renders real
+        predators vs. real prey as the two co-evolve (ADR-019 still holds — both are numpy snapshots)."""
+        preview_streamer.set_policies(predicts)
+
     def _emit_metrics(self, metrics: TrainingMetrics) -> None:
         frame = metrics.model_dump()
         with self._lock:
@@ -410,6 +441,18 @@ class TrainingManager:
         self._broadcast(frame)
         if m.ep_rew_mean is not None:
             self._record_highscore(m.ep_rew_mean, iteration=m.episode)
+
+    def _emit_ma_metrics(self, m: MultiAgentMetrics) -> None:
+        frame = m.model_dump()
+        with self._lock:
+            self._timesteps = m.timesteps
+            self._last_ma_metrics = m
+            self._metrics_log.append(frame)
+            del self._metrics_log[:-_METRICS_LOG_CAP]
+        self._broadcast(frame)
+        # The predator headline drives the high-score board (its solved_score is predator-side).
+        if m.ep_rew_mean is not None:
+            self._record_highscore(m.ep_rew_mean, iteration=m.round)
 
     def _emit_qtable(self, frame: QTableFrame) -> None:
         # The heatmap snapshot is *not* logged into _metrics_log (it is large and the chart/history
@@ -461,6 +504,7 @@ class TrainingManager:
             last_evolution=self._last_evolution,
             last_q_learning=self._last_q_learning,
             last_qtable=self._last_qtable,
+            last_ma_metrics=self._last_ma_metrics,
             error=self._error,
         )
 

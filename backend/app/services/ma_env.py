@@ -29,15 +29,121 @@ REST surface stay ML-free and fast to boot, exactly like the trainers and the si
 from __future__ import annotations
 
 import importlib
+import threading
 from typing import TYPE_CHECKING, Any
+
+from app.core.logging import get_logger
 
 if TYPE_CHECKING:
     from app.envs.registry import EnvSpec
+
+logger = get_logger(__name__)
+
+# MPE envs (mpe2) call the **process-global, non-thread-safe** ``pygame.init()`` on construction and
+# ``pygame.quit()`` on close — even headless (mpe2 builds an off-screen Surface unconditionally). With
+# the preview thread and the (per-species) trainer thread building / closing several envs concurrently,
+# two of those global calls can overlap and segfault on Windows (a hard access violation, not a Python
+# error). Serialize every mpe2 env **construction and close** behind one process lock so the global
+# pygame init/quit calls can never race. (The self-play trainer also keeps its envs persistent for the
+# whole run — see ``trainer_tag`` — so this lock is only contended a handful of times per run.)
+# Reentrant: closing a vec env re-enters via the wrapper's own guarded close on the same thread.
+_PYGAME_LOCK = threading.RLock()
+
+# Stiffer contact collisions for the competitive predator–prey world (simple_tag), so obstacles and
+# other agents are less easily passed through (the default 1e2 lets fast agents glide straight through).
+# MPE caps every entity at its own max_speed, so a stronger contact force just separates overlaps faster
+# without flinging anything off-arena. 2.5e2 is a gentler bump than the first 4e2 try — less bounce-back,
+# a bit more pass-through, still noticeably firmer than default. Cooperative simple_spread keeps the
+# default (its agents don't fight over obstacles). ADR-049.
+_TAG_CONTACT_FORCE = 250.0
+
+# Per-episode obstacle randomisation for simple_tag: the count varies per training round / watch session
+# (2…6, kept observable at a FIXED obs size by num_landmark_neighbors=2 — the policy sees the 2 nearest),
+# and each episode re-rolls every obstacle's size (−30 %…+50 % of the 0.2 base) and re-places them so they
+# don't overlap each other (the default reset scatters them and they sometimes touch). ADR-049.
+_BASE_OBSTACLE_SIZE = 0.2
+_OBSTACLE_SIZE_LO = 0.7
+_OBSTACLE_SIZE_HI = 1.5
+_OBSTACLE_MIN = 2
+_OBSTACLE_MAX = 6
+
+
+def _stiffen_collisions(parallel_env: Any, force: float) -> None:
+    """Raise the MPE world's contact_force on ``parallel_env`` (harder collisions). The world object
+    persists across resets, so this sticks for the env's life; EzPickle resets it on a SuperSuit clone,
+    so the species wrapper re-applies it at ``reset`` (the clone's runtime entry point)."""
+    world = getattr(getattr(parallel_env, "unwrapped", parallel_env), "world", None)
+    if world is not None:
+        world.contact_force = force
+
+
+def _randomize_obstacles(world: Any, rng: Any) -> None:
+    """Re-roll every obstacle's size + re-place them non-overlapping, in place (call after reset).
+
+    Sizes are ``0.2 × U(0.7, 1.5)`` (−30 %…+50 %); positions are rejection-sampled so no two obstacles
+    overlap (with a small margin). Run AFTER ``env.reset`` (which scatters them at the base size), so the
+    very first observation of the episode still reflects the reset layout — negligible for a 25-step
+    episode, and every subsequent step sees the re-rolled world. Obstacles are the collidable, non-boundary
+    landmarks (targets in simple_spread aren't collidable, so this no-ops there)."""
+    import numpy as np
+
+    obstacles = [
+        lm for lm in getattr(world, "landmarks", [])
+        if getattr(lm, "collide", False) and not getattr(lm, "boundary", False)
+    ]
+    placed: list[Any] = []
+    for lm in obstacles:
+        lm.size = float(_BASE_OBSTACLE_SIZE * rng.uniform(_OBSTACLE_SIZE_LO, _OBSTACLE_SIZE_HI))
+        pos = rng.uniform(-0.9, 0.9, size=2)
+        for _ in range(60):  # reject positions that overlap an already-placed obstacle
+            if all(
+                float(np.linalg.norm(pos - p.state.p_pos)) > (lm.size + p.size) * 1.05
+                for p in placed
+            ):
+                break
+            pos = rng.uniform(-0.9, 0.9, size=2)
+        lm.state.p_pos = pos
+        placed.append(lm)
+
+
+def random_obstacle_count(rng: Any) -> int:
+    """A random obstacle count in ``[2, 6]`` for one training round / watch session (simple_tag)."""
+    return int(rng.integers(_OBSTACLE_MIN, _OBSTACLE_MAX + 1))
 
 
 def is_multi_agent(spec: EnvSpec | None) -> bool:
     """True for a PettingZoo multi-agent env (the 5th seam), False for every single-agent env."""
     return spec is not None and spec.family == "petting_zoo"
+
+
+def is_competitive_ma(spec: EnvSpec | None) -> bool:
+    """True for a **heterogeneous, competitive** multi-agent env (simple_tag, G7b-2) — the
+    per-species self-play case (ADR-048), as opposed to the homogeneous, cooperative parameter-sharing
+    case (simple_spread, G7a). These two route to different trainers in the manager."""
+    return is_multi_agent(spec) and bool(spec and spec.competitive)
+
+
+def agent_role(agent: str) -> str:
+    """The species an MPE agent belongs to, from its PettingZoo name: ``"adversary"`` for a predator
+    (``adversary_0`` …) else ``"agent"`` (the prey ``agent_0`` …). Mirrors ``world.agents[i].adversary``
+    used by :func:`agent_sprites`, so the swarm render and the per-species policy routing agree."""
+    return "adversary" if agent.startswith("adversary") else "agent"
+
+
+def species_present(env_id: str) -> list[str]:
+    """The distinct species roles in ``env_id``, in a stable order (predators first): e.g.
+    ``["adversary", "agent"]`` for simple_tag. Drives the self-play trainer's per-species loop."""
+    raw = make_parallel_env(env_id)
+    try:
+        roles: list[str] = []
+        for a in raw.possible_agents:
+            role = agent_role(a)
+            if role not in roles:
+                roles.append(role)
+        roles.sort(key=lambda r: 0 if r == "adversary" else 1)  # predators first (the headline)
+        return roles
+    finally:
+        raw.close()
 
 
 def _load_scenario(name: str) -> Any:
@@ -56,13 +162,16 @@ def _load_scenario(name: str) -> Any:
     )
 
 
-def make_parallel_env(env_id: str, *, render_mode: str | None = None) -> Any:
+def make_parallel_env(
+    env_id: str, *, render_mode: str | None = None, obstacle_count: int | None = None
+) -> Any:
     """Build the raw PettingZoo **parallel** env for ``env_id`` from its registry row.
 
     The scenario module name is the spec's ``gym_id`` (e.g. ``"simple_spread_v3"``); the per-env
     construction kwargs (``N``, ``max_cycles``, ``continuous_actions`` …) ride in ``make_kwargs``.
     Used by the preview streamer (positions for the swarm render) — the trainer uses the vec-env
-    bridge below instead.
+    bridge below instead. ``obstacle_count`` overrides ``num_obstacles`` for the variable-obstacle
+    simple_tag world (the obs size stays fixed via the row's ``num_landmark_neighbors``).
     """
     from app.envs.registry import get_env
 
@@ -73,7 +182,24 @@ def make_parallel_env(env_id: str, *, render_mode: str | None = None) -> Any:
     kwargs: dict[str, Any] = dict(spec.make_kwargs)
     if render_mode is not None:
         kwargs["render_mode"] = render_mode
-    return module.parallel_env(**kwargs)
+    if obstacle_count is not None:
+        kwargs["num_obstacles"] = obstacle_count
+    with _PYGAME_LOCK:  # construction calls the global pygame.init() — serialize it (see lock note)
+        env = module.parallel_env(**kwargs)
+    if spec.competitive:  # harder collisions for the predator–prey world (preview path; no clone here)
+        _stiffen_collisions(env, _TAG_CONTACT_FORCE)
+    return env
+
+
+def close_env(env: Any) -> None:
+    """Close an MPE env (or its vec-env wrapper) under the shared lock so its global ``pygame.quit()``
+    can't race another env's construction/close on a different thread. Best-effort — a teardown hiccup
+    must never crash the preview / trainer thread."""
+    with _PYGAME_LOCK:
+        try:
+            env.close()
+        except Exception:  # noqa: BLE001 — never let env teardown crash the caller
+            logger.debug("MPE env close failed", exc_info=True)
 
 
 def make_vec_env(env_id: str) -> Any:
@@ -92,6 +218,164 @@ def make_vec_env(env_id: str) -> Any:
     vec = ss.pettingzoo_env_to_vec_env_v1(parallel)
     vec = ss.concat_vec_envs_v1(vec, 1, num_cpus=1, base_class="stable_baselines3")
     return VecMonitor(vec)
+
+
+# --- competitive self-play (simple_tag, G7b-2) ---------------------------------------------------
+#
+# Two species with *different* obs sizes + opposite rewards (predator obs 16 vs prey 14) break the
+# homogeneous parameter-sharing bridge above. The trainer learns one species at a time against the
+# *frozen* snapshot of the other (frozen self-play, ADR-048). The bridge to SB3 is the same SuperSuit
+# stack — but applied to a parallel env that exposes **only the learner species** (so its agents are
+# homogeneous again) while stepping the opponent species from the frozen policy inside ``step``.
+
+
+# The wrapper subclasses ``pettingzoo.utils.env.ParallelEnv`` (SuperSuit's bridge isinstance-checks
+# it), built lazily + cached so importing this module at app startup stays pettingzoo-free (the manager
+# imports ``is_competitive_ma`` at boot). One class, reused for every species env.
+_SPECIES_ENV_CLASS: Any = None
+
+
+def _species_env_class() -> Any:
+    """Lazily define + cache the species-filtering ParallelEnv wrapper class (frozen self-play, G7b-2).
+
+    Exposes only the **learner** species (so its agents are homogeneous → SuperSuit can parameter-share
+    them), and steps the opponent species from a *frozen* numpy snapshot (ADR-019) injected in ``step``.
+    Constant-agent episodes (simple_tag runs the full ``max_cycles`` — no agent dies), so the learner
+    set is fixed, which is what SuperSuit's Markov vector wrapper needs. Defined inside the function so
+    the ``pettingzoo`` import happens only when a self-play env is actually built."""
+    global _SPECIES_ENV_CLASS
+    if _SPECIES_ENV_CLASS is not None:
+        return _SPECIES_ENV_CLASS
+
+    from pettingzoo.utils.env import ParallelEnv
+
+    class _SpeciesParallelEnv(ParallelEnv):  # type: ignore[misc]  # ParallelEnv is untyped-generic
+        def __init__(
+            self,
+            raw: Any,
+            learner_role: str,
+            opponent_predict: Any | None = None,
+            contact_force: float | None = None,
+            randomize_obstacles: bool = False,
+        ) -> None:
+            self.env = raw
+            self._learner_role = learner_role
+            self._opponent_predict = opponent_predict
+            self._contact_force = contact_force  # re-applied each reset (survives the SuperSuit clone)
+            self._randomize_obstacles = randomize_obstacles  # re-roll obstacle size/pos each episode
+            self._learner = [a for a in raw.possible_agents if agent_role(a) == learner_role]
+            self._opp = [a for a in raw.possible_agents if agent_role(a) != learner_role]
+            self.possible_agents = list(self._learner)
+            self.agents = list(self._learner)
+            self._opp_obs: dict[str, Any] = {}
+            self._closed = False
+            # SuperSuit's MarkovVectorEnv reads par_env.unwrapped.render_mode; expose it (None is fine —
+            # the training env is headless, the preview renders the raw parallel env separately).
+            self.render_mode = getattr(raw, "render_mode", None)
+            md = dict(getattr(raw, "metadata", {}) or {})
+            md["is_parallelizable"] = True
+            self.metadata = md
+
+        def observation_space(self, agent: str) -> Any:
+            return self.env.observation_space(agent)
+
+        def action_space(self, agent: str) -> Any:
+            return self.env.action_space(agent)
+
+        def reset(self, seed: int | None = None, options: Any | None = None) -> tuple[dict, dict]:
+            obs, info = self.env.reset(seed=seed, options=options)
+            unwrapped = getattr(self.env, "unwrapped", self.env)
+            world = getattr(unwrapped, "world", None)
+            if self._contact_force is not None and world is not None:  # re-apply after a clone reset
+                world.contact_force = self._contact_force
+            if self._randomize_obstacles and world is not None:  # re-roll obstacle size + non-overlap
+                rng = getattr(unwrapped, "np_random", None)
+                if rng is not None:
+                    _randomize_obstacles(world, rng)
+            self._opp_obs = {a: obs[a] for a in self._opp if a in obs}
+            self.agents = [a for a in self.env.agents if a in self._learner]
+            return (
+                {a: obs[a] for a in self._learner if a in obs},
+                {a: info.get(a, {}) for a in self._learner},
+            )
+
+        def step(self, actions: dict) -> tuple[dict, dict, dict, dict, dict]:
+            merged = dict(actions)
+            for a in self._opp:
+                merged[a] = self._opponent_action(a)
+            obs, rew, term, trunc, info = self.env.step(merged)
+            self._opp_obs = {a: obs[a] for a in self._opp if a in obs}
+            self.agents = [a for a in self.env.agents if a in self._learner]
+
+            def sel(d: dict) -> dict:
+                return {a: d[a] for a in self._learner if a in d}
+
+            return sel(obs), sel(rew), sel(term), sel(trunc), sel(info)
+
+        def _opponent_action(self, agent: str) -> Any:
+            if self._opponent_predict is None or agent not in self._opp_obs:
+                return self.env.action_space(agent).sample()
+            try:
+                return int(self._opponent_predict(self._opp_obs[agent]))
+            except Exception:  # noqa: BLE001 — a flaky opponent forward must not crash a round
+                return self.env.action_space(agent).sample()
+
+        def render(self) -> Any:
+            return self.env.render()
+
+        def close(self) -> None:
+            # Idempotent: the SB3/gymnasium vec env closes us explicitly AND again via ``__del__`` on
+            # GC, and mpe2's close() calls the global pygame.quit() — so guard against a double quit.
+            # The pygame-global serialization is done by the CALLER (``close_env`` / ``make_species_vec_env``
+            # hold ``_PYGAME_LOCK``); this method must reference no module globals so SuperSuit can still
+            # cloudpickle-clone the wrapper (an RLock/logger reference here is unpicklable).
+            if self._closed:
+                return
+            self._closed = True
+            try:  # noqa: SIM105 — contextlib.suppress would add a module global ref (unpicklable clone)
+                self.env.close()
+            except Exception:  # noqa: BLE001 — never let env teardown crash the trainer
+                pass
+
+    _SPECIES_ENV_CLASS = _SpeciesParallelEnv
+    return _SPECIES_ENV_CLASS
+
+
+def make_species_vec_env(
+    env_id: str,
+    learner_role: str,
+    opponent_predict: Any | None = None,
+    obstacle_count: int | None = None,
+) -> Any:
+    """SB3-compatible vec env that trains **one species** of ``env_id`` against a frozen opponent.
+
+    Wraps the raw parallel env (learner-only, the opponent species auto-acted by ``opponent_predict``,
+    a numpy snapshot baked in here) and bridges it through SuperSuit + ``VecMonitor`` exactly like
+    :func:`make_vec_env`. The learner agents are homogeneous, so the result is one parameter-shared
+    ``MlpPolicy`` over that species (G7b-2). The trainer rebuilds this per round with the opponent's
+    latest snapshot (SuperSuit cloudpickle-clones the env, so the opponent must be baked in at build
+    time, not mutated later).
+
+    The whole construction runs under ``_PYGAME_LOCK``: the raw mpe2 env's pygame.init() **and**
+    SuperSuit's cloudpickle clone (which re-inits pygame on the copy) must not race the preview thread's
+    own mpe2 construction/close (the Windows segfault source)."""
+    import supersuit as ss
+    from stable_baselines3.common.vec_env import VecMonitor
+
+    from app.envs.registry import get_env
+
+    spec = get_env(env_id)
+    competitive = spec is not None and spec.competitive
+    force = _TAG_CONTACT_FORCE if competitive else None
+    with _PYGAME_LOCK:
+        raw = make_parallel_env(env_id, obstacle_count=obstacle_count)  # reentrant lock (also locks)
+        wrapped = _species_env_class()(
+            raw, learner_role, opponent_predict,
+            contact_force=force, randomize_obstacles=competitive,
+        )
+        vec = ss.pettingzoo_env_to_vec_env_v1(wrapped)
+        vec = ss.concat_vec_envs_v1(vec, 1, num_cpus=1, base_class="stable_baselines3")
+        return VecMonitor(vec)
 
 
 # --- render-state extraction (the swarm canvas) --------------------------------------------------
