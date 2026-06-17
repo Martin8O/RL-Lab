@@ -30,7 +30,7 @@ describe('<BoardStage /> (Othello, G6d)', () => {
     render(
       <BoardStage
         envName="Othello" board={othelloMeta.idle} meta={othelloMeta}
-        humanTurn={false} onCellClick={() => {}} statusText="" banner={null}
+        humanTurn={false} humanSide={null} onCellClick={() => {}} statusText="" banner={null}
       />,
     )
     // The standard opening has two discs of each colour at the centre.
@@ -43,7 +43,7 @@ describe('<BoardStage /> (Othello, G6d)', () => {
     render(
       <BoardStage
         envName="Othello" board={passBoard()} meta={othelloMeta}
-        humanTurn onCellClick={onCellClick} statusText="" banner={null}
+        humanTurn humanSide={0} onCellClick={onCellClick} statusText="" banner={null}
       />,
     )
     const pass = screen.getByRole('button', { name: 'Pass' })
@@ -55,7 +55,7 @@ describe('<BoardStage /> (Othello, G6d)', () => {
     const { rerender } = render(
       <BoardStage
         envName="Othello" board={passBoard()} meta={othelloMeta}
-        humanTurn={false} onCellClick={() => {}} statusText="" banner={null}
+        humanTurn={false} humanSide={null} onCellClick={() => {}} statusText="" banner={null}
       />,
     )
     expect(screen.queryByRole('button', { name: 'Pass' })).not.toBeInTheDocument()
@@ -63,7 +63,7 @@ describe('<BoardStage /> (Othello, G6d)', () => {
     rerender(
       <BoardStage
         envName="Othello" board={passBoard({ pass_action: null, legal_actions: [19] })}
-        meta={othelloMeta} humanTurn onCellClick={() => {}} statusText="" banner={null}
+        meta={othelloMeta} humanTurn humanSide={null} onCellClick={() => {}} statusText="" banner={null}
       />,
     )
     expect(screen.queryByRole('button', { name: 'Pass' })).not.toBeInTheDocument()
@@ -100,7 +100,7 @@ describe('<BoardStage /> move mode (Breakthrough, G6e)', () => {
     render(
       <BoardStage
         envName="Breakthrough" board={moveBoard()} meta={breakthroughMeta}
-        humanTurn onCellClick={onCellClick} statusText="" banner={null}
+        humanTurn humanSide={0} onCellClick={onCellClick} statusText="" banner={null}
       />,
     )
     // Before selecting, the piece is a "select" button and no destinations are offered.
@@ -117,12 +117,35 @@ describe('<BoardStage /> move mode (Breakthrough, G6e)', () => {
     render(
       <BoardStage
         envName="Breakthrough" board={moveBoard()} meta={breakthroughMeta}
-        humanTurn onCellClick={() => {}} statusText="" banner={null}
+        humanTurn humanSide={0} onCellClick={() => {}} statusText="" banner={null}
       />,
     )
     fireEvent.click(screen.getByRole('button', { name: 'Select your piece at row 2, column 2' }))
     expect(screen.getByRole('button', { name: 'Move to row 1, column 2' })).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: /Selected piece at row 2, column 2/ }))
     expect(screen.queryByRole('button', { name: 'Move to row 1, column 2' })).not.toBeInTheDocument()
+  })
+
+  // Orientation (G6e): the board flips 180° when the human plays the side that isn't `bottomPlayer`
+  // (so their pieces sit at the bottom). breakthroughMeta.orient.bottomPlayer === 1.
+  it('rotates the board 180° when the human plays the non-bottom side, not otherwise', () => {
+    const grid = (c: HTMLElement) => c.querySelector('div[style*="grid-template-columns"]') as HTMLElement
+    const first = render(
+      <BoardStage envName="Breakthrough" board={moveBoard()} meta={breakthroughMeta}
+        humanTurn={false} humanSide={0} onCellClick={() => {}} statusText="" banner={null} />,
+    )
+    expect(grid(first.container).style.transform).toBe('rotate(180deg)') // human is player 0 → flipped
+
+    const second = render(
+      <BoardStage envName="Breakthrough" board={moveBoard()} meta={breakthroughMeta}
+        humanTurn={false} humanSide={1} onCellClick={() => {}} statusText="" banner={null} />,
+    )
+    expect(grid(second.container).style.transform).toBe('') // player 1 already at the bottom → no flip
+
+    const watch = render(
+      <BoardStage envName="Breakthrough" board={moveBoard()} meta={breakthroughMeta}
+        humanTurn={false} humanSide={null} onCellClick={() => {}} statusText="" banner={null} />,
+    )
+    expect(grid(watch.container).style.transform).toBe('') // watch/training keeps the default view
   })
 })

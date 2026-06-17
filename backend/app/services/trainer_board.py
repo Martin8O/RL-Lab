@@ -161,9 +161,13 @@ def train_board(
     total_target = int(model.num_timesteps) + config.total_timesteps
 
     rollout = [0]  # rollout counter → the metrics frame's "iteration" (work-done index)
+    # A strong reference eval (e.g. Breakthrough's medium MCTS, ~9 s for 20 games) must not make Stop
+    # wait it out — pass the control's stop flag so any eval aborts promptly.
+    should_stop = lambda: control.stop_requested  # noqa: E731
     last_eval = [
         board_engine.eval_vs_mcts(
-            board_engine.build_board_predict(model), game, eval_sims, _EVAL_GAMES, config.seed
+            board_engine.build_board_predict(model), game, eval_sims, _EVAL_GAMES, config.seed,
+            should_stop=should_stop,
         )
     ]
 
@@ -228,9 +232,14 @@ def train_board(
                 callback=callback,
                 reset_num_timesteps=(r == 0 and resume_blob is None),
             )
+            # On Stop, skip the round-boundary eval entirely — it's the slow part (a strong reference is
+            # several seconds) and its result would be discarded anyway, so this is what makes Stop snappy.
+            if control.stop_requested:
+                break
             # Round boundary (quiescent): eval the snapshot, refresh the preview, snapshot the checkpoint.
             last_eval[0] = board_engine.eval_vs_mcts(
-                board_engine.build_board_predict(model), game, eval_sims, _EVAL_GAMES, config.seed
+                board_engine.build_board_predict(model), game, eval_sims, _EVAL_GAMES, config.seed,
+                should_stop=should_stop,
             )
             publish()
             emit()

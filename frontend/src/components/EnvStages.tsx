@@ -280,11 +280,13 @@ export function SwarmStage({ envName, canvasRef, legend }: {
 // (content/boardGames.ts), and the last move gets a ring. The board payload (cells/legal/turn/winner)
 // is fully game-agnostic; only `meta` (glyph → piece) is game-specific. The status line shows whose
 // turn it is; the result banner shows the honest win/draw/loss outcome (no continuous skill %).
-export function BoardStage({ envName, board, meta, humanTurn, onCellClick, statusText, banner }: {
+export function BoardStage({ envName, board, meta, humanTurn, humanSide, onCellClick, statusText, banner }: {
   envName: string
   board: BoardState
   meta: BoardGameMeta
   humanTurn: boolean
+  // The board player the human controls (for orientation), or null in watch/training (default view).
+  humanSide: number | null
   onCellClick: (action: number) => void
   statusText: string
   // `mark` colours the winner's piece in the banner — for games whose two players share one glyph
@@ -308,6 +310,12 @@ export function BoardStage({ envName, board, meta, humanTurn, onCellClick, statu
   const columnMode = meta.actionMode === 'column'
   const moveMode = meta.actionMode === 'move'
   const actionOf = (i: number) => (columnMode ? i % cols : i)
+
+  // Board orientation (G6e): for a directional game, flip the board 180° while the human plays the side
+  // that isn't `bottomPlayer`, so their pieces sit at the bottom and advance upward. A pure CSS rotation
+  // — the triangle glyphs flip to point the right way for free, and clicks/highlights ride the transform
+  // (the cell handlers use backend indices, which the rotation doesn't touch). No flip in watch/training.
+  const flip = !!meta.orient && humanSide != null && humanSide !== meta.orient.bottomPlayer
 
   // Move-mode selection — which of the human's pieces is picked. Reset whenever the turn passes, the
   // board advances (a move was played) or the game ends, via React's canonical "reset state on prop
@@ -382,6 +390,7 @@ export function BoardStage({ envName, board, meta, humanTurn, onCellClick, statu
         gridTemplateRows: `repeat(${rows}, ${cellPx}px)`,
         background: 'var(--surface-3)', padding: 6, borderRadius: 'var(--radius-md)',
         boxShadow: 'var(--shadow-md)', position: 'relative',
+        transform: flip ? 'rotate(180deg)' : undefined,
       }}>
         {cells.map((ch, i) => {
           const r = Math.floor(i / cols)

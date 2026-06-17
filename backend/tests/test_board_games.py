@@ -223,6 +223,21 @@ def test_breakthrough_profile_trains_cheap_scores_vs_medium() -> None:
     assert prof.teacher_start == "novice" and prof.teacher_end == "easy"
 
 
+def test_eval_vs_mcts_aborts_immediately_when_should_stop() -> None:
+    """A long reference eval must yield the moment training Stop is requested (G6e review fix): with
+    ``should_stop`` already True it returns at once without playing a game, so Stop isn't held up."""
+    calls = {"predict": 0}
+
+    def predict(_obs: object, _mask: object) -> int:
+        calls["predict"] += 1  # must never be reached — the abort fires before any move
+        return 0
+
+    game = board_engine.load_game("tic_tac_toe")
+    score = board_engine.eval_vs_mcts(predict, game, sims=10, n_games=20, should_stop=lambda: True)
+    assert score == 0.0  # no games scored
+    assert calls["predict"] == 0  # aborted before playing a single move
+
+
 # -- the game-agnostic board engine -----------------------------------------
 
 

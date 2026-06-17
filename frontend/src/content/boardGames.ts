@@ -31,6 +31,15 @@ export interface BoardGameMeta {
    * `BoardStage`'s click/highlight maths differ. Everything else stays game-agnostic.
    */
   actionMode?: 'cell' | 'column' | 'move'
+  /**
+   * Board orientation for directional move games (Breakthrough, G6e). When set, the board is flipped
+   * 180° while the human plays the side that ISN'T `bottomPlayer`, so the human's pieces always sit at
+   * the bottom and advance *upward* (the natural "I'm down here" view; chess.com does the same for the
+   * black player). `bottomPlayer` = which player sits at the bottom in OpenSpiel's default print. The
+   * flip is a pure CSS rotation, so the directional triangle glyphs flip to point the right way for free
+   * and clicks/highlights ride the transform. Omitted for placement games (orientation doesn't matter).
+   */
+  orient?: { bottomPlayer: number }
   /** The idle board shown when the game is selected but no session is running. */
   idle: BoardState
 }
@@ -139,6 +148,9 @@ export const BOARD_GAMES: Record<string, BoardGameMeta> = {
       w: { player: 1, glyph: '▲', color: 'var(--viz-6)' },
     },
     actionMode: 'move',
+    // Player 1 ('w') sits at the bottom of OpenSpiel's print, so when the human plays player 0 the
+    // board flips 180° to put their pieces at the bottom (advancing up). Watch/AI keep the default view.
+    orient: { bottomPlayer: 1 },
     idle: breakthroughIdleBoard(),
   },
 }

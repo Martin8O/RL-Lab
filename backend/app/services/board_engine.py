@@ -542,13 +542,22 @@ def board_move_fn(game: Any, predict: MaskedPredictFn) -> Callable[[Any], int]:
 
 
 def eval_vs_mcts(
-    predict: MaskedPredictFn, game: Any, sims: int, n_games: int = 20, seed: int = 0
+    predict: MaskedPredictFn,
+    game: Any,
+    sims: int,
+    n_games: int = 20,
+    seed: int = 0,
+    should_stop: Callable[[], bool] | None = None,
 ) -> float:
     """Mean game result ∈ [−1, 1] for the net vs a fixed reference MCTS — the chart's honest skill curve.
 
     The net's seat alternates each game so both sides are measured; the per-game value is
     ``returns()[net_seat]`` (+1 win / 0 draw / −1 loss). For Tic-Tac-Toe a well-trained net converges
     toward 0 (it draws — the game's ceiling against strong play). Reuses the G6a :class:`MctsOpponent`.
+
+    ``should_stop`` lets a caller abort a long eval the moment a training Stop is requested (a strong
+    reference like Breakthrough's medium MCTS is ~9 s for 20 games — without this, Stop waits it out);
+    the partial mean is returned and discarded by the stopping trainer, so correctness is unaffected.
     """
     import numpy as np
 
@@ -556,10 +565,16 @@ def eval_vs_mcts(
     rng = np.random.default_rng(seed)
     total = 0.0
     for g in range(n_games):
+        if should_stop is not None and should_stop():
+            return total / max(1, g)  # abort promptly on Stop; the result is unused
         state = game.new_initial_state()
         net_seat = g % game.num_players()
         bot = MctsOpponent(game, sims, seed + g)
         while not state.is_terminal():
+            # Per-move stop check too: a single Breakthrough game vs a strong MCTS can take a few
+            # seconds, so checking only per game still lets one long game finish before Stop bites.
+            if should_stop is not None and should_stop():
+                return total / max(1, g)
             if state.is_chance_node():
                 outcomes = state.chance_outcomes()
                 state.apply_action(int(rng.choice([a for a, _ in outcomes])))

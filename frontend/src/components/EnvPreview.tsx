@@ -583,6 +583,9 @@ export default function EnvPreview() {
   // It's the human's turn when a human session is live and the board is waiting on the human's side.
   const boardHumanTurn =
     boardPlaying && playMode === 'human' && !!board && !board.is_terminal && board.current_player === boardSide
+  // Orientation (G6e): in a human context (idle preview or a human game, NOT an AI watch or training)
+  // the board is drawn from the human's side; in watch/training it keeps OpenSpiel's default view.
+  const boardHumanSide = clientKind === 'board' && playMode === 'human' && !runLive ? boardSide : null
   // The opponent faced, for the W/D/L banner: the trained net (G6b — the active session carries a
   // checkpoint) reads "your trained AI"; otherwise the built-in MCTS at the chosen difficulty.
   const vsNet = clientKind === 'board' && !!playActiveCheckpoint
@@ -734,7 +737,7 @@ export default function EnvPreview() {
             ) : clientKind === 'board' && board && boardMeta ? (
               <BoardStage
                 envName={envName} board={board} meta={boardMeta}
-                humanTurn={boardHumanTurn} onCellClick={onBoardCellClick}
+                humanTurn={boardHumanTurn} humanSide={boardHumanSide} onCellClick={onBoardCellClick}
                 statusText={boardStatus} banner={boardBanner}
               />
             ) : clientKind === 'mpe' ? (

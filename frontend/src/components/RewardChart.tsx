@@ -117,7 +117,13 @@ function chartYDomain(series: Series[], goalY?: number): { min: number; max: num
   const ys: number[] = []
   for (const s of series) for (const v of s.values) if (v !== null && v !== undefined) ys.push(v)
   const min = Math.min(0, ...(ys.length ? ys : [0]), ...(goalY != null ? [goalY] : []))
-  const max = Math.max(1, ...(ys.length ? ys : [1]), ...(goalY != null ? [goalY] : []))
+  let max = Math.max(1, ...(ys.length ? ys : [1]), ...(goalY != null ? [goalY] : []))
+  // Keep a little headroom above the goal line so the gold "solved" rule + its label clear the legend
+  // pinned at the top of the plot — otherwise (when the goal is the ceiling, e.g. board games at +1)
+  // both sit flush against the very top and overlap.
+  if (goalY != null && max - goalY < (max - min) * 0.08) {
+    max = goalY + (max - min) * 0.08
+  }
   return { min, max }
 }
 

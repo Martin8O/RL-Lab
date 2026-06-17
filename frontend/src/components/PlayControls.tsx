@@ -5,6 +5,7 @@ import { useAppStore } from '../store/useAppStore'
 import { fetchCheckpoints, startPlay, stopPlay, updatePlaySpeed } from '../api/client'
 import type { CheckpointMeta } from '../api/types'
 import { keymapFor } from '../content/playKeymaps'
+import { boardMetaFor } from '../content/boardGames'
 import PlayInstructions from './PlayInstructions'
 import ParamInfo from './ParamInfo'
 import type { BoardStrength } from '../api/types'
@@ -56,6 +57,16 @@ export default function PlayControls() {
   // watch and the controls swap the checkpoint picker for side + difficulty; G6b adds an opponent picker
   // so you can instead face your **trained net** (a checkpoint).
   const isBoard      = env?.family === 'board'
+  // The coloured piece to show for each side in the side picker (G6e). For a directional game the human
+  // always plays from the bottom (advancing up), so both sides show that "up" glyph (the `bottomPlayer`'s
+  // glyph), distinguished by colour; placement games show each player's own glyph.
+  const boardMeta    = boardMetaFor(selectedEnvId)
+  const sideMark = (player: number): { glyph: string; color: string } => {
+    const pieces = Object.values(boardMeta?.pieces ?? {})
+    const own = pieces.find((pc) => pc.player === player)
+    const up = boardMeta?.orient ? pieces.find((pc) => pc.player === boardMeta.orient!.bottomPlayer) : undefined
+    return { glyph: (up ?? own)?.glyph ?? (player === 0 ? '①' : '②'), color: own?.color ?? 'var(--text-strong)' }
+  }
   const playing      = playState === 'playing'
   const trainLive    = trainState === 'running' || trainState === 'paused' || trainState === 'stopping'
   // Checkpoints that can actually be played here (same env; any algo works via the AI policy).
@@ -204,17 +215,38 @@ export default function PlayControls() {
 
           {isBoard ? (
             <>
-              {/* Board games (G6a): pick your side. */}
+              {/* Board games (G6a): pick your side, shown as the game's actual coloured pieces (G6e) — a
+                  native <select> can't colour its options, so this is a small segmented radio control.
+                  For a directional game (Breakthrough) the human always ends up at the bottom advancing
+                  up, so both options show that "up" glyph distinguished only by colour. */}
               <label style={labelStyle}>
                 {t('play.board_side')}
-                <select
-                  value={boardSide}
-                  onChange={(e) => setBoardSide(parseInt(e.target.value, 10))}
-                  style={selectStyle}
-                >
-                  <option value={0}>{t('play.board_side_first')}</option>
-                  <option value={1}>{t('play.board_side_second')}</option>
-                </select>
+                <div role="radiogroup" aria-label={t('play.board_side')} style={sideGroupStyle}>
+                  {[0, 1].map((p) => {
+                    const mark = sideMark(p)
+                    const active = boardSide === p
+                    return (
+                      <button
+                        key={p}
+                        type="button"
+                        role="radio"
+                        aria-checked={active}
+                        aria-label={t(p === 0 ? 'play.board_side_first' : 'play.board_side_second')}
+                        onClick={() => setBoardSide(p)}
+                        style={{
+                          ...sideBtnStyle,
+                          background: active ? 'var(--surface-2)' : 'transparent',
+                          color: active ? 'var(--text-strong)' : 'var(--text-muted)',
+                          borderColor: active ? 'var(--border-default)' : 'transparent',
+                          boxShadow: active ? 'var(--shadow-xs)' : 'none',
+                        }}
+                      >
+                        <span aria-hidden style={{ color: mark.color, fontWeight: 800 }}>{mark.glyph}</span>
+                        {t(p === 0 ? 'play.board_side_first' : 'play.board_side_second')}
+                      </button>
+                    )
+                  })}
+                </div>
               </label>
               {/* Opponent (G6b): the built-in search AI (MCTS, with a difficulty) or your trained net.
                   Only shown once a checkpoint exists for this game; otherwise it's always the MCTS. */}
@@ -318,4 +350,20 @@ const selectStyle: CSSProperties = {
   fontSize: 'var(--fs-label)', fontFamily: 'var(--font-sans)',
   background: 'var(--surface-2)', color: 'var(--text-strong)',
   border: '1px solid var(--border-default)', cursor: 'pointer', transition: 'var(--t-colors)',
+}
+
+// Board side picker (G6e) — a small segmented radio control so each side can show its coloured piece
+// glyph (a native <select> can't colour individual options). Mirrors the sidebar's Segmented look.
+const sideGroupStyle: CSSProperties = {
+  display: 'flex', gap: 3, padding: 3,
+  background: 'var(--surface-inset)', border: '1px solid var(--border-default)',
+  borderRadius: 'var(--radius-md)',
+}
+
+const sideBtnStyle: CSSProperties = {
+  display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 5,
+  height: 'calc(var(--control-sm) - 6px)', padding: '0 9px', borderRadius: 'var(--radius-sm)',
+  borderWidth: 1, borderStyle: 'solid',
+  fontSize: 'var(--fs-label)', fontFamily: 'var(--font-sans)', fontWeight: 'var(--fw-medium)',
+  whiteSpace: 'nowrap', cursor: 'pointer', transition: 'var(--t-colors)',
 }
