@@ -153,7 +153,9 @@
     "cell_play": "Play row {{row}}, column {{col}}",
     "cell_drop": "Drop a disc into column {{col}}",
     "cell_taken": "Row {{row}}, column {{col}}: {{mark}}",
-    "cell_empty": "Row {{row}}, column {{col}}: empty"
+    "cell_empty": "Row {{row}}, column {{col}}: empty",
+    "pass": "Pass",
+    "must_pass": "No legal move — you must pass"
   },
   "watch": {
     "about": "What am I watching?",

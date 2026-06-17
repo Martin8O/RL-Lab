@@ -81,6 +81,80 @@ def test_tictactoe_listed_in_envs_api() -> None:
     assert len(board) == 1 and board[0]["family"] == "board"
 
 
+# -- Othello (G6d) — the 3rd board game: decorated board string + a pass move -----------------------
+
+
+def test_othello_registered() -> None:
+    """G6d — the THIRD board game ships as data only (the engine resolves it from gym_id): same family /
+    routing / trainability as the others, but bigger (65 actions = 64 cells + a pass) and 8×8."""
+    spec = get_env("othello")
+    assert spec is not None, "othello not registered"
+    assert spec.gym_id == "othello"  # the OpenSpiel short name (resolved by board_engine)
+    assert spec.family == "board" and spec.action_space == "discrete"
+    assert spec.supported_algos == ["ppo"]  # routed to the board trainer by is_board_game
+    assert spec.human_playable is True and spec.competitive is True and spec.turn_based is True
+    assert spec.hw_requirement == "cpu" and spec.train_implemented is True  # CPU, trains like the others
+    assert spec.min_score == -1.0 and spec.solved_score == 1.0  # same zero-sum chart scale
+
+
+def test_othello_listed_in_envs_api() -> None:
+    rows = client.get("/api/envs").json()
+    board = [r for r in rows if r["id"] == "othello"]
+    assert len(board) == 1 and board[0]["family"] == "board"
+
+
+def test_othello_profile_uses_novice_teacher() -> None:
+    """G6d — Othello is much bigger than Connect Four, so it trains against the near-random NOVICE
+    teacher (ramping to easy) and is scored vs easy, so its honest curve climbs instead of sitting at
+    the loss floor. ``novice`` is a sub-easy teacher tier, weaker than the weakest play difficulty."""
+    prof = board_engine.board_profile("othello")
+    assert prof.eval_strength == "easy"
+    assert prof.teacher_start == "novice" and prof.teacher_end == "easy"
+    assert board_engine.STRENGTH_SIMS["novice"] < board_engine.STRENGTH_SIMS["easy"]
+
+
+def test_othello_decorated_board_parses_to_clean_8x8() -> None:
+    """Othello's ``str(state)`` is DECORATED (a header, ``a b c`` / ``1 2 3`` labels, ``-`` for empty,
+    spaces between cells), unlike TTT/Connect Four's clean grid — yet ``board_payload`` must still yield
+    a clean 8×8 grid of only ``.``/``x``/``o`` with no stray label chars leaking in (G6d)."""
+    game = board_engine.load_game("othello")
+    state = game.new_initial_state()
+    p = board_engine.board_payload(state, None)
+    assert p["rows"] == 8 and p["cols"] == 8 and len(p["cells"]) == 64
+    assert set(p["cells"]) <= {".", "x", "o"}  # decoration (labels, headers) must not leak through
+    assert p["cells"].count("x") == 2 and p["cells"].count("o") == 2  # the four central opening discs
+    assert p["pass_action"] is None  # no forced pass at the opening
+    state.apply_action(19)  # a known legal opening move (d3)
+    p = board_engine.board_payload(state, 19)
+    assert p["cells"].count("x") + p["cells"].count("o") == 5  # the four openers + the placed disc (≥)
+
+
+def test_othello_pass_move_detected_generically() -> None:
+    """A forced pass surfaces as ``BoardState.pass_action`` — the legal action whose ``action_to_string``
+    reads ``"pass"`` (game-agnostic; also Go). Deterministic: a seeded random rollout reaches a pass."""
+    import numpy as np
+
+    game = board_engine.load_game("othello")
+    rng = np.random.default_rng(5)  # this seed's rollout hits a forced pass near the endgame
+    state = game.new_initial_state()
+    saw_pass = False
+    while not state.is_terminal():
+        p = board_engine.board_payload(state, None)
+        if p["pass_action"] is not None:
+            saw_pass = True
+            assert p["pass_action"] in state.legal_actions()
+            assert state.action_to_string(state.current_player(), p["pass_action"]).lower() == "pass"
+        state.apply_action(int(rng.choice(state.legal_actions())))
+    assert saw_pass, "the seeded Othello rollout never reached the pass move"
+
+
+def test_clean_grid_games_have_no_pass_action() -> None:
+    """The pass field stays None for games that never pass (TTT/Connect Four) — additive + inert."""
+    for gym_id in ("tic_tac_toe", "connect_four"):
+        game = board_engine.load_game(gym_id)
+        assert board_engine.board_payload(game.new_initial_state(), None)["pass_action"] is None
+
+
 # -- the game-agnostic board engine -----------------------------------------
 
 

@@ -618,8 +618,11 @@ export default function EnvPreview() {
           boardBanner = winnerBanner(board.winner)
         }
       } else if (boardPlaying) {
+        // A forced pass (Othello, G6d): the human has no placement, only the pass move — prompt them
+        // to use the Pass button instead of "click to play". For now a pass ⇒ no other legal move.
+        const mustPass = boardHumanTurn && board.pass_action != null && board.legal_actions.length <= 1
         boardStatus = playMode === 'human'
-          ? (boardHumanTurn ? t('board.your_move') : t('board.ai_thinking'))
+          ? (mustPass ? t('board.must_pass') : boardHumanTurn ? t('board.your_move') : t('board.ai_thinking'))
           : t('board.watching', { mark: markFor(board.current_player) })
       }
     }
@@ -817,7 +820,7 @@ export default function EnvPreview() {
             position: 'absolute', top: 12, right: 12, zIndex: 2,
             display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
             width: 'var(--control-sm)', height: 'var(--control-sm)', padding: 0, cursor: 'pointer',
-            background: 'var(--surface-3)', border: '1px solid var(--border-default)',
+            background: 'var(--surface-3)', borderWidth: 1, borderStyle: 'solid', borderColor: 'var(--border-default)',
             borderRadius: 'var(--radius-md)', color: 'var(--text-muted)',
             boxShadow: 'var(--shadow-sm)', transition: 'var(--t-colors)',
           }}

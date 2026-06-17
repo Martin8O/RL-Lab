@@ -291,7 +291,7 @@ export function BoardStage({ envName, board, meta, humanTurn, onCellClick, statu
   banner: { text: string; kind: 'win' | 'draw' | 'loss'; mark?: { glyph: string; color: string } } | null
 }) {
   const { t } = useTranslation()
-  const { rows, cols, cells, legal_actions, last_action, is_terminal } = board
+  const { rows, cols, cells, legal_actions, last_action, is_terminal, pass_action } = board
   const legal = new Set(legal_actions)
   const cellPx = Math.max(48, Math.min(110, Math.floor(360 / Math.max(rows, cols, 1))))
   const bannerColor =
@@ -348,7 +348,7 @@ export function BoardStage({ envName, board, meta, humanTurn, onCellClick, statu
         gridTemplateColumns: `repeat(${cols}, ${cellPx}px)`,
         gridTemplateRows: `repeat(${rows}, ${cellPx}px)`,
         background: 'var(--surface-3)', padding: 6, borderRadius: 'var(--radius-md)',
-        boxShadow: 'var(--shadow-md)',
+        boxShadow: 'var(--shadow-md)', position: 'relative',
       }}>
         {cells.map((ch, i) => {
           const r = Math.floor(i / cols)
@@ -393,6 +393,24 @@ export function BoardStage({ envName, board, meta, humanTurn, onCellClick, statu
             </div>
           )
         })}
+        {/* Pass move (Othello, G6d): a forced pass when no placement is legal. Absolutely positioned to
+            the LEFT of the grid and vertically centred, so it toggling on/off never reflows the board (a
+            button *below* the grid shoved the whole board up, then back down on the pass). Game-agnostic
+            — driven by the backend-detected `pass_action`; the AI/net pass automatically. */}
+        {humanTurn && !is_terminal && pass_action != null && (
+          <button
+            onClick={() => onCellClick(pass_action)}
+            style={{
+              position: 'absolute', right: '100%', top: '50%', transform: 'translateY(-50%)',
+              marginRight: 14, whiteSpace: 'nowrap', padding: '8px 22px', cursor: 'pointer',
+              fontWeight: 'var(--fw-semibold)', fontSize: 'var(--fs-sm)', color: 'var(--text-strong)',
+              background: 'var(--surface-2)', border: '1px solid var(--border-strong)',
+              borderRadius: 'var(--radius-sm)',
+            }}
+          >
+            {t('board.pass')}
+          </button>
+        )}
       </div>
     </div>
   )

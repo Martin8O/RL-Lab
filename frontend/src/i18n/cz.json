@@ -153,7 +153,9 @@
     "cell_play": "Zahrát řádek {{row}}, sloupec {{col}}",
     "cell_drop": "Vhodit žeton do sloupce {{col}}",
     "cell_taken": "Řádek {{row}}, sloupec {{col}}: {{mark}}",
-    "cell_empty": "Řádek {{row}}, sloupec {{col}}: prázdné"
+    "cell_empty": "Řádek {{row}}, sloupec {{col}}: prázdné",
+    "pass": "Vynechat tah",
+    "must_pass": "Žádný možný tah — musíte vynechat"
   },
   "watch": {
     "about": "Na co se dívám?",

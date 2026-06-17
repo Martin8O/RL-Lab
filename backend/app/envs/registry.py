@@ -1773,6 +1773,56 @@ register(
     )
 )
 
+# Othello / Reversi (G6d) — the THIRD board game. Still data-only on the engine side (the board
+# subsystem resolves the game from gym_id), but it exercises two generic wrinkles the smaller games
+# didn't: (1) OpenSpiel prints its 8×8 board *decorated* (row/column labels, "-" for empty), so the
+# board parser detokenises it (board_engine._board_grid, keyed by gym_id) — TTT/Connect Four stay
+# byte-identical; (2) a **pass** move when a player has no legal placement (action 64 of 65), surfaced
+# generically as BoardState.pass_action → a Pass button in the renderer. A click is still a single
+# CELL placement (actionMode "cell"), and flips are automatic (the streamed board already carries the
+# post-move discs, so the renderer needs no flip logic). Much bigger than Connect Four (~10^28 states),
+# so it trains against the near-random NOVICE MCTS teacher (ramping to easy) and is scored vs the easy
+# reference (board_engine.BOARD_PROFILES) — its honest curve climbs ≈−0.7→+0.2 on a CPU budget.
+register(
+    EnvSpec(
+        id="othello",
+        gym_id="othello",  # the OpenSpiel short name (resolved by app.services.board_engine)
+        display_name=Bilingual(en="Othello", cz="Othello (Reversi)"),
+        description=Bilingual(
+            en="Place a disc on the 8×8 board so it traps a line of the AI's discs between your new "
+            "disc and another of yours — every trapped disc flips to your colour. Whoever owns more "
+            "discs when no moves remain wins. If you have no legal move you must pass. Play against a "
+            "built-in AI that searches ahead (Monte-Carlo Tree Search) — pick a side and a difficulty "
+            "— or **train your own neural net** to play (it learns by playing the search AI) and then "
+            "face it. A classic of swings and reversals, far bigger than Connect Four.",
+            cz="Položte žeton na desku 8×8 tak, aby mezi váš nový žeton a jiný váš uvěznil souvislou "
+            "řadu žetonů AI — každý uvězněný žeton se obrátí na vaši barvu. Vyhrává ten, kdo má víc "
+            "žetonů, až nejsou možné tahy. Pokud nemáte legální tah, musíte vynechat (pass). Hrajte "
+            "proti vestavěné AI, která prohledává tahy dopředu (Monte-Carlo stromové prohledávání) — "
+            "vyberte si stranu a obtížnost — nebo si **natrénujte vlastní neuronovou síť** (učí se hrou "
+            "proti prohledávací AI) a pak se jí postavte. Klasika plná zvratů, mnohem větší než Čtyři v řadě.",
+        ),
+        family="board",
+        obs_type="vector",  # inert tag — board games are routed, never made via make_env
+        action_space="discrete",  # Discrete(65): 64 cell placements + a pass move
+        supported_algos=["ppo"],  # surfaced as "ppo"; routed to the board trainer by is_board_game
+        hyperparams=_board_hyperparams(),  # standard PPO knobs (ent_coef ★ 0.01); rounds is internal
+        # Same eval-vs-reference-MCTS ∈ [−1, 1] chart scale as the other board games (solved = +1, min =
+        # −1); trained novice→easy and scored vs easy (BOARD_PROFILES) so the curve climbs honestly.
+        solved_score=1.0,
+        min_score=-1.0,
+        default_total_timesteps=150_000,  # ★ budget — a much bigger game; the curve climbs over ~5 min CPU
+        play_step_scale=1,
+        floor_scales_with_steps=False,
+        turn_based=True,  # one move per click; the board subsystem drives the turn loop
+        human_playable=True,  # play a side vs the MCTS AI or your trained net
+        competitive=True,  # 2-player zero-sum → routed to the board trainer, like simple_tag
+        difficulty="advanced",  # the deepest board game so far
+        hw_requirement="cpu",  # MCTS + the MaskablePPO board trainer both run on CPU (no GPU gate)
+        train_implemented=True,  # the same game-agnostic neural board trainer (MaskablePPO vs MCTS, G6b)
+    )
+)
+
 # Hopper and Walker2d render at 125 fps and fall fast, so even with human play capped at the 30 fps
 # frame rate a person gets only ~8 s before the topple — too short to actually play. Stretch their
 # human-play wall-clock ~5× (the user's request) so there is real time to react; the other MuJoCo

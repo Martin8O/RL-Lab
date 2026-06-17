@@ -24,7 +24,7 @@ export default function PlayInstructions() {
           display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
           width: 'var(--control-sm)', height: 'var(--control-sm)', padding: 0, cursor: 'pointer',
           background: 'var(--surface-2)', color: 'var(--text-muted)',
-          border: '1px solid var(--border-default)', borderRadius: 'var(--radius-md)',
+          borderWidth: 1, borderStyle: 'solid', borderColor: 'var(--border-default)', borderRadius: 'var(--radius-md)',
           transition: 'var(--t-colors)',
         }}
         onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--accent)'; e.currentTarget.style.borderColor = 'var(--accent-border)' }}

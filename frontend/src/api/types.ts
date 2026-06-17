@@ -428,6 +428,9 @@ export interface BoardState {
   is_terminal: boolean
   /** Winning player index, or null for a draw / a game still in progress. */
   winner: number | null
+  /** A legal "pass" move mapping to no board cell (Othello when a player has no placement; Go), or
+   *  null. The renderer shows a Pass button for it instead of a cell click (G6d). */
+  pass_action?: number | null
 }
 
 /** WS frame: {type:"frame", ...} — a rendered env image OR client-render state. */

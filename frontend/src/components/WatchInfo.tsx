@@ -82,7 +82,7 @@ export default function WatchInfo({ checkpoints, selected, onSelect, watching, o
           display: 'inline-flex', alignItems: 'center', gap: 7,
           height: 'var(--control-sm)', padding: '0 12px', cursor: 'pointer',
           background: 'var(--surface-2)', color: 'var(--text-strong)',
-          border: '1px solid var(--border-default)', borderRadius: 'var(--radius-md)',
+          borderWidth: 1, borderStyle: 'solid', borderColor: 'var(--border-default)', borderRadius: 'var(--radius-md)',
           fontSize: 'var(--fs-label)', fontWeight: 'var(--fw-medium)', transition: 'var(--t-colors)',
         }}
         onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--accent-border)' }}

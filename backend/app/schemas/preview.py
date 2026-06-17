@@ -71,6 +71,9 @@ class BoardState(BaseModel):
     last_action: int | None  # the action just applied (for a "last move" highlight); None at start
     is_terminal: bool
     winner: int | None  # winning player index, or None for a draw / a game still in progress
+    # A legal "pass" move that maps to no board cell (Othello when a player has no placement; Go).
+    # The renderer shows a dedicated Pass button for it. None for games/plies without one (G6d).
+    pass_action: int | None = None
 
 
 class FrameMessage(BaseModel):

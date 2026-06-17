@@ -177,6 +177,43 @@ export const PLAY_GUIDES: Record<string, PlayGuide> = {
     },
   },
 
+  // Othello/Reversi (G6d) — clicked, turn-based, a single CELL placement that flips the trapped line
+  // automatically. Same training-free MCTS AI as the other board games, or your own trained net. The
+  // one new wrinkle: when you have no legal move you must use the Pass button. A much bigger game.
+  othello: {
+    goal: {
+      en: 'Own more discs than the AI when the board fills up. Each move you place one disc so it traps '
+        + 'a straight line of the AI\'s discs between it and another of yours — the whole trapped line '
+        + 'flips to your colour. You play the filled discs ● or the open discs ◯ (pick your side); the '
+        + 'built-in AI takes the other. If you have no legal move you must pass. Corners can never be '
+        + 'flipped, so they are gold.',
+      cz: 'Mějte víc žetonů než AI, až se deska zaplní. Každým tahem položíte jeden žeton tak, aby mezi '
+        + 'něj a jiný váš uvěznil souvislou řadu žetonů AI — celá uvězněná řada se obrátí na vaši barvu. '
+        + 'Hrajete plné žetony ● nebo prázdné ◯ (vyberte si stranu); vestavěná AI hraje druhou. Pokud '
+        + 'nemáte legální tah, musíte vynechat. Rohy nelze nikdy obrátit, takže mají zlatou cenu.',
+    },
+    controls: [
+      { keys: 'Click', action: { en: 'Place a disc on a highlighted cell', cz: 'Položte žeton na zvýrazněné políčko' } },
+      { keys: 'Pass', action: { en: 'When you have no legal move, click the Pass button', cz: 'Když nemáte tah, klikněte na tlačítko Vynechat' } },
+    ],
+    tips: {
+      en: 'This game is mouse-driven and turn-based — no keyboard. Click a highlighted cell to place a '
+        + 'disc; every disc you trap flips to your colour. Before you start, pick your side and a '
+        + 'difficulty (the ? explains how the AI thinks). Grabbing many discs early is a trap — the lead '
+        + 'swings wildly right to the end. Aim for the corners (they can never be flipped) and the edges, '
+        + 'and avoid the squares next to an empty corner, which hand it over. If you ever have no legal '
+        + 'move a Pass button appears — you must use it. Drop to Easy for a real chance to win; switch to '
+        + '"Watch AI vs AI" to see two searchers battle over the board.',
+      cz: 'Hra se ovládá myší a je tahová — žádná klávesnice. Klikněte na zvýrazněné políčko a položte '
+        + 'žeton; každý uvězněný žeton se obrátí na vaši barvu. Než začnete, vyberte si stranu a obtížnost '
+        + '(? vysvětluje, jak AI přemýšlí). Nahrabat si brzy hodně žetonů je past — vedení se až do konce '
+        + 'divoce přelévá. Miřte na rohy (ty nelze nikdy obrátit) a na okraje a vyhněte se polím vedle '
+        + 'prázdného rohu, která ho soupeři darují. Pokud nemáte žádný tah, objeví se tlačítko Vynechat — '
+        + 'musíte ho použít. Na Lehké máte reálnou šanci vyhrát; přepnutím na „Sledovat AI vs AI“ uvidíte '
+        + 'souboj dvou prohledávačů o desku.',
+    },
+  },
+
   lunarlander: {
     goal: {
       en: 'Land the module gently on the pad between the two flags, upright and slow, with both '

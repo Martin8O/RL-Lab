@@ -48,6 +48,27 @@ function emptyBoard(rows: number, cols: number, legalCount: number = rows * cols
   }
 }
 
+/** Othello's standard opening: four discs in the centre of the 8×8 board, Black ('x') to move, with
+ *  the four legal opening placements advertised. Shown before a session so the empty grid isn't. */
+function othelloIdleBoard(): BoardState {
+  const cells = Array<string>(64).fill('.')
+  cells[27] = 'o' // d4
+  cells[28] = 'x' // e4
+  cells[35] = 'x' // d5
+  cells[36] = 'o' // e5
+  return {
+    cells,
+    rows: 8,
+    cols: 8,
+    legal_actions: [19, 26, 37, 44], // d3, c4, f5, e6
+    current_player: 0,
+    last_action: null,
+    is_terminal: false,
+    winner: null,
+    pass_action: null,
+  }
+}
+
 export const BOARD_GAMES: Record<string, BoardGameMeta> = {
   // Tic-Tac-Toe: glyph 'x' = player 0 (moves first, accent), 'o' = player 1 (danger). The action
   // index equals the cell index (0–8), so a legal cell is directly clickable.
@@ -70,6 +91,19 @@ export const BOARD_GAMES: Record<string, BoardGameMeta> = {
     },
     actionMode: 'column',
     idle: emptyBoard(6, 7, 7), // seven column-actions
+  },
+  // Othello/Reversi (G6d): an 8×8 disc game. Player 0 ('x') = the filled disc ●, player 1 ('o') = the
+  // open disc ◯ — same high-contrast --text-strong token, distinguished by FILL so both read clearly in
+  // dark AND light (true black/white discs can't: no theme token is always-dark or always-light, and a
+  // pale fill reads as white — the Connect Four lesson). A move is a single CELL placement (the default
+  // actionMode), flips arrive pre-applied in the streamed board (no flip logic here), and a forced pass
+  // surfaces as BoardState.pass_action → a Pass button handled generically in BoardStage.
+  othello: {
+    pieces: {
+      x: { player: 0, glyph: '●', color: 'var(--text-strong)' },
+      o: { player: 1, glyph: '◯', color: 'var(--text-strong)' },
+    },
+    idle: othelloIdleBoard(),
   },
 }
 

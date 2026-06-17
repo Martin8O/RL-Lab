@@ -135,6 +135,16 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
           + 'vidí mnohem dál a chybuje zřídka — čekejte opravdový souboj. **Střední** je vyvážená první '
           + 'zkouška.',
       },
+      othello: {
+        en: 'Othello is the biggest board game here, with constant swings, so look-ahead pays off and '
+          + 'difficulty really bites. On **Easy** the AI searches little and misjudges the late flips you '
+          + 'can exploit. On **Hard** it sees the reversals coming and plays for corners — a stiff test. '
+          + '**Medium** is a fair first game.',
+        cz: 'Othello je tu největší desková hra plná neustálých zvratů, takže prohledávání dopředu se '
+          + 'vyplácí a obtížnost je hodně znát. Na **Lehké** AI prohledává málo a špatně odhaduje pozdní '
+          + 'obraty, kterých můžete využít. Na **Těžké** zvraty předvídá a hraje na rohy — tvrdá zkouška. '
+          + '**Střední** je férová první partie.',
+      },
     },
   },
   algorithm: {
@@ -1215,6 +1225,10 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
       connect_four: {
         en: "Score = how the net does vs the reference AI: **−1** loses all, **0** draws all, **+1** wins all (\"solved\"). A fresh net already scores around −0.6 (it wins a few by luck), then climbs as it learns. Beating the search AI *every* game (+1) is a very high bar, so expect the curve to head toward 0 and above — well below +1 is still real, hard-won skill.",
         cz: 'Skóre = jak si síť vede proti referenční AI: **−1** vše prohraje, **0** vše remizuje, **+1** vše vyhraje („vyřešeno“). Čerstvá síť má hned kolem −0,6 (pár partií vyhraje náhodou), pak stoupá, jak se učí. Porazit prohledávací AI v *každé* partii (+1) je velmi vysoká laťka, takže čekejte, že křivka zamíří k 0 a výš — i hluboko pod +1 je to skutečná, těžce nabytá dovednost.',
+      },
+      othello: {
+        en: "Score = how the net does vs the reference (easy) AI: **−1** loses all, **0** draws all, **+1** wins all (\"solved\"). Othello is huge, so a fresh net starts low — around −0.7 — then climbs as it learns to beat the easy searcher, typically settling a bit above 0 (it wins more than it loses). Reaching +1 (winning *every* game) is a very high bar, so a curve well below the line is still genuine progress.",
+        cz: 'Skóre = jak si síť vede proti referenční (lehké) AI: **−1** vše prohraje, **0** vše remizuje, **+1** vše vyhraje („vyřešeno“). Othello je obrovské, takže čerstvá síť začíná nízko — kolem −0,7 — a pak stoupá, jak se učí porážet lehkého prohledávače, obvykle se ustálí kousek nad 0 (vyhrává víc, než prohrává). Dosáhnout +1 (vyhrát *každou* partii) je velmi vysoká laťka, takže i křivka hluboko pod čárou je skutečný pokrok.',
       },
     },
   },

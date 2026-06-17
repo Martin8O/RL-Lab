@@ -35,7 +35,14 @@ MaskedPredictFn = Callable[[Any, Any], int]
 # (and slower) play. Tic-Tac-Toe is tiny, so even "hard" is sub-millisecond; the spread is tuned so
 # "easy" is genuinely beatable by a beginner while "hard" plays optimally (a hard-vs-hard pair draws
 # — the TTT correctness invariant). Keyed by the play-config ``ai_strength``.
-STRENGTH_SIMS: dict[str, int] = {"easy": 10, "medium": 80, "hard": 400}
+#
+# ``novice`` (G6d) is a sub-easy *teacher* tier, NOT a play difficulty: the play picker only offers
+# easy/medium/hard, so it never surfaces as an opponent the user faces. It exists because a big game
+# (Othello, ~10^28 states) trained from scratch against even the easy bot rarely wins → almost no
+# learning signal; a near-random novice teacher hands the fresh net enough wins to start climbing
+# (verified — eval-vs-easy goes −0.7→+0.2 with a novice teacher, vs barely moving against easy). Used
+# only via :data:`BOARD_PROFILES`.
+STRENGTH_SIMS: dict[str, int] = {"novice": 3, "easy": 10, "medium": 80, "hard": 400}
 _DEFAULT_STRENGTH = "medium"
 
 
@@ -58,9 +65,14 @@ class BoardProfile(NamedTuple):
 # is both taught by and scored against EASY — scoring it vs medium would pin the honest skill curve at
 # the loss floor while the net is genuinely improving. Unlisted games fall back to the TTT profile.
 # Keyed by the OpenSpiel short name (``gym_id``); the renderer/contract stay fully game-agnostic.
+# Othello (G6d, ~10^28 states) is far bigger again. Against the easy bot a fresh net almost never wins,
+# so it barely learns; trained against the near-random NOVICE teacher (ramping up to easy) it gets
+# enough early wins to climb, and scored against the easy reference its honest curve rises from ≈−0.7
+# to ≈+0.2 over a CPU budget (verified). So it is taught novice→easy and scored vs easy.
 BOARD_PROFILES: dict[str, BoardProfile] = {
     "tic_tac_toe": BoardProfile(eval_strength="medium", teacher_start="easy", teacher_end="medium"),
     "connect_four": BoardProfile(eval_strength="easy", teacher_start="easy", teacher_end="easy"),
+    "othello": BoardProfile(eval_strength="easy", teacher_start="novice", teacher_end="easy"),
 }
 _DEFAULT_PROFILE = BOARD_PROFILES["tic_tac_toe"]
 
@@ -121,24 +133,89 @@ class MctsOpponent:
         return int(self._bot.step(state))
 
 
+class BoardStrFormat(NamedTuple):
+    """How to read the board grid out of ``str(state)`` for a game (G6d).
+
+    Most OpenSpiel grid games (Tic-Tac-Toe, Connect Four) print a **clean** grid — one row per line,
+    one char per cell, ``.`` for empty — which :func:`_board_grid` reads directly. Othello prints a
+    **decorated** grid (a "Black to play" header, ``a b c …`` column labels, ``1 … 8`` row labels,
+    ``-`` for empty and a space between cells), so its rows must be detokenised. This descriptor
+    captures the two things that vary (the empty marker + whether rows are label-wrapped); the rest of
+    the subsystem stays game-agnostic. Keyed by the OpenSpiel short name; defaults to the clean format.
+    """
+
+    empty: str  # the empty-cell marker in str(state) ("." for most games, "-" for Othello)
+    labeled: bool  # True ⇒ rows are space-separated and wrapped by numeric row labels (Othello)
+
+
+_DEFAULT_STR_FORMAT = BoardStrFormat(empty=".", labeled=False)
+_BOARD_STR_FORMATS: dict[str, BoardStrFormat] = {
+    "othello": BoardStrFormat(empty="-", labeled=True),
+}
+
+
+def _board_grid(state: Any) -> tuple[int, int, list[str]]:
+    """Extract the ``(rows, cols, cells)`` grid from ``str(state)``, normalising empties to ``"."``.
+
+    Cells are row-major single glyph chars (``"."`` empty, ``"x"``/``"o"`` pieces). Clean-grid games
+    (TTT/Connect Four) parse byte-identically to G6a; labeled games (Othello) read each board row as
+    the ``cols`` single-char cell tokens between the numeric row labels, with the true ``rows × cols``
+    taken from the ``observation_tensor`` shape (so the header/label lines never leak into the grid).
+    """
+    game = state.get_game()
+    fmt = _BOARD_STR_FORMATS.get(game.get_type().short_name, _DEFAULT_STR_FORMAT)
+    text = str(state).strip("\n")
+
+    if not fmt.labeled:
+        lines = [ln.rstrip() for ln in text.split("\n") if ln.strip() != ""]
+        rows = len(lines)
+        cols = max((len(ln) for ln in lines), default=0)
+        cells: list[str] = []
+        for ln in lines:
+            for c in range(cols):
+                ch = ln[c] if c < len(ln) else " "
+                cells.append("." if ch == fmt.empty else ch)
+        return rows, cols, cells
+
+    # Labeled grid (Othello): the obs-tensor shape gives the authoritative rows × cols; each board row
+    # is the line whose first whitespace token is a digit (the row label), followed by `cols` cell chars.
+    shape = game.observation_tensor_shape()
+    rows, cols = int(shape[-2]), int(shape[-1])
+    grid: list[str] = []
+    for ln in text.split("\n"):
+        toks = ln.split()
+        if len(toks) >= cols + 1 and toks[0].isdigit():
+            grid.extend("." if ch == fmt.empty else ch for ch in toks[1 : 1 + cols])
+        if len(grid) >= rows * cols:
+            break
+    return rows, cols, grid
+
+
+def _pass_action(state: Any) -> int | None:
+    """The index of a legal **pass** move (Othello when a player has no placement; Go), else ``None``.
+
+    Game-agnostic: a pass is the legal action whose ``action_to_string`` reads ``"pass"`` — it maps to
+    no board cell, so the renderer shows a dedicated Pass button rather than a cell click. ``None`` for
+    games without one (TTT/Connect Four never pass) and at terminal/chance nodes (nobody to move)."""
+    if state.is_terminal() or state.is_chance_node():
+        return None
+    player = int(state.current_player())
+    for a in state.legal_actions():
+        if state.action_to_string(player, int(a)).strip().lower() == "pass":
+            return int(a)
+    return None
+
+
 def board_payload(state: Any, last_action: int | None) -> dict[str, Any]:
     """The streamed ``BoardState`` for one ply — built from the **generic** ``pyspiel.State`` API.
 
-    ``cells`` is the board as a row-major list of single glyph characters parsed from
-    ``str(state)`` (``"."`` empty, ``"x"``/``"o"`` for Tic-Tac-Toe, etc.). Reading the board as
-    characters is the one game-agnostic extraction that works for any ASCII-grid OpenSpiel game;
-    the only game-specific bit — mapping a glyph to a piece/player for rendering — lives in the
-    **renderer** (``frontend/src/content/boardGames.ts``), where the prompt permits TTT specifics.
-    Everything else (legal moves, whose turn, terminality, the winner) is the generic API.
+    ``cells`` is the board as a row-major list of single glyph characters (``"."`` empty, ``"x"``/``"o"``
+    pieces) extracted by :func:`_board_grid`, which handles both clean (TTT/Connect Four) and decorated
+    (Othello) OpenSpiel board strings. The only game-specific bit — mapping a glyph to a piece/player
+    for rendering — lives in the **renderer** (``frontend/src/content/boardGames.ts``). Everything else
+    (legal moves, whose turn, terminality, the winner, a forced pass) is the generic API.
     """
-    text = str(state).strip("\n")
-    lines = [ln.rstrip() for ln in text.split("\n") if ln.strip() != ""]
-    rows = len(lines)
-    cols = max((len(ln) for ln in lines), default=0)
-    cells: list[str] = []
-    for ln in lines:
-        for c in range(cols):
-            cells.append(ln[c] if c < len(ln) else " ")
+    rows, cols, cells = _board_grid(state)
 
     terminal = bool(state.is_terminal())
     winner: int | None = None
@@ -159,6 +236,8 @@ def board_payload(state: Any, last_action: int | None) -> dict[str, Any]:
         "last_action": int(last_action) if last_action is not None else None,
         "is_terminal": terminal,
         "winner": winner,
+        # A legal "pass" move (Othello when stuck), or None — the renderer shows a Pass button for it.
+        "pass_action": _pass_action(state),
     }
 
 
