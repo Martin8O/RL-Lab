@@ -54,7 +54,8 @@
     "resume": "Pokračovat",
     "stopping": "Zastavuji…",
     "train_needs_gpu": "Trénink této hry vyžaduje GPU (k dispozici na stolním PC). Zatím si ji můžete zahrát ručně — použijte tlačítko Hrát níže.",
-    "train_not_implemented": "Trénink této hry zatím není hotový — hry z obrazu potřebují GPU trenér (CnnPolicy), který přijde v některé z dalších verzí. Zatím si ji můžete zahrát ručně — použijte tlačítko Hrát níže."
+    "train_not_implemented": "Trénink této hry zatím není hotový — hry z obrazu potřebují GPU trenér (CnnPolicy), který přijde v některé z dalších verzí. Zatím si ji můžete zahrát ručně — použijte tlačítko Hrát níže.",
+    "train_not_implemented_ma": "Trénink tohoto světa přijde v některém z dalších kroků — každý druh potřebuje vlastní „mozek“. Zatím můžete jen sledovat, jak se neučený svět pohybuje (nedá se hrát ručně — roj nemá jednoho řidiče)."
   },
   "stats": {
     "progress": "Postup",

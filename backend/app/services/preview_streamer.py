@@ -115,6 +115,35 @@ class PreviewStreamer:
         self._ensure_loop()
         self._broadcast(self.state().model_dump())
 
+    def start_watch(self, env_id: str) -> None:
+        """Begin a *training-free* preview of ``env_id`` — the "watch the ecosystem" mode (G7b).
+
+        Reuses the run-preview machinery with **no** published policy, so the loop steps the env
+        with random actions (``_choose_*`` fall back to ``action_space.sample()``). Used for a
+        multi-agent env whose per-species trainer isn't built yet (heterogeneous ``simple_tag``,
+        G7b-1): neither human-playable nor trainable, but still watchable as a moving swarm. The
+        lifecycle is identical to a training run's ``attach_run`` — a later real run just re-attaches
+        and publishes its policy — so the two can never collide (the watch envs are training-gated).
+        """
+        # Switching directly between two watch-only envs would otherwise hit the stale-thread race
+        # (``_ensure_loop`` skips while the *old* env's thread is still alive). Stop + join it first so
+        # the new env always gets a fresh render loop. (Training never hits this — env switches there
+        # are gated behind stopping the run.)
+        with self._lock:
+            busy_other = (
+                self._thread is not None and self._thread.is_alive() and self._env_id != env_id
+            )
+        if busy_other:
+            self.detach_run()
+            thread = self._thread
+            if thread is not None:
+                thread.join(timeout=2.0)
+        self.attach_run(env_id)
+
+    def stop_watch(self) -> None:
+        """End a watch started by :meth:`start_watch` (the loop observes it, stops, closes its env)."""
+        self.detach_run()
+
     def set_policy(self, predict: PredictFn) -> None:
         """Publish the live model's predict fn; until then the loop uses random actions."""
         with self._lock:

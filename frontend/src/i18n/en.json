@@ -54,7 +54,8 @@
     "resume": "Resume",
     "stopping": "Stopping…",
     "train_needs_gpu": "Training this game needs a GPU (available on the desktop). You can still play it by hand now — use the Play button below.",
-    "train_not_implemented": "Training for this game isn't built yet — pixel-based games need the GPU (CnnPolicy) trainer that's coming in a later version. You can still play it by hand now — use the Play button below."
+    "train_not_implemented": "Training for this game isn't built yet — pixel-based games need the GPU (CnnPolicy) trainer that's coming in a later version. You can still play it by hand now — use the Play button below.",
+    "train_not_implemented_ma": "Training for this world is coming in a later step — each species needs its own brain. For now you can just watch the untrained world move (it isn't hand-playable — a swarm has no single driver)."
   },
   "stats": {
     "progress": "Progress",

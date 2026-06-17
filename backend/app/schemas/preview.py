@@ -96,3 +96,16 @@ class PreviewConfig(BaseModel):
 
     visual: bool | None = None
     speed: float | None = None
+
+
+class PreviewWatch(BaseModel):
+    """Start/stop a *training-free* preview of an env — the "watch the ecosystem" mode (G7b).
+
+    Drives the same streamer with **no** published policy → a random-action rollout, so a
+    multi-agent env that is neither human-playable nor yet trainable (heterogeneous ``simple_tag``,
+    whose per-species trainer lands in G7b-2) is still watchable as a moving swarm. ``on`` toggles
+    the watch; ``env_id`` names the env to render.
+    """
+
+    env_id: str
+    on: bool

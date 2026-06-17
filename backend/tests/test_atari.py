@@ -123,10 +123,12 @@ def test_train_implemented_split_after_g4b() -> None:
     """After G4b the image-obs family splits: **Atari trains** (the CnnPolicy + AtariWrapper/frame-stack
     + CUDA seam is built), while **CarRacing stays gated** (its non-Atari image trainer is G3c-train).
     Every vector/discrete env — including the GPU-gated *vector* heavies (BipedalWalker/MuJoCo, MlpPolicy)
-    — trains too. So ``train_implemented`` is False for exactly the not-yet-built image trainers, which
-    today is only CarRacing; a GPU box still keeps that one gated via the manager backstop below."""
+    — trains too. ``train_implemented`` is False for exactly the not-yet-built trainers: the image
+    CarRacing (G3c-train) **and** the heterogeneous multi-agent ``simple_tag`` envs (their per-species
+    trainer is G7b-2 — registered watch-only first); a GPU box still keeps those gated via the backstop."""
+    not_yet = {"carracing", "mpe_tag", "mpe_tag_pack"}  # trainers not built yet (G3c-train, G7b-2)
     for spec in list_envs():
-        expected = spec.id != "carracing"  # the only env whose trainer isn't built yet
+        expected = spec.id not in not_yet
         assert spec.train_implemented is expected, (
             f"{spec.id}: train_implemented={spec.train_implemented} (obs_type={spec.obs_type})"
         )

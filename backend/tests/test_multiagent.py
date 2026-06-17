@@ -146,3 +146,76 @@ def test_ppo_trains_on_mpe_via_supersuit_bridge() -> None:
     # VecMonitor populates the episode buffer (25-cycle episodes finish well within a rollout).
     assert metrics[-1].ep_rew_mean is not None
     assert metrics[-1].timesteps >= 768
+
+
+# -- Predator–Prey (simple_tag) — heterogeneous species, watch-only first step (G7b-1) -------------
+
+MPE_TAG = ["mpe_tag", "mpe_tag_pack"]
+
+
+def test_mpe_tag_registered_watch_only() -> None:
+    for eid in MPE_TAG:
+        spec = get_env(eid)
+        assert spec is not None, f"{eid} not registered"
+        assert spec.family == "petting_zoo"
+        assert spec.gym_id == "simple_tag_v3"  # the mpe2 scenario module name
+        assert spec.supported_algos == ["ppo"]
+        assert spec.competitive is True  # predators vs. prey
+        assert spec.human_playable is False  # a swarm has no single human driver (play is G7b-3)
+        assert spec.train_implemented is False  # per-species trainer not built yet (G7b-2)
+        assert spec.hw_requirement == "cpu"
+
+
+def test_mpe_tag_make_kwargs_carry_species_counts() -> None:
+    k = get_env("mpe_tag").make_kwargs  # type: ignore[union-attr]
+    assert k["num_adversaries"] == 3 and k["num_good"] == 1 and k["num_obstacles"] == 2
+    kp = get_env("mpe_tag_pack").make_kwargs  # type: ignore[union-attr]
+    assert kp["num_adversaries"] == 6 and kp["num_good"] == 2
+
+
+def test_mpe_tag_is_heterogeneous_with_roles_and_obstacles() -> None:
+    """simple_tag has two species with DIFFERENT obs sizes (why parameter sharing won't do, G7b-2),
+    and the render extraction tags predators 'adversary' + collidable landmarks 'obstacle'."""
+    env = ma_env.make_parallel_env("mpe_tag")
+    try:
+        env.reset(seed=0)
+        adversaries = [a for a in env.agents if a.startswith("adversary")]
+        good = [a for a in env.agents if a.startswith("agent")]
+        assert len(adversaries) == 3 and len(good) == 1
+        # Heterogeneous: predator obs is larger than prey obs (the homogeneity break, G7b-2).
+        assert env.observation_space(adversaries[0]).shape != env.observation_space(good[0]).shape
+
+        sprites = ma_env.agent_sprites(env)
+        roles = sorted({s["role"] for s in sprites})
+        assert roles == ["adversary", "agent"]  # both species drive the swarm colours
+        for s in sprites:
+            AgentSprite(**s)
+        entities = ma_env.world_entities(env)
+        assert entities and all(e["kind"] == "obstacle" for e in entities)  # collidable landmarks
+        for e in entities:
+            WorldEntity(**e)
+    finally:
+        env.close()
+
+
+def test_mpe_tag_training_is_gated() -> None:
+    """train_implemented=False → the manager backstop rejects a training start (not a 5xx)."""
+    res = client.post(
+        "/api/train/start",
+        json={"env_id": "mpe_tag", "algo": "ppo", "seed": 0, "total_timesteps": 1000,
+              "hyperparams": {}},
+    )
+    assert 400 <= res.status_code < 500
+
+
+def test_preview_watch_endpoint_toggles_active() -> None:
+    """The training-free 'watch the ecosystem' endpoint marks the preview active/inactive. Visual is
+    turned off first so no render thread spawns (keeps the test fast + thread-free)."""
+    client.post("/api/preview", json={"visual": False})
+    try:
+        on = client.post("/api/preview/watch", json={"env_id": "mpe_tag", "on": True}).json()
+        assert on["active"] is True
+        off = client.post("/api/preview/watch", json={"env_id": "mpe_tag", "on": False}).json()
+        assert off["active"] is False
+    finally:
+        client.post("/api/preview", json={"visual": True})

@@ -719,9 +719,27 @@ const MPE_SPREAD_WATCH_TIP: Bilingual = {
     + 'plynulé, koordinované rozprostírání — ne jako jednotlivci ujíždějící každý po svém.',
 }
 
+// Predator–Prey (simple_tag, G7b). Watch-only in this first step: the per-species trainer isn't
+// built yet, so the dots move with *random* actions — the point here is the world, the two species
+// and the obstacles, not skilled behaviour (that arrives once each species gets its own brain).
+const MPE_TAG_WATCH_TIP: Bilingual = {
+  en: 'Red dots are the predators; the blue dot is the faster prey they are trying to touch, and the '
+    + 'grey discs are obstacles that block everyone. Right now nobody is trained — the dots move at '
+    + 'random, so you are watching the raw ecosystem, not a hunt. Once each species gets its own brain '
+    + '(the next build step) the predators should learn to fan out and corner the prey while the prey '
+    + 'learns to dodge and use the obstacles — the emergent herding-and-ambushing this env is famous for.',
+  cz: 'Červené tečky jsou predátoři; modrá tečka je rychlejší kořist, které se snaží dotknout, a šedé '
+    + 'kruhy jsou překážky, které blokují všechny. Teď není nikdo natrénovaný — tečky se pohybují '
+    + 'náhodně, takže sledujete syrový ekosystém, ne lov. Jakmile každý druh dostane vlastní „mozek“ '
+    + '(další krok vývoje), predátoři by se měli naučit rozprostřít se a zahnat kořist do kouta, zatímco '
+    + 'kořist se učí uhýbat a využívat překážky — vznikající obkličování a léčky, jimiž je tento svět proslulý.',
+}
+
 export const WATCH_TIPS: Record<string, Bilingual> = {
   mpe_spread: MPE_SPREAD_WATCH_TIP,
   mpe_spread_swarm: MPE_SPREAD_WATCH_TIP,
+  mpe_tag: MPE_TAG_WATCH_TIP,
+  mpe_tag_pack: MPE_TAG_WATCH_TIP,
 }
 
 /** The "what to look for" watch note for a watch-only env, or null if it has none. */

@@ -1392,6 +1392,101 @@ for _mpe_row in _MPE_GAMES:
 
 
 # ---------------------------------------------------------------------------
+# Multi-agent — Predator–Prey (simple_tag) — G7b "the ecosystem" (heterogeneous species).
+#
+# Unlike Simple Spread (homogeneous, one shared brain), simple_tag has **two species** with
+# *different* obs sizes and *opposite* rewards: fast **predators** (``adversary`` — they share a
+# reward for touching the prey) chase a faster **prey** (``agent`` — penalised on contact), around
+# a couple of solid **obstacles**. That breaks SuperSuit's parameter-sharing bridge (it needs
+# identical spaces), so the trainer needs **per-species policies** — built in **G7b-2**. This first
+# step (G7b-1) registers the env as **watchable** (the existing swarm render already colours
+# ``adversary`` agents and ``obstacle`` landmarks) with training **gated off** until the per-species
+# trainer lands: ``train_implemented=False`` (the ADR-043 gate shows the CZ/EN "trainer coming" note)
+# and ``human_playable=False`` (a swarm has no single driver; competitive human play is G7b-3).
+#
+# ``min_score`` / ``solved_score`` here are **provisional** (predator-side, the chart's eventual
+# focus) — unused while training is gated (no chart, no skill meter) and re-measured per-species in
+# G7b-2. ``competitive=True`` records the predator-vs-prey nature (data only; no UI wired to it yet).
+# ---------------------------------------------------------------------------
+
+
+def _mpe_tag_spec(
+    env_id: str,
+    n_adversaries: int,
+    n_good: int,
+    n_obstacles: int,
+    display: str,
+    difficulty: Literal["beginner", "intermediate", "advanced"],
+    min_score: float,
+    solved_score: float,
+    default_total_timesteps: int,
+    desc_en: str,
+    desc_cz: str,
+) -> EnvSpec:
+    """Build one Predator–Prey (simple_tag) EnvSpec — heterogeneous species, training-gated (G7b-1)."""
+    return EnvSpec(
+        id=env_id,
+        gym_id="simple_tag_v3",  # the mpe2 scenario module name (resolved by app.services.ma_env)
+        display_name=Bilingual(en=display, cz=display),
+        description=Bilingual(en=desc_en, cz=desc_cz),
+        family="petting_zoo",
+        obs_type="vector",  # per-agent vector obs — but sizes DIFFER by species (16 vs 14), hence G7b-2
+        action_space="discrete",  # Discrete(5): stay / left / right / down / up
+        supported_algos=["ppo"],  # per-species PPO (G7b-2); evo / Q-learning have no MA path
+        hyperparams=_standard_hyperparams(),
+        # PettingZoo parallel_env kwargs (consumed by ma_env.make_parallel_env). simple_tag takes
+        # explicit species counts + obstacles instead of Simple Spread's single ``N``.
+        make_kwargs={
+            "num_good": n_good,
+            "num_adversaries": n_adversaries,
+            "num_obstacles": n_obstacles,
+            "max_cycles": 25,
+            "continuous_actions": False,
+        },
+        solved_score=solved_score,  # provisional (predator-side); re-measured per-species in G7b-2
+        min_score=min_score,  # provisional; unused while training is gated
+        default_total_timesteps=default_total_timesteps,
+        play_step_scale=1,
+        floor_scales_with_steps=False,
+        human_playable=False,  # a swarm has no single human driver; competitive play is G7b-3
+        competitive=True,  # predators vs. prey (data only; no UI wired to it yet)
+        difficulty=difficulty,
+        hw_requirement="cpu",  # small env; per-species PPO trains on CPU (the GPU desktop scales it)
+        train_implemented=False,  # per-species trainer not built yet (G7b-2) — watch-only for now
+    )
+
+
+# id, n_adversaries, n_good, n_obstacles, display, difficulty, min, solved, steps, desc EN, desc CZ
+_MPE_TAG_GAMES: list[
+    tuple[str, int, int, int, str, Literal["beginner", "intermediate", "advanced"], float, float, int, str, str]
+] = [
+    ("mpe_tag", 3, 1, 2, "Predator–Prey (3 vs 1)", "intermediate", 0.0, 80.0, 500_000,
+     "Three cooperating predators chase a single, faster prey around a shared 2-D world dotted with "
+     "two obstacles. The predators share a reward for every touch of the prey; the prey is penalised "
+     "for being caught and for fleeing off-screen — so the two species learn opposite goals. The "
+     "classic, accessible cousin of OpenAI's hide-and-seek and the gateway to emergent herding and "
+     "ambushing. (Watch-only for now — each species gets its own brain in the next step.)",
+     "Tři spolupracující predátoři honí jedinou, rychlejší kořist ve sdíleném 2-D světě se dvěma "
+     "překážkami. Predátoři dostávají společnou odměnu za každý dotyk kořisti; kořist je trestána za "
+     "chycení i za útěk mimo obrazovku — oba druhy se tak učí opačné cíle. Klasický a přístupný "
+     "bratranec hry na schovávanou od OpenAI a brána ke vznikajícímu obkličování a léčkám. "
+     "(Zatím jen ke sledování — každý druh dostane vlastní „mozek“ v dalším kroku.)"),
+    ("mpe_tag_pack", 6, 2, 2, "Predator–Prey (6 vs 2)", "advanced", 0.0, 120.0, 1_000_000,
+     "The same predator–prey chase scaled up to a six-predator pack hunting two prey — richer pack "
+     "coordination, more chances for the prey to split the hunters and escape, and a harder "
+     "credit-assignment problem for both species. A vivid ecosystem to watch once each species has "
+     "its own trained brain.",
+     "Stejná honička predátor–kořist zvětšená na šestičlennou smečku lovící dvě kořisti — bohatší "
+     "koordinace smečky, víc příležitostí pro kořist rozdělit lovce a uniknout a těžší přiřazení "
+     "zásluh pro oba druhy. Názorný ekosystém ke sledování, jakmile každý druh dostane vlastní "
+     "natrénovaný „mozek“."),
+]
+
+for _mpe_tag_row in _MPE_TAG_GAMES:
+    register(_mpe_tag_spec(*_mpe_tag_row))
+
+
+# ---------------------------------------------------------------------------
 # MuJoCo family (continuous control / robotics) — G5a "install + human-play on CPU
 # now, training GPU-gated" (the Atari/BipedalWalker pattern).
 #

@@ -115,7 +115,11 @@ typed seams need real code — see [`adding-an-environment.md`](adding-an-enviro
    raw parallel env (preview/render) and the SuperSuit parameter-sharing **vec env** (one shared `MlpPolicy`
    over all homogeneous agents); `trainer_ppo` + the preview streamer branch on `family=="petting_zoo"`. The
    `frame` WS type carries additive `agents`/`world` positions for a client-rendered "swarm" canvas. Homogeneous
-   agents only (simple_spread); heterogeneous species (simple_tag) and 2-agent competitive play come later (G7b/c).
+   agents train via parameter sharing (simple_spread). **Heterogeneous species (simple_tag predators vs. prey)
+   are registered *watch-only* (G7b-1 / ADR-047):** different obs sizes + opposite rewards break parameter
+   sharing, so their per-species trainer is deferred (`train_implemented=False`) and the env is made watchable
+   without training via `POST /api/preview/watch` (the streamer runs a no-policy random rollout). The per-species
+   trainer (G7b-2) and 2-agent competitive play (G7b/c) come later.
 
 ## Standalone packaging (F5)
 

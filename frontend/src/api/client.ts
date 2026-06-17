@@ -367,6 +367,18 @@ export async function setPreview(config: PreviewConfig): Promise<PreviewState> {
   return res.json() as Promise<PreviewState>
 }
 
+/** Start/stop a training-free "watch the ecosystem" preview (G7b) — drives the streamer with a
+ *  random rollout so a not-yet-trainable multi-agent env (simple_tag) is still watchable. */
+export async function watchPreview(envId: string, on: boolean): Promise<PreviewState> {
+  const res = await fetch(`${API_BASE}/api/preview/watch`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ env_id: envId, on }),
+  })
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  return res.json() as Promise<PreviewState>
+}
+
 // ── Play vs AI & skill (E2) ─────────────────────────────────────────────────────
 
 /** Start one interactive episode (human at the keyboard, or AI watch from a checkpoint).

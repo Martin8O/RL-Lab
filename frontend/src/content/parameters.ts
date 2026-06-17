@@ -183,6 +183,14 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
         en: 'PPO only, same as the 3-agent version — one shared policy now drives a six-agent swarm. The bigger the swarm, the more there is to coordinate, but it is still the single shared brain learning for everyone.',
         cz: 'Jen PPO, stejně jako u verze se třemi agenty — jedna sdílená strategie teď řídí roj šesti agentů. Čím větší roj, tím víc koordinace, ale stále se učí jeden sdílený mozek za všechny.',
       },
+      mpe_tag: {
+        en: 'PPO only — but unlike Simple Spread the two species (predators vs. prey) have different observations and opposite rewards, so one shared brain will not do: each species needs its own policy. That per-species trainer is the next build step; for now you can watch the untrained world move.',
+        cz: 'Jen PPO — ale na rozdíl od Simple Spread mají oba druhy (predátoři vs. kořist) jiná pozorování a opačné odměny, takže jeden sdílený mozek nestačí: každý druh potřebuje vlastní strategii. Trenér pro jednotlivé druhy je dalším krokem vývoje; zatím můžete sledovat, jak se neučený svět pohybuje.',
+      },
+      mpe_tag_pack: {
+        en: 'PPO only, same as the 3-vs-1 version — a six-predator pack and two prey, still two opposed species that each need their own policy (the per-species trainer is the next step). Watch-only for now.',
+        cz: 'Jen PPO, stejně jako verze 3 na 1 — šestičlenná smečka predátorů a dvě kořisti, stále dva protichůdné druhy, z nichž každý potřebuje vlastní strategii (trenér pro jednotlivé druhy je dalším krokem). Zatím jen ke sledování.',
+      },
       hopper: MUJOCO_ALGO,
       walker2d: MUJOCO_ALGO,
       halfcheetah: MUJOCO_ALGO,
@@ -766,6 +774,14 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
       mpe_spread_swarm: {
         en: 'Six agents and six targets is much harder to coordinate, so it needs the larger ★ 1M budget — and even then expect only partial coverage on a CPU. This row is really a showcase of the swarm at scale; the heavy training belongs on the GPU desktop (G7b).',
         cz: 'Šest agentů a šest cílů se koordinuje mnohem hůř, takže potřebuje větší rozpočet ★ 1M — a i tak čekejte na CPU jen částečné pokrytí. Tento řádek je hlavně ukázka roje ve větším měřítku; náročný trénink patří na stroj s GPU (G7b).',
+      },
+      mpe_tag: {
+        en: 'This budget applies once the per-species trainer lands (next step) — predators and prey learn together, so it takes a fair number of steps before the chase looks purposeful. The ★ 500k is a sensible CPU start; the GPU desktop scales it up.',
+        cz: 'Tento rozpočet platí, jakmile přijde trenér pro jednotlivé druhy (další krok) — predátoři a kořist se učí společně, takže než honička začne vypadat účelně, chvíli to trvá. ★ 500k je rozumný start na CPU; stroj s GPU ho navýší.',
+      },
+      mpe_tag_pack: {
+        en: 'The bigger pack-vs-prey world needs the larger ★ 1M budget once training is built (next step), and is really a showcase to scale on the GPU desktop.',
+        cz: 'Větší svět smečka vs. kořist potřebuje větší rozpočet ★ 1M, jakmile bude trénink hotový (další krok), a je hlavně ukázkou pro škálování na stroji s GPU.',
       },
       hopper: MUJOCO_STEPS,
       walker2d: MUJOCO_STEPS,

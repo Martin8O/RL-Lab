@@ -108,9 +108,16 @@ spec's `gym_id` is the scenario module name (e.g. `"simple_spread_v3"`). The ada
 builds the raw parallel env (preview/render) and the SuperSuit **parameter-sharing** vec env (one shared
 `MlpPolicy` over all homogeneous agents); `trainer_ppo` and the preview streamer branch on `is_multi_agent`.
 Rendering is a **client-side "swarm" canvas** drawn from the additive `agents`/`world` frame fields (per-agent
-+ landmark world positions extracted by `ma_env.agent_sprites`/`world_entities`). **Homogeneous agents only**
-(simple_spread); heterogeneous species (simple_tag) need per-species policies (G7b). MA reproducibility is
++ landmark world positions extracted by `ma_env.agent_sprites`/`world_entities`). MA reproducibility is
 policy-level (the SuperSuit vec env can't be seeded by SB3; the trainer seeds numpy/torch/python instead).
+
+**Homogeneous agents** (simple_spread) train via parameter sharing. **Heterogeneous species** (simple_tag —
+predators vs. prey, different obs sizes + opposite rewards) break parameter sharing and need **per-species
+policies** (G7b-2). Such an env can still be *registered watch-only* now (G7b-1 / ADR-047): set
+`train_implemented=False` (gates Run with a multi-agent note) and rely on the **training-free watch** —
+`POST /api/preview/watch` drives the streamer with no policy (random rollout) so the swarm renders without a
+trainer. The render + frame contract already cover heterogeneous worlds (`role="adversary"`, `kind="obstacle"`),
+so registering simple_tag was a data row + content only.
 
 The registry is the source of truth: the sidebar, skill bands, step ladder, compare filter, and the algo
 dropdown all read from it. `supported_algos` is how a game opts out of an algorithm (e.g. an image env can be

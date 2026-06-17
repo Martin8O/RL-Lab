@@ -21,8 +21,10 @@ export interface RunControls {
   trainGated: boolean
   /** Why training is gated, so the Sidebar picks the right note. `'no_gpu'` = needs a CUDA device (the
    *  vector heavies un-gate on a GPU); `'not_implemented'` = image-obs CnnPolicy trainer not built yet
-   *  (stays gated even on a GPU, G4b/G3c-train); `null` = not gated. */
-  trainGatedReason: 'no_gpu' | 'not_implemented' | null
+   *  (stays gated even on a GPU, G4b/G3c-train); `'not_implemented_ma'` = a watch-only multi-agent env
+   *  whose per-species trainer isn't built yet (simple_tag, G7b) — not pixel-based and not hand-playable,
+   *  so it needs its own note; `null` = not gated. */
+  trainGatedReason: 'no_gpu' | 'not_implemented' | 'not_implemented_ma' | null
 }
 
 export function useRunControls(): RunControls {
@@ -50,10 +52,14 @@ export function useRunControls(): RunControls {
   //     need a CUDA device — gated only while none is present (a GPU machine un-gates them).
   const selectedEnv     = envs.find((e) => e.id === selectedEnvId)
   const notImplemented  = !!selectedEnv && selectedEnv.train_implemented === false
+  // A watch-only multi-agent env (simple_tag): its trainer isn't built either, but the image-trainer
+  // note ("pixel-based games … use the Play button") is doubly wrong here — it's vector, and there's
+  // no Play button (a swarm has no single human driver) — so it gets its own note.
+  const watchOnlyMa     = !!selectedEnv && selectedEnv.family === 'petting_zoo' && selectedEnv.human_playable === false
   const needsAbsentGpu  = !!selectedEnv && selectedEnv.hw_requirement === 'gpu' && !gpuAvailable
   const trainGated      = notImplemented || needsAbsentGpu
-  const trainGatedReason: 'no_gpu' | 'not_implemented' | null =
-    notImplemented ? 'not_implemented' : needsAbsentGpu ? 'no_gpu' : null
+  const trainGatedReason: 'no_gpu' | 'not_implemented' | 'not_implemented_ma' | null =
+    notImplemented ? (watchOnlyMa ? 'not_implemented_ma' : 'not_implemented') : needsAbsentGpu ? 'no_gpu' : null
   const canRun          = !!selectedEnvId && envs.length > 0 && !trainGated
 
   // Apply the REST response's state to the store immediately, so the controls flip (Run → Pause/Stop,

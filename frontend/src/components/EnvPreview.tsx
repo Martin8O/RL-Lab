@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAppStore } from '../store/useAppStore'
-import { sendPlayAction, setFrameHandler, setPlayFrameHandler, setPreview, startPlay, stopPlay } from '../api/client'
+import { sendPlayAction, setFrameHandler, setPlayFrameHandler, setPreview, startPlay, stopPlay, watchPreview } from '../api/client'
 import type { AgentSprite, GridLayout, PlayFrame, PreviewFrame, WorldEntity } from '../api/types'
 import { keymapFor } from '../content/playKeymaps'
 import { DEFAULT_AGENT, DEFAULT_GRIDS, isGridEnv } from '../content/gridMaps'
@@ -97,8 +97,12 @@ export default function EnvPreview() {
 
   const runLive      = trainState === 'running' || trainState === 'paused' || trainState === 'stopping'
   const playVisible  = playState !== 'idle'
+  // Multi-agent env whose per-species trainer isn't built yet (simple_tag, G7b): not playable and
+  // not trainable, but still *watchable* — we auto-stream a training-free random rollout (below).
+  const mpeWatchOnly = selectedEnv?.family === 'petting_zoo' && selectedEnv?.train_implemented === false
+  const [watching, setWatching] = useState(false)
   // "live" = frames are (or just were) flowing for this env.
-  const live         = (visual && runLive) || playState === 'playing' || (playVisible && hasFrame)
+  const live         = (visual && runLive) || playState === 'playing' || (playVisible && hasFrame) || (watching && hasFrame)
   // Which client-side renderer to use (else a server JPEG on the canvas).
   const clientKind: 'cartpole' | 'mountaincar' | 'pendulum' | 'acrobot' | 'lunarlander' | 'grid' | 'mpe' | null =
     selectedEnvId === 'cartpole' ? 'cartpole'
@@ -125,6 +129,39 @@ export default function EnvPreview() {
     const { visual: v, speed: s } = useAppStore.getState()
     void setPreview({ visual: v, speed: s }).catch(() => {})
   }, [backendStatus])
+
+  // "Watch the ecosystem" (G7b): a not-yet-trainable multi-agent env (simple_tag) is neither
+  // playable nor trainable, so nothing would ever stream — auto-start a training-free preview
+  // (random rollout) while it's selected + Visual is on. The existing swarm frame pipeline draws
+  // it (predators red, prey blue, obstacles solid).
+  //
+  // Reconciler, not a naive start/stop: StrictMode double-invokes effects (mount→cleanup→mount) and
+  // each backend toggle is an async POST, so start-on-run / stop-on-cleanup calls race and can leave
+  // the singleton streamer stopped (the swarm never appears — the bug this fixes). We debounce to the
+  // *latest* desired env so the churn collapses into one call, and only send `stop` if WE started a
+  // watch (`watchStartedRef`) — otherwise reconciling a normal env would detach a live *training*
+  // preview, which shares the same streamer.
+  const watchWantRef = useRef<string | null>(null)
+  const watchStartedRef = useRef(false)
+  useEffect(() => {
+    // Block the auto-watch only while a play session is *actively* streaming (playState === 'playing'),
+    // NOT for terminal 'stopped'/'finished' states — a leftover stopped session (e.g. an earlier AI play
+    // of another env) must not keep the swarm from ever rendering. (MA envs aren't playable anyway.)
+    watchWantRef.current =
+      mpeWatchOnly && visual && backendStatus === 'online' && !runLive && playState !== 'playing' ? selectedEnvId : null
+    const id = window.setTimeout(() => {
+      const want = watchWantRef.current
+      if (want) {
+        watchStartedRef.current = true
+        void watchPreview(want, true).then(() => { if (watchWantRef.current === want) setWatching(true) }).catch(() => {})
+      } else if (watchStartedRef.current) {
+        watchStartedRef.current = false
+        setWatching(false)
+        void watchPreview('', false).catch(() => {})  // stop_watch ignores the id (detaches the streamer)
+      }
+    }, 50)
+    return () => window.clearTimeout(id)
+  }, [mpeWatchOnly, selectedEnvId, visual, backendStatus, runLive, playState])
 
   // One frame sink for both training-preview and play frames. A frame carries either client
   // -render state (CartPole → drive the SVG cart, no React render) or a JPEG (→ canvas).
