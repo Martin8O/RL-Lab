@@ -675,6 +675,10 @@ export default function RewardChart() {
   // reads the per-report frame (episode-based).
   const isEvo = algo === 'neuroevolution'
   const isQ   = algo === 'q_learning'
+  // AlphaZero's progress unit is self-play GAMES, not env steps (each "step" is a whole game = thousands
+  // of GPU forwards), so its Steps / Steps/s chips are relabelled Games / Games/s to read honestly — a
+  // chess run at ~0.3 games/s looks misleadingly slow next to PPO's hundreds of moves/s otherwise (G6g).
+  const isAz  = algo === 'alphazero'
   const lastMetrics = metricsHistory.at(-1)
   const compactControls = size.w > 0 && size.w < 380
 
@@ -736,6 +740,22 @@ export default function RewardChart() {
     score = lastProgress?.ep_rew_mean ?? lastMetrics?.ep_rew_mean ?? null
     sps = lastProgress?.steps_per_sec
     elapsed = lastProgress?.elapsed ?? lastMetrics?.elapsed
+    // AlphaZero reports games/s as a *cumulative* average (done / elapsed), which the long startup eval
+    // drags toward 0 early on and never recovers — making a healthy ~2 games/s read as "0–1". Show a
+    // RECENT rate instead — but a 2-point delta is far too noisy: a whole cohort advances in lockstep
+    // and several games end on the same ply, so consecutive per-game frames are bursty (dt≈0 spikes,
+    // then gaps) → the chip flickered 0,8,1,3,… Average over a ~6 s trailing window for a steady recent
+    // games/s. PPO keeps SB3's own fps; evolution/Q-learning keep their per-report 2-point rate (sparse).
+    if (isAz && progressHistory.length >= 2) {
+      const b = progressHistory[progressHistory.length - 1]
+      let a = progressHistory[0]
+      for (let i = progressHistory.length - 2; i >= 0; i--) {
+        a = progressHistory[i]
+        if (b.elapsed - a.elapsed >= 6) break  // spanned ~6 s of wall-clock → a stable average
+      }
+      const dt = b.elapsed - a.elapsed
+      if (dt > 0) sps = (b.timesteps - a.timesteps) / dt
+    }
   }
 
   // Skill %: Score across the env's [min_score, solved_score] range, so it reads consistently
@@ -985,8 +1005,8 @@ export default function RewardChart() {
                   : '—'
               }
             />
-            <StatChip label={t('stats.steps')}        value={steps != null ? fmtSteps(steps) : '—'} />
-            <StatChip label={t('stats.steps_per_sec')} value={sps != null ? String(Math.round(sps)) : '—'} />
+            <StatChip label={t(isAz ? 'stats.games' : 'stats.steps')}        value={steps != null ? fmtSteps(steps) : '—'} />
+            <StatChip label={t(isAz ? 'stats.games_per_sec' : 'stats.steps_per_sec')} value={sps != null ? (isAz ? sps.toFixed(1) : String(Math.round(sps))) : '—'} />
             <StatChip label={t('stats.elapsed')}      value={elapsed != null ? fmtElapsed(elapsed) : '—'} />
           </>
         ) : (

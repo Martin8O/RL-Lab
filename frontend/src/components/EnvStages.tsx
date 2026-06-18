@@ -7,7 +7,7 @@
 import type { CSSProperties, RefObject } from 'react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import type { BoardState, GridLayout } from '../api/types'
+import type { BoardMove, BoardState, GridLayout } from '../api/types'
 import type { BoardGameMeta } from '../content/boardGames'
 import {
   MC_GOAL, MC_GROUND_PATH, MC_SURFACE_PATH, mcX, mcY,
@@ -280,7 +280,7 @@ export function SwarmStage({ envName, canvasRef, legend }: {
 // (content/boardGames.ts), and the last move gets a ring. The board payload (cells/legal/turn/winner)
 // is fully game-agnostic; only `meta` (glyph → piece) is game-specific. The status line shows whose
 // turn it is; the result banner shows the honest win/draw/loss outcome (no continuous skill %).
-export function BoardStage({ envName, board, meta, humanTurn, humanSide, onCellClick, statusText, banner }: {
+export function BoardStage({ envName, board, meta, humanTurn, humanSide, onCellClick, statusText, banner, maxBoardPx = 0 }: {
   envName: string
   board: BoardState
   meta: BoardGameMeta
@@ -292,11 +292,18 @@ export function BoardStage({ envName, board, meta, humanTurn, humanSide, onCellC
   // `mark` colours the winner's piece in the banner — for games whose two players share one glyph
   // (Connect Four: both '●', only the colour differs), "● wins" would otherwise be unreadable.
   banner: { text: string; kind: 'win' | 'draw' | 'loss'; mark?: { glyph: string; color: string } } | null
+  // The largest square (px) the board may occupy (the measured stage box, grows in fullscreen). 0 = fall
+  // back to the old fixed sizing. Lets the board fill the panel instead of leaving big empty margins.
+  maxBoardPx?: number
 }) {
   const { t } = useTranslation()
   const { rows, cols, cells, legal_actions, last_action, is_terminal, pass_action } = board
   const legal = new Set(legal_actions)
-  const cellPx = Math.max(48, Math.min(110, Math.floor(360 / Math.max(rows, cols, 1))))
+  // Size the squares to fill the measured stage (clamped so a 3×3 board doesn't become enormous and an
+  // 8×8 stays readable); fall back to the fixed sizing when the stage hasn't been measured yet.
+  const cellPx = maxBoardPx > 0
+    ? Math.max(40, Math.min(180, Math.floor((maxBoardPx - 12) / Math.max(rows, cols, 1))))
+    : Math.max(48, Math.min(110, Math.floor(360 / Math.max(rows, cols, 1))))
   const bannerColor =
     banner?.kind === 'win' ? 'var(--success)' : banner?.kind === 'loss' ? 'var(--danger)' : 'var(--text-strong)'
 
@@ -317,23 +324,32 @@ export function BoardStage({ envName, board, meta, humanTurn, humanSide, onCellC
   // (the cell handlers use backend indices, which the rotation doesn't touch). No flip in watch/training.
   const flip = !!meta.orient && humanSide != null && humanSide !== meta.orient.bottomPlayer
 
-  // Move-mode selection — which of the human's pieces is picked. Reset whenever the turn passes, the
-  // board advances (a move was played) or the game ends, via React's canonical "reset state on prop
-  // change during render" pattern (no effect — setState-in-effect triggers cascading renders).
+  // Move-mode selection — which of the human's pieces is picked, and (chess) a pending promotion choice.
+  // Reset whenever the turn passes, the board advances (a move was played) or the game ends, via React's
+  // canonical "reset state on prop change during render" pattern (no effect — setState-in-effect cascades).
   const [selectedFrom, setSelectedFrom] = useState<number | null>(null)
+  const [promoAt, setPromoAt] = useState<{ cell: number; moves: BoardMove[] } | null>(null)
   const turnKey = `${humanTurn}:${last_action}:${is_terminal}`
   const [prevTurnKey, setPrevTurnKey] = useState(turnKey)
   if (turnKey !== prevTurnKey) {
     setPrevTurnKey(turnKey)
     setSelectedFrom(null)
+    setPromoAt(null)
   }
 
   const moves = board.moves ?? []
-  // The cells the human can move FROM, and (once a piece is picked) that piece's destination cell → action.
+  // The cells the human can move FROM, and (once a piece is picked) that piece's destinations. A chess
+  // promotion has SEVERAL actions landing on the same square (=Q/=R/=B/=N), so a destination maps to a
+  // *list* of moves: one → submit directly, many → open the promotion picker (selectedDest below).
   const fromCells = moveMode ? new Set(moves.map((m) => m.from_cell)) : null
-  const destForSelected = new Map<number, number>()
+  const destForSelected = new Map<number, BoardMove[]>()
   if (moveMode && selectedFrom != null) {
-    for (const m of moves) if (m.from_cell === selectedFrom) destForSelected.set(m.to_cell, m.action)
+    for (const m of moves) {
+      if (m.from_cell !== selectedFrom) continue
+      const at = destForSelected.get(m.to_cell)
+      if (at) at.push(m)
+      else destForSelected.set(m.to_cell, [m])
+    }
   }
   const moveInteractive = moveMode && humanTurn && !is_terminal
 
@@ -359,19 +375,38 @@ export function BoardStage({ envName, board, meta, humanTurn, humanSide, onCellC
     }
   }
 
-  const cellBox: CSSProperties = {
+  // A real chessboard look (chess): flush light/dark squares in the classic lichess brown, vs the small
+  // games' flat single-surface cells. Theme-independent on purpose — a chessboard is always brown/cream
+  // (like the Atari CRT skin is game-specific), and the cburnett pieces are drawn for exactly this board.
+  const checkered = !!meta.checkered
+  const LIGHT_SQ = '#f0d9b5'
+  const DARK_SQ = '#b58863'
+  const pad = checkered ? 8 : 6
+  const sqIsLight = (r: number, c: number) => (r + c) % 2 === 0
+  const cellBox = (r: number, c: number): CSSProperties => ({
     width: cellPx, height: cellPx, display: 'flex', alignItems: 'center', justifyContent: 'center',
-    background: 'var(--surface-2)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-default)',
+    background: checkered ? ((r + c) % 2 === 0 ? LIGHT_SQ : DARK_SQ) : 'var(--surface-2)',
+    borderRadius: checkered ? 0 : 'var(--radius-sm)',
+    border: checkered ? 'none' : '1px solid var(--border-default)',
     padding: 0, margin: 0,
-  }
+  })
 
   // While the human is choosing a move, a mode-specific hint replaces the generic status (no banner up).
   const moveHint = moveInteractive && !banner
     ? (selectedFrom == null ? t('board.select_piece') : t('board.select_dest'))
     : null
 
+  // Chess promotion: show the picker glyphs in the human's own colour. The backend streams the promo
+  // letter lower-cased; case it to whatever case the human's pieces use in the glyph map (chess: white
+  // pieces are UPPER-cased keys, black lower) — derived, not a hardcoded side, since white isn't player 0.
+  const humanUsesUpperGlyphs = Object.entries(meta.pieces).some(
+    ([key, pc]) => pc.player === humanSide && key === key.toUpperCase() && key !== key.toLowerCase(),
+  )
+  const promoCase = (letter: string) => (humanUsesUpperGlyphs ? letter.toUpperCase() : letter.toLowerCase())
+  const PROMO_ORDER: Record<string, number> = { q: 0, r: 1, b: 2, n: 3 }
+
   return (
-    <div role="group" aria-label={envName} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14 }}>
+    <div role="group" aria-label={envName} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14, position: 'relative' }}>
       {/* Whose turn / the final result — leads the board so play always reads as labelled. */}
       <div style={{
         minHeight: 24, fontSize: 'var(--fs-sm)', fontWeight: 'var(--fw-semibold)',
@@ -384,11 +419,14 @@ export function BoardStage({ envName, board, meta, humanTurn, humanSide, onCellC
         {banner ? banner.text : (moveHint ?? statusText)}
       </div>
 
+      {/* Wrap so a coordinate overlay (chess files/ranks) can sit over the board without riding the
+          board's orientation flip — it computes visual positions itself. */}
+      <div style={{ position: 'relative' }}>
       <div style={{
-        display: 'grid', gap: 5,
+        display: 'grid', gap: checkered ? 0 : 5,
         gridTemplateColumns: `repeat(${cols}, ${cellPx}px)`,
         gridTemplateRows: `repeat(${rows}, ${cellPx}px)`,
-        background: 'var(--surface-3)', padding: 6, borderRadius: 'var(--radius-md)',
+        background: 'var(--surface-3)', padding: pad, borderRadius: 'var(--radius-md)',
         boxShadow: 'var(--shadow-md)', position: 'relative',
         transform: flip ? 'rotate(180deg)' : undefined,
       }}>
@@ -396,16 +434,30 @@ export function BoardStage({ envName, board, meta, humanTurn, humanSide, onCellC
           const r = Math.floor(i / cols)
           const c = i % cols
           const mark = ch.trim().toUpperCase()
-          const piece = meta.pieces[ch.trim().toLowerCase()]
-          const glyph = piece && (
-            <span aria-hidden style={{ fontSize: cellPx * 0.55, lineHeight: 1, color: piece.color, fontWeight: 800 }}>
-              {piece.glyph}
-            </span>
-          )
-          // The last-move trail ring — kept muted in move mode so it never competes with the gold
-          // selection/destination highlights; the placement games keep the piece-coloured ring.
+          // Case-sensitive first (chess tells white 'P' from black 'p' by case), then the lower-cased
+          // fallback the single-case games (x/o, b/w) rely on. Backward-compatible with all of them.
+          const piece = meta.pieces[ch.trim()] ?? meta.pieces[ch.trim().toLowerCase()]
+          // Counter-rotate the piece when the board is flipped for orientation, so chess's upright pieces
+          // (Unicode glyphs OR the lichess SVGs) stay readable; triangle games let their glyphs ride the flip.
+          const uprightFix = flip && meta.uprightGlyphs ? 'rotate(180deg)' : undefined
+          const glyph = piece && (meta.pieceImageBase && piece.image
+            ? (
+              <img src={`${meta.pieceImageBase}/${piece.image}.svg`} alt="" draggable={false}
+                style={{ width: cellPx * 0.84, height: cellPx * 0.84, pointerEvents: 'none', transform: uprightFix }} />
+            )
+            : (
+              <span aria-hidden style={{
+                fontSize: cellPx * 0.62, lineHeight: 1, color: piece.color, fontWeight: 800, transform: uprightFix,
+              }}>
+                {piece.glyph}
+              </span>
+            ))
+          // The last-move trail ring — a chess-style yellow on the checkered board, else muted in move
+          // mode (so it never competes with the gold selection markers) / piece-coloured for placement.
           const trailRing = lastCells.has(i)
-            ? `inset 0 0 0 3px ${moveMode ? 'var(--text-muted)' : (piece?.color ?? 'var(--accent)')}`
+            ? `inset 0 0 0 ${checkered ? 5 : 3}px ${
+                checkered ? 'rgba(255,205,0,0.8)' : moveMode ? 'var(--text-muted)' : (piece?.color ?? 'var(--accent)')
+              }`
             : undefined
 
           // ── Move mode (Breakthrough): pick a piece, then click one of its gold-marked destinations ──
@@ -415,19 +467,24 @@ export function BoardStage({ envName, board, meta, humanTurn, humanSide, onCellC
               return (
                 <button key={i} onClick={() => setSelectedFrom(null)}
                   aria-label={t('board.cell_selected', { row: r + 1, col: c + 1 })}
-                  style={{ ...cellBox, cursor: 'pointer', boxShadow: 'inset 0 0 0 3px var(--goal)' }}>
+                  style={{ ...cellBox(r, c), cursor: 'pointer', boxShadow: 'inset 0 0 0 3px var(--goal)' }}>
                   {glyph}
                 </button>
               )
             }
-            const destAction = moveInteractive ? destForSelected.get(i) : undefined
-            if (destAction !== undefined) {
+            const destMoves = moveInteractive ? destForSelected.get(i) : undefined
+            if (destMoves && destMoves.length > 0) {
               // A legal destination: an empty target shows a centred gold dot, a capture shows the gold
-              // ring around the enemy glyph. Clicking submits the matching action int.
+              // ring around the enemy glyph. One action → submit it; several (a chess promotion landing
+              // on this square) → open the piece picker so the player chooses ♕/♖/♗/♘.
+              const onDest = () => {
+                if (destMoves.length === 1) { onCellClick(destMoves[0].action); setSelectedFrom(null) }
+                else setPromoAt({ cell: i, moves: destMoves })
+              }
               return (
-                <button key={i} onClick={() => { onCellClick(destAction); setSelectedFrom(null) }}
+                <button key={i} onClick={onDest}
                   aria-label={t('board.cell_move_to', { row: r + 1, col: c + 1 })}
-                  style={{ ...cellBox, cursor: 'pointer', boxShadow: piece ? 'inset 0 0 0 3px var(--goal)' : undefined }}>
+                  style={{ ...cellBox(r, c), cursor: 'pointer', boxShadow: piece ? 'inset 0 0 0 3px var(--goal)' : undefined }}>
                   {glyph ?? <span aria-hidden style={{ display: 'block', width: cellPx * 0.3, height: cellPx * 0.3, borderRadius: '50%', background: 'var(--goal)' }} />}
                 </button>
               )
@@ -437,7 +494,7 @@ export function BoardStage({ envName, board, meta, humanTurn, humanSide, onCellC
               return (
                 <button key={i} onClick={() => setSelectedFrom(i)}
                   aria-label={t('board.cell_select', { row: r + 1, col: c + 1 })}
-                  style={{ ...cellBox, cursor: 'pointer', boxShadow: trailRing }}>
+                  style={{ ...cellBox(r, c), cursor: 'pointer', boxShadow: trailRing }}>
                   {glyph}
                 </button>
               )
@@ -447,7 +504,7 @@ export function BoardStage({ envName, board, meta, humanTurn, humanSide, onCellC
                 aria-label={piece
                   ? t('board.cell_taken', { mark, row: r + 1, col: c + 1 })
                   : t('board.cell_empty', { row: r + 1, col: c + 1 })}
-                style={{ ...cellBox, boxShadow: trailRing }}>
+                style={{ ...cellBox(r, c), boxShadow: trailRing }}>
                 {glyph}
               </div>
             )
@@ -467,7 +524,7 @@ export function BoardStage({ envName, board, meta, humanTurn, humanSide, onCellC
                 aria-label={columnMode
                   ? t('board.cell_drop', { col: c + 1 })
                   : t('board.cell_play', { row: r + 1, col: c + 1 })}
-                style={{ ...cellBox, cursor: 'pointer', boxShadow: trailRing }}
+                style={{ ...cellBox(r, c), cursor: 'pointer', boxShadow: trailRing }}
               >
                 {glyph}
               </button>
@@ -480,7 +537,7 @@ export function BoardStage({ envName, board, meta, humanTurn, humanSide, onCellC
               aria-label={piece
                 ? t('board.cell_taken', { mark, row: r + 1, col: c + 1 })
                 : t('board.cell_empty', { row: r + 1, col: c + 1 })}
-              style={{ ...cellBox, boxShadow: trailRing }}
+              style={{ ...cellBox(r, c), boxShadow: trailRing }}
             >
               {glyph}
             </div>
@@ -505,6 +562,89 @@ export function BoardStage({ envName, board, meta, humanTurn, humanSide, onCellC
           </button>
         )}
       </div>
+      {/* Coordinate labels (chess): files a–h along the player's bottom edge, ranks 1–8 up the right
+          edge — lichess-style, each tinted to contrast its square. Computed from the orientation (and the
+          flip) in VISUAL coordinates, so they stay correct + upright whether you play white or black. */}
+      {checkered && (
+        <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }} aria-hidden>
+          {Array.from({ length: cols }, (_, vc) => {
+            const gc = flip ? cols - 1 - vc : vc // grid file under this visual column
+            const gr = flip ? 0 : rows - 1 // the visual bottom row's grid row
+            return (
+              <span key={`file-${vc}`} style={{
+                position: 'absolute', left: pad + vc * cellPx + 3, bottom: pad + 1,
+                fontSize: Math.max(8, Math.round(cellPx * 0.2)), fontWeight: 700, lineHeight: 1,
+                color: sqIsLight(gr, gc) ? DARK_SQ : LIGHT_SQ,
+              }}>
+                {String.fromCharCode(97 + gc)}
+              </span>
+            )
+          })}
+          {Array.from({ length: rows }, (_, vr) => {
+            const gr = flip ? rows - 1 - vr : vr // grid rank under this visual row
+            const gc = flip ? 0 : cols - 1 // the visual right column's grid col
+            return (
+              <span key={`rank-${vr}`} style={{
+                position: 'absolute', right: pad + 3, top: pad + vr * cellPx + 2,
+                fontSize: Math.max(8, Math.round(cellPx * 0.2)), fontWeight: 700, lineHeight: 1,
+                color: sqIsLight(gr, gc) ? DARK_SQ : LIGHT_SQ,
+              }}>
+                {rows - gr}
+              </span>
+            )
+          })}
+        </div>
+      )}
+      </div>
+
+      {/* Chess promotion picker (G6g): when a pawn reaches the back rank the (from,to) carries four
+          actions (=Q/=R/=B/=N); this overlay lets the player choose which piece. Rendered OUTSIDE the
+          (possibly flipped) grid so it stays upright, and as a centred panel + backdrop so it never
+          depends on per-cell coordinates. Clicking a piece submits its action; the backdrop cancels. */}
+      {promoAt && (
+        <>
+          <button
+            aria-label={t('board.promote_cancel')}
+            onClick={() => setPromoAt(null)}
+            style={{
+              position: 'absolute', inset: 0, background: 'color-mix(in srgb, var(--surface-1) 55%, transparent)',
+              border: 'none', cursor: 'pointer', borderRadius: 'var(--radius-md)',
+            }}
+          />
+          <div role="group" aria-label={t('board.promote_prompt')} style={{
+            position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
+            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, padding: '14px 18px',
+            background: 'var(--surface-2)', border: '2px solid var(--border-strong)',
+            borderRadius: 'var(--radius-md)', boxShadow: 'var(--shadow-md)',
+          }}>
+            <span style={{ fontSize: 'var(--fs-sm)', fontWeight: 'var(--fw-semibold)', color: 'var(--text-strong)' }}>
+              {t('board.promote_prompt')}
+            </span>
+            <div style={{ display: 'flex', gap: 8 }}>
+              {[...promoAt.moves]
+                .sort((a, b) => (PROMO_ORDER[a.promotion ?? ''] ?? 9) - (PROMO_ORDER[b.promotion ?? ''] ?? 9))
+                .map((m) => {
+                  const letter = m.promotion ?? 'q'
+                  const promoPiece = meta.pieces[promoCase(letter)]
+                  return (
+                    <button key={m.action}
+                      onClick={() => { onCellClick(m.action); setSelectedFrom(null); setPromoAt(null) }}
+                      aria-label={t('board.promote_to', { piece: t(`board.piece_${letter}`) })}
+                      style={{
+                        width: 52, height: 52, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        background: 'var(--surface-1)', border: '1px solid var(--border-default)',
+                        borderRadius: 'var(--radius-sm)', cursor: 'pointer',
+                      }}>
+                      <span aria-hidden style={{ fontSize: 30, lineHeight: 1, color: promoPiece?.color ?? 'var(--text-strong)', fontWeight: 800 }}>
+                        {promoPiece?.glyph ?? letter.toUpperCase()}
+                      </span>
+                    </button>
+                  )
+                })}
+            </div>
+          </div>
+        </>
+      )}
     </div>
   )
 }

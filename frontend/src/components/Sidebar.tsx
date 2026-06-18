@@ -159,7 +159,14 @@ function ParamSlider({ id, label, value, min, max, step, recommended, disabled, 
           disabled={disabled}
           onChange={(e) => {
             const raw = parseFloat(e.target.value)
-            onChange(log ? Math.pow(10, raw) : raw)
+            let v = log ? Math.pow(10, raw) : raw
+            // Snap to the recommended value when the thumb lands within half a step of it, so the green
+            // ★ tick is always exactly selectable even if the recommendation isn't on the step grid
+            // (otherwise the thumb only stops just left or right of the tick — never on it).
+            if (!log && recommended >= min && recommended <= max && Math.abs(v - recommended) <= step / 2) {
+              v = recommended
+            }
+            onChange(v)
           }}
           style={{ width: '100%', cursor: disabled ? 'default' : 'pointer', accentColor: 'var(--accent)', display: 'block' }}
         />

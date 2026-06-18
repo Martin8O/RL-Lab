@@ -80,6 +80,12 @@ BOARD_PROFILES: dict[str, BoardProfile] = {
     "connect_four": BoardProfile(eval_strength="easy", teacher_start="easy", teacher_end="easy"),
     "othello": BoardProfile(eval_strength="easy", teacher_start="novice", teacher_end="easy"),
     "breakthrough": BoardProfile(eval_strength="medium", teacher_start="novice", teacher_end="easy"),
+    # Chess (G6g) is AlphaZero-only (no MCTS teacher → teacher fields unused), and far too deep to beat a
+    # real searcher on any tolerable budget. Scored against the **novice** (3-sim) reference: a fresh net
+    # already draws it (≈0.00, both near-random — measured), then the curve climbs as self-play teaches it
+    # to beat the weak searcher. A stronger reference (easy) pins a fresh net at ≈−0.7 AND makes the
+    # random-rollout eval much slower (chess rollouts play full games), so novice is both honest and cheap.
+    "chess": BoardProfile(eval_strength="novice", teacher_start="novice", teacher_end="novice"),
 }
 _DEFAULT_PROFILE = BOARD_PROFILES["tic_tac_toe"]
 
@@ -154,20 +160,25 @@ class BoardStrFormat(NamedTuple):
     * ``"compact"`` (Breakthrough) — ``a … h`` / ``1 … 8`` labels, cells **packed with no separators**
       and a single-char row label prefixed directly (``"8bbbbbbbb"``); strip the leading digit label,
       take ``cols`` chars. A trailing column-label line (``" abcdefgh"``) has no leading digit → skipped.
+    * ``"fen"`` (chess, G6g) — ``str(state)`` is a single **FEN** line (``"rnbqkbnr/pppppppp/…/RNBQKBNR
+      w KQkq - 0 1"``); the first space-separated field is the piece placement, ranks ``8 → 1`` split by
+      ``/`` with digits = runs of empties. **Case is preserved** (uppercase = white, lowercase = black),
+      unlike the other kinds, since chess distinguishes the two sides by piece-letter case, not glyph.
 
-    The ``"spaced"``/``"compact"`` paths take the authoritative ``rows × cols`` from the
+    The ``"spaced"``/``"compact"``/``"fen"`` paths take the authoritative ``rows × cols`` from the
     ``observation_tensor`` shape so header/label lines never leak into the grid. Keyed by the OpenSpiel
     short name; defaults to the clean format.
     """
 
     empty: str  # the empty-cell marker in str(state) ("." for most games, "-" for Othello)
-    kind: Literal["clean", "spaced", "compact"]
+    kind: Literal["clean", "spaced", "compact", "fen"]
 
 
 _DEFAULT_STR_FORMAT = BoardStrFormat(empty=".", kind="clean")
 _BOARD_STR_FORMATS: dict[str, BoardStrFormat] = {
     "othello": BoardStrFormat(empty="-", kind="spaced"),
     "breakthrough": BoardStrFormat(empty=".", kind="compact"),
+    "chess": BoardStrFormat(empty=".", kind="fen"),
 }
 
 
@@ -193,6 +204,21 @@ def _board_grid(state: Any) -> tuple[int, int, list[str]]:
                 ch = ln[c] if c < len(ln) else " "
                 cells.append("." if ch == fmt.empty else ch)
         return rows, cols, cells
+
+    if fmt.kind == "fen":
+        # Chess: str(state) is one FEN line; its first field is the piece placement (ranks 8→1 split by
+        # '/', digits = empty runs). Case is preserved so the renderer can tell white (UPPER) from black.
+        placement = text.split(" ", 1)[0]
+        shape = game.observation_tensor_shape()
+        rows, cols = int(shape[-2]), int(shape[-1])
+        grid_fen: list[str] = []
+        for rank in placement.split("/"):
+            for ch in rank:
+                if ch.isdigit():
+                    grid_fen.extend(["."] * int(ch))
+                else:
+                    grid_fen.append(ch)
+        return rows, cols, grid_fen[: rows * cols]
 
     # Decorated grids: the obs-tensor shape gives the authoritative rows × cols.
     shape = game.observation_tensor_shape()
@@ -281,6 +307,69 @@ def _last_move_cells(state: Any, last_action: int | None, rows: int, cols: int) 
     return parsed if parsed is not None else (None, None)
 
 
+# Diff-decoded move games (chess, G6g) — unlike Breakthrough's clean ``"a7a6"`` coordinate pairs, chess
+# ``action_to_string`` is SAN (``"Nc3"``, ``"O-O"``, ``"exd6"``, ``"e8=Q+"``), which can't be parsed as two
+# squares. The robust, game-agnostic decoder instead **applies the action on a clone and diffs the board**:
+# the vacated square is the ``from``, the square that gained the mover is the ``to``. This handles every
+# special move with no chess-specific rules — castling (the king's e1→g1 squares), en-passant (the pawn's
+# e5→d6), and **promotion** (e7→e8 with the new piece letter), where the same (from,to) has up to four
+# legal actions (=Q/=R/=B/=N) that the streamed ``promotion`` letter disambiguates so the client can show a
+# piece picker. Verified on every move type (``Local/_probe_chess2.py``); ~0.3 ms per move (clone is free).
+_DIFF_MOVE_GAMES: frozenset[str] = frozenset({"chess"})
+# FEN piece letters by case (uppercase = white = player 0, lowercase = black = player 1); promotable targets.
+_PAWNS = frozenset({"P", "p"})
+_PROMO_PIECES = frozenset({"Q", "R", "B", "N", "q", "r", "b", "n"})
+
+
+def _diff_from_to(before: list[str], after: list[str]) -> tuple[int, int, str | None] | None:
+    """Decode ``(from_cell, to_cell, promotion)`` by diffing two board-cell grids (chess, G6g).
+
+    ``before``/``after`` are row-major ``_board_grid`` cells (case-preserved FEN letters, ``"."`` empty).
+    The ``to`` square is the one that gained the moving piece (preferring the **king** so castling reports
+    the king's move, not the rook's); the ``from`` is the vacated square holding that same piece before
+    (or a pawn, for a promotion). ``promotion`` is the lower-cased new piece letter when a pawn changed
+    type on the move (``"q"``/``"r"``/``"b"``/``"n"``), else ``None``. ``None`` if it can't be decoded."""
+    if len(before) != len(after):
+        return None
+    emptied = [i for i in range(len(before)) if before[i] != "." and after[i] == "."]
+    appeared = [i for i in range(len(after)) if after[i] != "." and after[i] != before[i]]
+    if not appeared:
+        return None
+    to_cell = next((i for i in appeared if after[i] in ("k", "K")), appeared[0])
+    mover = after[to_cell]
+    cands = [i for i in emptied if before[i] == mover]
+    if not cands and mover in _PROMO_PIECES:  # promotion: the pawn vacated, the piece type changed
+        cands = [i for i in emptied if before[i] in _PAWNS]
+    if not cands:
+        cands = emptied
+    if not cands:
+        return None
+    from_cell = cands[0]
+    promotion = mover.lower() if (before[from_cell] in _PAWNS and after[to_cell] not in _PAWNS) else None
+    return from_cell, to_cell, promotion
+
+
+def _diff_legal_moves(state: Any) -> list[dict[str, Any]]:
+    """Each legal action's ``{action, from_cell, to_cell, promotion?}`` via the board-diff decoder (chess).
+
+    Clones + applies each legal action and diffs the board, so a promotion yields four entries sharing
+    (from,to) with distinct ``promotion`` letters. Undecodable actions are skipped (none in practice)."""
+    before = _board_grid(state)[2]
+    out: list[dict[str, Any]] = []
+    for a in state.legal_actions():
+        nxt = state.clone()
+        nxt.apply_action(int(a))
+        decoded = _diff_from_to(before, _board_grid(nxt)[2])
+        if decoded is None:
+            continue
+        from_cell, to_cell, promo = decoded
+        move: dict[str, Any] = {"action": int(a), "from_cell": from_cell, "to_cell": to_cell}
+        if promo is not None:
+            move["promotion"] = promo
+        out.append(move)
+    return out
+
+
 def _pass_action(state: Any) -> int | None:
     """The index of a legal **pass** move (Othello when a player has no placement; Go), else ``None``.
 
@@ -296,14 +385,25 @@ def _pass_action(state: Any) -> int | None:
     return None
 
 
-def board_payload(state: Any, last_action: int | None) -> dict[str, Any]:
+def board_cells(state: Any) -> list[str]:
+    """The board as a row-major glyph list (the renderer's ``BoardState.cells``) — exposed so a play/preview
+    loop can snapshot the *previous* board before applying a move and hand it to :func:`board_payload` as
+    ``prev_cells`` (the chess last-move highlight is decoded by diffing prev → current, G6g)."""
+    return _board_grid(state)[2]
+
+
+def board_payload(state: Any, last_action: int | None, prev_cells: list[str] | None = None) -> dict[str, Any]:
     """The streamed ``BoardState`` for one ply — built from the **generic** ``pyspiel.State`` API.
 
     ``cells`` is the board as a row-major list of single glyph characters (``"."`` empty, ``"x"``/``"o"``
-    pieces) extracted by :func:`_board_grid`, which handles both clean (TTT/Connect Four) and decorated
-    (Othello) OpenSpiel board strings. The only game-specific bit — mapping a glyph to a piece/player
+    pieces) extracted by :func:`_board_grid`, which handles clean (TTT/Connect Four), decorated (Othello)
+    and FEN (chess) OpenSpiel board strings. The only game-specific bit — mapping a glyph to a piece/player
     for rendering — lives in the **renderer** (``frontend/src/content/boardGames.ts``). Everything else
     (legal moves, whose turn, terminality, the winner, a forced pass) is the generic API.
+
+    ``prev_cells`` (the board *before* ``last_action``, from :func:`board_cells`) lets a diff-decoded move
+    game (chess) report the last move's from/to for the highlight — chess SAN can't be re-decoded from the
+    post-move state, so the caller passes the previous board. Optional + ignored by every other game.
     """
     rows, cols, cells = _board_grid(state)
 
@@ -330,12 +430,21 @@ def board_payload(state: Any, last_action: int | None) -> dict[str, Any]:
         "pass_action": _pass_action(state),
     }
 
-    # Move-based games (Breakthrough, G6e): the move isn't a placement, so add the per-legal-action
-    # (from→to) cell map the client needs to turn a clicked pair into an action + the last move's cells
-    # for the move highlight. Absent for placement games (TTT/Connect Four/Othello) — byte-identical.
-    if state.get_game().get_type().short_name in _MOVE_GAMES:
+    # Move-based games: the move isn't a placement, so add the per-legal-action (from→to) cell map the
+    # client needs to turn a clicked pair into an action + the last move's cells for the move highlight.
+    # Absent for placement games (TTT/Connect Four/Othello) — byte-identical. Two decoders: Breakthrough
+    # parses coordinate strings (position-independent), chess diffs the board (handles promotion/castling).
+    short_name = state.get_game().get_type().short_name
+    if short_name in _MOVE_GAMES:
         payload["moves"] = [] if terminal else _legal_moves(state, rows, cols)
         payload["last_from"], payload["last_to"] = _last_move_cells(state, last_action, rows, cols)
+    elif short_name in _DIFF_MOVE_GAMES:
+        payload["moves"] = [] if terminal else _diff_legal_moves(state)
+        # The last move can't be re-decoded from the post-move state (SAN), so diff prev → current cells.
+        if prev_cells is not None and (decoded := _diff_from_to(prev_cells, cells)) is not None:
+            payload["last_from"], payload["last_to"] = decoded[0], decoded[1]
+        else:
+            payload["last_from"], payload["last_to"] = None, None
 
     return payload
 

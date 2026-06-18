@@ -125,6 +125,66 @@ describe('<BoardStage /> move mode (Breakthrough, G6e)', () => {
     fireEvent.click(screen.getByRole('button', { name: /Selected piece at row 2, column 2/ }))
     expect(screen.queryByRole('button', { name: 'Move to row 1, column 2' })).not.toBeInTheDocument()
   })
+})
+
+// G6g — chess: the FEN piece letters distinguish white (UPPERCASE → outline glyphs) from black
+// (lowercase → filled glyphs) by case, and a pawn promotion offers SEVERAL actions on one square that a
+// picker disambiguates. Uses a tiny 3×3 board (BoardStage is generic over rows/cols) with one white pawn.
+const chessMeta = BOARD_GAMES.chess
+
+function chessPromoBoard(): BoardState {
+  const cells = Array<string>(9).fill('.')
+  cells[4] = 'P' // a white pawn (uppercase) at the centre — case is what marks it white (player 1)
+  cells[0] = 'k' // a black king (lowercase, player 0) — proves case-sensitive lookup picks the filled glyph
+  return {
+    cells,
+    rows: 3,
+    cols: 3,
+    legal_actions: [200, 201, 202, 203],
+    current_player: 0,
+    last_action: null,
+    is_terminal: false,
+    winner: null,
+    moves: [ // four actions landing on the SAME square (a promotion), differing only by piece
+      { action: 200, from_cell: 4, to_cell: 1, promotion: 'q' },
+      { action: 201, from_cell: 4, to_cell: 1, promotion: 'r' },
+      { action: 202, from_cell: 4, to_cell: 1, promotion: 'b' },
+      { action: 203, from_cell: 4, to_cell: 1, promotion: 'n' },
+    ],
+  }
+}
+
+describe('<BoardStage /> chess (G6g)', () => {
+  it('renders white/black pieces as the lichess SVGs, mapped from FEN case', () => {
+    const { container } = render(
+      <BoardStage envName="Chess" board={chessMeta.idle} meta={chessMeta}
+        humanTurn={false} humanSide={null} onCellClick={() => {}} statusText="" banner={null} />,
+    )
+    const imgs = (file: string) => container.querySelectorAll(`img[src$="${file}.svg"]`).length
+    expect(imgs('wK')).toBe(1) // white king (uppercase K → player 1 → cburnett wK)
+    expect(imgs('bK')).toBe(1) // black king (lowercase k → player 0 → bK)
+    expect(imgs('wP')).toBe(8) // eight white pawns
+    expect(imgs('bP')).toBe(8) // eight black pawns
+  })
+
+  it('promotion: destination click opens a piece picker, and the chosen piece submits its action', () => {
+    const onCellClick = vi.fn()
+    render(
+      <BoardStage envName="Chess" board={chessPromoBoard()} meta={chessMeta}
+        humanTurn humanSide={1} onCellClick={onCellClick} statusText="" banner={null} />,
+    )
+    // Pick the pawn → its single destination lights up; clicking it opens the picker (does NOT submit yet).
+    fireEvent.click(screen.getByRole('button', { name: 'Select your piece at row 2, column 2' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Move to row 1, column 2' }))
+    expect(onCellClick).not.toHaveBeenCalled() // a promotion needs the piece choice first
+    // All four promotion choices are offered; picking the queen submits that action int.
+    expect(screen.getByRole('button', { name: 'Promote to rook' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Promote to knight' })).toBeInTheDocument()
+    // The picker shows the human's OWN colour: white (player 1) promotes to the white queen ♕, not ♛.
+    expect(screen.getByRole('button', { name: 'Promote to queen' })).toHaveTextContent('♕')
+    fireEvent.click(screen.getByRole('button', { name: 'Promote to queen' }))
+    expect(onCellClick).toHaveBeenCalledWith(200) // the action behind the =Q choice
+  })
 
   // Orientation (G6e): the board flips 180° when the human plays the side that isn't `bottomPlayer`
   // (so their pieces sit at the bottom). breakthroughMeta.orient.bottomPlayer === 1.

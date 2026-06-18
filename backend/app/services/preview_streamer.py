@@ -289,9 +289,10 @@ class PreviewStreamer:
                         time.sleep(0.05)
                         continue
                     move = self._board_move(state, rng)
+                    prev_cells = board_engine.board_cells(state)  # for the chess last-move diff (G6g)
                     state.apply_action(move)
                     step += 1
-                    self._emit_board_frame(episode, step, board_engine.board_payload(state, move))
+                    self._emit_board_frame(episode, step, board_engine.board_payload(state, move, prev_cells))
                     time.sleep(self._BOARD_PLY_DELAY / self._current_speed())
                 # Linger on the finished board a moment before the next game (still abortable).
                 for _ in range(6):

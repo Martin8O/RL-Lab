@@ -4,6 +4,31 @@
 
 import { useAppStore } from '../store/useAppStore'
 import { pauseTraining, resumeTraining, startTraining, stopTraining } from './client'
+import type { TrainConfig } from './types'
+
+/** Build the TrainConfig from the store's current settings (the sidebar). Shared by Start and by
+ *  Load-to-continue (so resuming a run can extend/retune it with the current params). Reads
+ *  `getState()` so it works outside React too. Returns null when no env is selected. */
+export function buildTrainConfig(): TrainConfig | null {
+  const s = useAppStore.getState()
+  if (!s.selectedEnvId) return null
+  const env = s.envs.find((e) => e.id === s.selectedEnvId)
+  const isAz = s.algo === 'alphazero'
+  const isSelfPlay = !!env && env.family === 'petting_zoo' && env.competitive === true
+  return {
+    env_id: s.selectedEnvId,
+    algo: s.algo,
+    seed: s.seed,
+    // AlphaZero's budget is iterations × games_per_iter self-play games; total_timesteps mirrors that
+    // so the progress bar / status agree with the trainer (which reports games as timesteps).
+    total_timesteps: isAz ? s.alphaZeroParams.iterations * s.alphaZeroParams.games_per_iter : s.totalTimesteps,
+    hyperparams: s.hyperparams,
+    evolution: s.algo === 'neuroevolution' ? s.evolutionParams : null,
+    q_learning: s.algo === 'q_learning' ? s.qLearningParams : null,
+    self_play: isSelfPlay ? s.selfPlayParams : null,
+    alphazero: isAz ? s.alphaZeroParams : null,
+  }
+}
 
 export interface RunControls {
   handleRun: () => Promise<void>
@@ -30,16 +55,10 @@ export interface RunControls {
 }
 
 export function useRunControls(): RunControls {
-  const algo            = useAppStore((s) => s.algo)
+  // The run-config values (algo, seed, hyperparams, …) are read at click time via buildTrainConfig()
+  // (getState()), so the hook itself only needs what drives the gating + control state below.
   const selectedEnvId   = useAppStore((s) => s.selectedEnvId)
   const envs            = useAppStore((s) => s.envs)
-  const seed            = useAppStore((s) => s.seed)
-  const totalTimesteps  = useAppStore((s) => s.totalTimesteps)
-  const hyperparams     = useAppStore((s) => s.hyperparams)
-  const evolutionParams = useAppStore((s) => s.evolutionParams)
-  const qLearningParams = useAppStore((s) => s.qLearningParams)
-  const selfPlayParams  = useAppStore((s) => s.selfPlayParams)
-  const alphaZeroParams = useAppStore((s) => s.alphaZeroParams)
   const trainState      = useAppStore((s) => s.trainState)
   const gpuAvailable    = useAppStore((s) => s.gpuAvailable)
   const clearMetrics    = useAppStore((s) => s.clearMetrics)
@@ -63,8 +82,6 @@ export function useRunControls(): RunControls {
   // A board game (G6a): its neural self-play trainer isn't built yet (G6b), but unlike the MA/image
   // cases it IS hand-playable now (vs the built-in MCTS AI), so its gate note points to Play.
   const isBoard         = !!selectedEnv && selectedEnv.family === 'board'
-  // Competitive multi-agent (simple_tag) runs PPO self-play, so it carries the round schedule (G7b-2).
-  const isSelfPlay      = !!selectedEnv && selectedEnv.family === 'petting_zoo' && selectedEnv.competitive === true
   const needsAbsentGpu  = !!selectedEnv && selectedEnv.hw_requirement === 'gpu' && !gpuAvailable
   const trainGated      = notImplemented || needsAbsentGpu
   const trainGatedReason: 'no_gpu' | 'not_implemented' | 'not_implemented_ma' | 'not_implemented_board' | null =
@@ -82,22 +99,9 @@ export function useRunControls(): RunControls {
     if (!canRun) return
     clearMetrics()
     try {
-      const isAz = algo === 'alphazero'
-      const status = await startTraining({
-        env_id: selectedEnvId!,
-        algo,
-        seed,
-        // AlphaZero's budget is iterations × games_per_iter self-play games; total_timesteps mirrors
-        // that so the progress bar / status agree with the trainer (which reports games as timesteps).
-        total_timesteps: isAz ? alphaZeroParams.iterations * alphaZeroParams.games_per_iter : totalTimesteps,
-        hyperparams,
-        // Each block is sent only for its own algorithm; null keeps the recorded config clean.
-        evolution: algo === 'neuroevolution' ? evolutionParams : null,
-        q_learning: algo === 'q_learning' ? qLearningParams : null,
-        // Competitive multi-agent self-play (simple_tag) is still algo "ppo" but carries the rounds.
-        self_play: isSelfPlay ? selfPlayParams : null,
-        alphazero: isAz ? alphaZeroParams : null,
-      })
+      const config = buildTrainConfig()
+      if (!config) return
+      const status = await startTraining(config)
       setTrainState(status.state)
     } catch (err) {
       console.error('Failed to start training:', err)

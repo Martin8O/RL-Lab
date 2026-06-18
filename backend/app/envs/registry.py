@@ -1499,11 +1499,17 @@ def _board_hyperparams(
         "simulations": HyperparamDef(  # neural-MCTS sims per move — deeper search = stronger, slower
             type="int", default=50, recommended=az_simulations, min=20, max=160, step=10,
         ),
-        "games_per_iter": HyperparamDef(  # self-play games generated per iteration
-            type="int", default=24, recommended=az_games, min=8, max=48, step=4,
+        # Self-play games per iteration. Doubles as the **GPU batch width**: self-play runs this many
+        # games concurrently and batches their MCTS leaf-evals into one forward (capped by the internal
+        # parallel_games=128 after the G6g review), so a wider value = a fuller GPU. Max 128 so chess can
+        # run a full 128-wide cohort (profiled ceiling — ~2× the throughput of the old 24, G6g review).
+        "games_per_iter": HyperparamDef(
+            type="int", default=24, recommended=az_games, min=8, max=128, step=8,
         ),
-        "iterations": HyperparamDef(  # the budget (this algorithm's "Total Steps")
-            type="int", default=30, recommended=az_iterations, min=5, max=80, step=5,
+        # The budget (this algorithm's "Total Steps"). Max 500 so a single deep-game run (chess) can train
+        # for hours; resume (Load) continues from the saved net and runs another full schedule on top.
+        "iterations": HyperparamDef(
+            type="int", default=30, recommended=az_iterations, min=5, max=500, step=5,
         ),
     }
     return hp
@@ -1943,6 +1949,71 @@ register(
         difficulty="advanced",  # a deep strategic move game
         hw_requirement="cpu",  # MCTS + the MaskablePPO board trainer both run on CPU (no GPU gate)
         train_implemented=True,  # the same game-agnostic neural board trainer (MaskablePPO vs MCTS, G6b)
+    )
+)
+
+# Chess (G6g) — the G6 finale and the AlphaZero payoff. The FIRST game whose moves are decoded by a board
+# diff (chess action_to_string is SAN — "Nc3", "O-O", "e8=Q" — not a coordinate pair), which the board
+# subsystem handles generically (board_engine._DIFF_MOVE_GAMES): each legal action streams its {from,to}
+# cells + a `promotion` letter, and a promoting (from,to) carries up to four actions the renderer's piece
+# picker disambiguates. Otherwise data-only: the [20,8,8] observation_tensor is a CNN plane stack like the
+# other board games, so the batched-GPU AlphaZero engine (G6g first half) trains it with ZERO engine
+# changes. ALPHAZERO-ONLY: MaskablePPO over chess's 4674-move space vs an MCTS teacher is hopeless, so the
+# PPO board trainer isn't offered — chess is the showcase for the self-play AZ engine on the GPU. Training a
+# strong chess net is open-ended (lots of self-play), so it ships honest: it plays legally + trains +
+# improves vs the cheap NOVICE reference (board_engine.board_profile → a fresh net already draws it), with a
+# "needs a lot of self-play to get strong" framing (like Atari's "needs hours"). hw_requirement stays "cpu"
+# (ungated — the AZ engine falls back to CPU), while the device badge reads GPU when one is present
+# (api/device.trainsOnGpu, board+alphazero). Modest ★ budget so a run shows a moving curve in a tolerable
+# time; the user can crank the Iterations slider up for a longer, stronger run.
+register(
+    EnvSpec(
+        id="chess",
+        gym_id="chess",  # the OpenSpiel short name (resolved by app.services.board_engine)
+        display_name=Bilingual(en="Chess", cz="Šachy"),
+        description=Bilingual(
+            en="The classic game of kings on an 8×8 board — move a piece by clicking it and then its "
+            "destination (promotion, castling and en-passant all handled). Chess is the showcase for the "
+            "**AlphaZero** engine: there is no built-in search opponent to teach a tiny net here, so you "
+            "**train your own neural network by self-play** on the GPU and then face it. A strong chess "
+            "net takes a lot of self-play, so expect a freshly trained one to play legal but modest "
+            "chess — watch the reward curve climb as it learns, and raise the Iterations for a stronger "
+            "opponent.",
+            cz="Klasická královská hra na desce 8×8 — figurkou táhnete tak, že na ni kliknete a pak na "
+            "její cíl (proměna, rošáda i braní mimochodem jsou ošetřeny). Šachy jsou ukázkou enginu "
+            "**AlphaZero**: není tu vestavěný prohledávací soupeř, který by malou síť učil, takže si "
+            "**natrénujete vlastní neuronovou síť hrou sama proti sobě** na GPU a pak se jí postavíte. "
+            "Silná šachová síť potřebuje hodně self-play, takže čerstvě natrénovaná hraje legálně, ale "
+            "skromně — sledujte, jak křivka odměny stoupá, jak se učí, a pro silnějšího soupeře zvyšte "
+            "počet iterací.",
+        ),
+        family="board",
+        obs_type="vector",  # inert tag — board games are routed, never made via make_env
+        action_space="discrete",  # Discrete(4674): OpenSpiel's chess move encoding
+        # AlphaZero ONLY: chess is the self-play AZ showcase (G6g). MaskablePPO over the 4674-move space vs
+        # an MCTS teacher won't learn it, so PPO isn't offered — unlike the small boards that support both.
+        supported_algos=["alphazero"],
+        # ★ AZ budget tuned for chess on the GPU: a **64-wide self-play cohort** (games_per_iter) is the
+        # profiled throughput sweet spot — it ~doubles games/s over the old 24 by keeping the GPU batch
+        # full (the bottleneck is the pure-Python MCTS tree, not the GPU forward, so a wider cohort is the
+        # main lever; ~2 games/s vs ~1). A modest default iteration count keeps a first run to ~10 min;
+        # raise Iterations (up to 500) for an hours-long, stronger run — Load continues from the saved net.
+        # The recommended sims/iterations sit on the slider step grid (30 ∈ step-10, 15 ∈ step-5) so the
+        # green ★ tick is exactly selectable (off-grid values land just left/right of it).
+        hyperparams=_board_hyperparams(az_iterations=15, az_simulations=30, az_games=64),
+        # Same eval-vs-reference-MCTS ∈ [−1, 1] chart scale as the other board games (solved = +1, min =
+        # −1); scored vs the cheap NOVICE reference so a fresh net starts near 0 and the curve can climb.
+        solved_score=1.0,
+        min_score=-1.0,
+        default_total_timesteps=960,  # inert for AZ-only (no PPO step ladder); = the ★ AZ budget (15×64)
+        play_step_scale=1,
+        floor_scales_with_steps=False,
+        turn_based=True,  # one move per click-pair; the board subsystem drives the turn loop
+        human_playable=True,  # play a side vs your trained net (no built-in search opponent for chess)
+        competitive=True,  # 2-player zero-sum → routed to the board trainer, like the other board games
+        difficulty="advanced",  # the deepest game in the catalog
+        hw_requirement="cpu",  # ungated — the AZ engine runs on GPU when present, else falls back to CPU
+        train_implemented=True,  # the batched-GPU AlphaZero self-play engine (G6g)
     )
 )
 

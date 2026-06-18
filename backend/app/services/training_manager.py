@@ -198,8 +198,18 @@ class TrainingManager:
             raise NothingToSaveError("No trained model to save yet — start a run first")
         return self._ckpt.save(config, snapshot, metrics, label)
 
-    def load_checkpoint(self, checkpoint_id: str) -> TrainStatus:
-        """Resume training from a saved checkpoint (PPO continues; evolution continues)."""
+    def load_checkpoint(
+        self, checkpoint_id: str, new_config: TrainConfig | None = None
+    ) -> TrainStatus:
+        """Resume training from a saved checkpoint (PPO continues; evolution continues).
+
+        By default the resumed run keeps the **saved** config. If ``new_config`` is supplied (the
+        sidebar's current settings) **and it targets the same game + algorithm**, the run adopts its
+        hyperparameters + seed instead — so the user can *extend or retune* a run (e.g. raise AlphaZero's
+        Iterations to keep training for hours) while picking up from the saved net. The env/algorithm
+        always come from the checkpoint and the saved **weights** always win (the architecture is read
+        from the blob), so a mismatched ``new_config`` is simply ignored — Load never fails on it.
+        """
         loaded = self._ckpt.load(checkpoint_id)
         if loaded is None:
             raise CheckpointNotFoundError(f"Checkpoint '{checkpoint_id}' not found")
@@ -215,15 +225,29 @@ class TrainingManager:
                 f"'{loaded.config.algo}'"
             )
 
+        # Adopt the current sidebar settings only when they continue the *same* run (same game + algo);
+        # otherwise fall back to the saved config so Load is always safe (the sidebar may be elsewhere).
         config = loaded.config
-        # PPO continues the global step counter, so target an additional full budget on top of
-        # where the checkpoint left off. Evolution continues by generation (handled in-trainer).
-        # Competitive self-play (simple_tag) AND board games (G6b) are the exceptions: their budget is
-        # "rounds × per-round" and resume simply runs another full schedule, so they must NOT add the
-        # elapsed steps (that would inflate the per-round budget) — leave total_timesteps as recorded.
-        if config.algo == "ppo" and not is_competitive_ma(spec) and not is_board_game(spec):
+        if (
+            new_config is not None
+            and new_config.env_id == loaded.config.env_id
+            and new_config.algo == loaded.config.algo
+        ):
+            config = new_config
+        # Both PPO and AlphaZero target ANOTHER full budget on top of where the checkpoint left off, so
+        # the recorded total must add the elapsed steps/games (else a just-loaded finished AZ model reads
+        # as ~50%: the sidebar shows the bare new schedule, e.g. 960, while the bar climbs to 1920).
+        #  • PPO continues the global step counter → games_done + new budget.
+        #  • AZ runs another full `iterations` schedule → total_target = games_done + iterations × games.
+        # Evolution continues by generation (in-trainer). The exceptions that must NOT add elapsed steps
+        # (their "rounds × per-round" budget would inflate): competitive self-play (simple_tag) and the
+        # MaskablePPO *board* trainer (G6b) — hence the PPO guard excludes them; AZ is always a board game
+        # but computes its own schedule, so it's added explicitly.
+        if config.algo == "alphazero" or (
+            config.algo == "ppo" and not is_competitive_ma(spec) and not is_board_game(spec)
+        ):
             config = config.model_copy(
-                update={"total_timesteps": loaded.meta.timesteps + loaded.config.total_timesteps}
+                update={"total_timesteps": loaded.meta.timesteps + config.total_timesteps}
             )
         return self._launch(config, spec.gym_id, resume=loaded.blob)
 

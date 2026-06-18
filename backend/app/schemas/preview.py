@@ -54,13 +54,18 @@ class BoardMove(BaseModel):
     plus the board-cell indices it moves **from** and **to** (row-major, matching ``BoardState.cells``).
 
     A move is a (from-square → to-square), not a single-cell placement, so the client can't derive the
-    action from one click. The backend decodes each legal action's from/to (from ``action_to_string``)
-    and streams this map; the renderer highlights a selected piece's destinations and maps a clicked
-    (from, to) pair back to ``action``. Present only for move-mode games (``BoardState.moves``)."""
+    action from one click. The backend decodes each legal action's from/to (from ``action_to_string``,
+    or a board diff for chess) and streams this map; the renderer highlights a selected piece's
+    destinations and maps a clicked (from, to) pair back to ``action``. Present only for move-mode games
+    (``BoardState.moves``)."""
 
     action: int
     from_cell: int
     to_cell: int
+    # Chess promotion (G6g): the new piece letter (``"q"``/``"r"``/``"b"``/``"n"``) when this move promotes
+    # a pawn. A promoting (from,to) has up to four actions differing only here, so the renderer shows a
+    # piece picker. None/absent for every non-promotion move (and all non-chess move games).
+    promotion: str | None = None
 
 
 class BoardState(BaseModel):

@@ -215,6 +215,78 @@ def test_placement_games_omit_the_move_fields() -> None:
         assert "moves" not in p and "last_from" not in p and "last_to" not in p
 
 
+# -- G6g: chess — diff-decoded moves (SAN), promotion, FEN board, AZ-only ----
+
+
+def test_chess_registered() -> None:
+    """G6g — chess ships as data + a renderer + the promotion UI; it is the AlphaZero showcase, so it is
+    AZ-ONLY (MaskablePPO can't learn its 4674-move space), runs on the GPU when present (ungated)."""
+    spec = get_env("chess")
+    assert spec is not None and spec.gym_id == "chess"
+    assert spec.family == "board" and spec.action_space == "discrete"
+    assert spec.supported_algos == ["alphazero"]  # AZ-only — no MaskablePPO teacher path for chess
+    assert spec.human_playable is True and spec.competitive is True and spec.turn_based is True
+    assert spec.train_implemented is True and spec.hw_requirement == "cpu"  # ungated; GPU when present
+    assert spec.min_score == -1.0 and spec.solved_score == 1.0  # same ±1 board chart scale
+
+
+def test_chess_fen_board_parses_to_8x8_case_preserved() -> None:
+    """OpenSpiel prints chess as a single FEN line; ``board_payload`` must yield a clean 8×8 grid of FEN
+    piece letters with **case preserved** (uppercase = white, lowercase = black — the renderer needs the
+    case to tell the two sides apart), with no FEN side/castling/clock fields leaking into the cells."""
+    game = board_engine.load_game("chess")
+    p = board_engine.board_payload(game.new_initial_state(), None)
+    assert p["rows"] == 8 and p["cols"] == 8 and len(p["cells"]) == 64
+    assert "".join(p["cells"][:8]) == "rnbqkbnr"  # rank 8 (black back rank) at the top
+    assert "".join(p["cells"][56:64]) == "RNBQKBNR"  # rank 1 (white back rank) at the bottom
+    assert set(p["cells"]) == {".", "p", "n", "b", "r", "q", "k", "P", "N", "B", "R", "Q", "K"}
+
+
+def test_chess_streams_diff_decoded_from_to_moves() -> None:
+    """Chess ``action_to_string`` is SAN, not a coordinate pair, so moves are decoded by a board diff: each
+    legal action streams ``{action, from_cell, to_cell}`` starting on a current-player (white, uppercase)
+    piece. Every legal action decodes (the diff is exhaustive)."""
+    game = board_engine.load_game("chess")
+    p = board_engine.board_payload(game.new_initial_state(), None)
+    moves = p["moves"]
+    assert moves is not None and {m["action"] for m in moves} == set(p["legal_actions"])  # all decoded
+    cells = p["cells"]
+    for m in moves:
+        assert 0 <= m["from_cell"] < 64 and 0 <= m["to_cell"] < 64
+        assert cells[m["from_cell"]].isupper()  # white (player 0) moves first; its pieces are uppercase
+
+
+def test_chess_promotion_streams_multiple_actions_per_square() -> None:
+    """A promoting pawn reaches one square via SEVERAL actions (=Q/=R/=B/=N) — the renderer's piece picker
+    disambiguates. The decoder streams them all sharing (from,to) with distinct ``promotion`` letters."""
+    game = board_engine.load_game("chess")
+    state = game.new_initial_state("7k/4P3/8/8/8/8/8/K7 w - - 0 1")  # white pawn e7, free to promote
+    promo = [m for m in board_engine.board_payload(state, None)["moves"] if m.get("promotion")]
+    assert len({(m["from_cell"], m["to_cell"]) for m in promo}) == 1  # all land on the same square (e8)
+    assert {m["promotion"] for m in promo} == {"q", "r", "b", "n"}  # the four promotion choices
+    assert len({m["action"] for m in promo}) == 4  # four distinct action ints behind that one square
+
+
+def test_chess_last_move_decoded_from_prev_cells() -> None:
+    """Chess SAN can't be re-decoded from the post-move state, so the last-move highlight diffs the
+    *previous* board (passed as ``prev_cells``) against the current one — e4 reports e2 → e4."""
+    game = board_engine.load_game("chess")
+    state = game.new_initial_state()
+    prev = board_engine.board_cells(state)
+    e4 = next(a for a in state.legal_actions() if state.action_to_string(0, a) == "e4")
+    state.apply_action(e4)
+    p = board_engine.board_payload(state, e4, prev)
+    assert p["last_from"] == 52 and p["last_to"] == 36  # e2 (row 6, col 4) → e4 (row 4, col 4)
+    # Without prev_cells the highlight is simply absent (no crash) — SAN alone can't place it.
+    assert board_engine.board_payload(state, e4)["last_from"] is None
+
+
+def test_chess_profile_uses_cheap_novice_reference() -> None:
+    """Chess is scored against the cheapest NOVICE reference: a fresh net already draws it (≈0), and the
+    random-rollout eval stays affordable (a stronger reference both pins the curve and is far slower)."""
+    assert board_engine.board_profile("chess").eval_strength == "novice"
+
+
 def test_breakthrough_profile_trains_cheap_scores_vs_medium() -> None:
     """Breakthrough is taught novice→easy (cheap, fast self-play) but scored vs the MEDIUM reference:
     eval-vs-easy saturates at +1 almost at once, so medium is the honest, non-saturating yardstick."""

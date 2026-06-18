@@ -250,6 +250,46 @@ export const PLAY_GUIDES: Record<string, PlayGuide> = {
     },
   },
 
+  // Chess (G6g): the move-based interaction with a promotion picker. There is no built-in search
+  // opponent for chess — you play your own AlphaZero-trained net (or watch two nets play).
+  chess: {
+    goal: {
+      en: 'Checkmate the opponent\'s king — trap it so it cannot escape capture. Each piece moves its own '
+        + 'way (pawns forward, knights in an L, bishops diagonally, rooks straight, the queen any line, the '
+        + 'king one square), and you capture by moving onto an enemy piece. Chess is the home of the '
+        + '**AlphaZero** engine here: there is no built-in opponent to face, so you train your own neural '
+        + 'network by self-play and then play it. A freshly trained net plays legal but modest chess — the '
+        + 'longer it self-plays, the stronger it gets.',
+      cz: 'Dejte mat soupeřovu králi — sevřete ho tak, aby nemohl uniknout braní. Každá figurka táhne '
+        + 'po svém (pěšci vpřed, jezdci do L, střelci úhlopříčně, věže rovně, dáma libovolnou přímkou, '
+        + 'král o jedno pole) a berete tak, že vejdete na soupeřovu figurku. Šachy jsou tu doménou enginu '
+        + '**AlphaZero**: není tu vestavěný soupeř, takže si natrénujete vlastní neuronovou síť hrou sama '
+        + 'proti sobě a pak ji hrajete. Čerstvě natrénovaná síť hraje legálně, ale skromně — čím déle '
+        + 'hraje sama proti sobě, tím je silnější.',
+    },
+    controls: [
+      { keys: 'Click', action: { en: 'Click one of your pieces to light up its legal moves', cz: 'Klikněte na svou figurku, ať se zvýrazní její možné tahy' } },
+      { keys: 'Click', action: { en: 'Then click a highlighted square to move or capture there', cz: 'Pak klikněte na zvýrazněné políčko, kam táhnout nebo brát' } },
+      { keys: 'Pick', action: { en: 'Promoting a pawn? Choose the new piece in the picker', cz: 'Proměna pěšce? Vyberte novou figurku v nabídce' } },
+    ],
+    tips: {
+      en: 'This game is mouse-driven and turn-based — no keyboard. Click a piece to see where it can go '
+        + '(click it again, or another piece, to change your mind), then click a highlighted square. '
+        + 'Castling is a king move two squares toward a rook; en-passant and promotion are handled for '
+        + 'you (a pawn reaching the far rank opens a piece picker — usually take the queen). There is no '
+        + 'built-in difficulty here: first train a net (it learns by self-play on the GPU), then face it '
+        + 'or switch to "Watch AI vs AI". A short run plays legal but weak chess — raise the Iterations '
+        + 'for a stronger opponent.',
+      cz: 'Hra se ovládá myší a je tahová — žádná klávesnice. Klikněte na figurku, ať vidíte, kam může '
+        + '(dalším kliknutím na ni nebo na jinou figurku výběr změníte), pak klikněte na zvýrazněné '
+        + 'políčko. Rošáda je tah krále o dvě pole k věži; braní mimochodem i proměna jsou ošetřeny za '
+        + 'vás (pěšec na poslední řadě otevře nabídku figurek — obvykle berte dámu). Není tu vestavěná '
+        + 'obtížnost: nejdřív natrénujte síť (učí se hrou sama proti sobě na GPU), pak se jí postavte nebo '
+        + 'přepněte na „Sledovat AI vs AI“. Krátký běh hraje legálně, ale slabě — pro silnějšího soupeře '
+        + 'zvyšte počet iterací.',
+    },
+  },
+
   lunarlander: {
     goal: {
       en: 'Land the module gently on the pad between the two flags, upright and slow, with both '

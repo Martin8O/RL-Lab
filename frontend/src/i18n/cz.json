@@ -70,6 +70,8 @@
     "score": "Skóre",
     "steps": "Kroky",
     "steps_per_sec": "Kroků/s",
+    "games": "Partie",
+    "games_per_sec": "Partií/s",
     "elapsed": "Čas",
     "no_data": "Spusťte trénink pro živé statistiky"
   },
@@ -166,7 +168,14 @@
     "select_piece": "Váš tah — klikněte na jednu ze svých figurek",
     "select_dest": "Nyní klikněte na zvýrazněné políčko, kam chcete táhnout",
     "pass": "Vynechat tah",
-    "must_pass": "Žádný možný tah — musíte vynechat"
+    "must_pass": "Žádný možný tah — musíte vynechat",
+    "promote_prompt": "Proměnit na",
+    "promote_cancel": "Zrušit proměnu",
+    "promote_to": "Proměnit na {{piece}}",
+    "piece_q": "dámu",
+    "piece_r": "věž",
+    "piece_b": "střelce",
+    "piece_n": "jezdce"
   },
   "watch": {
     "about": "Na co se dívám?",

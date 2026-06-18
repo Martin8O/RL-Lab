@@ -45,9 +45,22 @@ SnapshotSink = Callable[[CheckpointArtifact], None]
 _EVAL_GAMES = 18
 
 
+def _eval_budget(n_actions: int, eval_simulations: int) -> tuple[int, int]:
+    """``(#eval games, neural-MCTS sims/move)`` for the per-iteration eval-vs-reference (G6g).
+
+    The eval pits the net (batched neural-MCTS) against a random-rollout reference MCTS — cheap on the
+    small boards but heavy on **chess** (~4674 moves, ~100-ply games, and each reference rollout plays a
+    full random game), where one eval game measured ~5–6 s. So a high-branching game gets fewer games + a
+    capped search depth to keep the per-iteration eval a tolerable few-tens-of-seconds (a noisier but
+    affordable ±1 readout); the small boards keep the steady 18 games at full depth."""
+    if n_actions > 1000:  # chess / go — expensive long-game random-rollout eval
+        return 4, min(eval_simulations, 12)
+    return _EVAL_GAMES, eval_simulations
+
+
 def _dirichlet_alpha(n_actions: int) -> float:
     """Root-exploration noise scale ≈ 10 / typical-branching: looser for low-branching games (Connect
-    Four ~7 moves → 1.0), tighter for high-branching ones (Breakthrough/Othello → 0.3)."""
+    Four ~7 moves → 1.0), tighter for high-branching ones (Breakthrough/Othello/chess → 0.3)."""
     return 1.0 if n_actions < 50 else 0.3
 
 
@@ -86,7 +99,10 @@ def train_az(
     # Same reference MCTS the PPO baseline is scored against (board_engine.board_profile, G6c), so the
     # two algorithms' learning curves are directly comparable. AZ has no teacher — it self-plays.
     eval_sims = board_engine.STRENGTH_SIMS[board_engine.board_profile(gym_id).eval_strength]
-    dir_alpha = _dirichlet_alpha(int(game.num_distinct_actions()))
+    n_actions = int(game.num_distinct_actions())
+    dir_alpha = _dirichlet_alpha(n_actions)
+    # Lighter eval for high-branching games (chess) so the per-iteration eval stays a few-tens-of-seconds.
+    eval_games, eval_move_sims = _eval_budget(n_actions, hp.eval_simulations)
 
     if resume_blob is not None:
         model, games_done = az_net.build_model_from_blob(resume_blob, game, device=device)
@@ -133,7 +149,7 @@ def train_az(
         # so the curve reflects the move AZ would actually play (and clearly clears the PPO baseline). The
         # net's eval moves are BATCHED across the eval games (az_batch) so this stays fast on the GPU.
         return az_batch.eval_vs_mcts_parallel(
-            model, game, eval_sims, _EVAL_GAMES, hp.eval_simulations, hp.c_puct,
+            model, game, eval_sims, eval_games, eval_move_sims, hp.c_puct,
             config.seed, should_stop=should_stop,
         )
 
@@ -200,9 +216,11 @@ def train_az(
 
     last_loss: list[float | None] = [None]
 
-    # Initial (untrained) preview policy + chart point + a savable snapshot — Save works from step 0.
-    last_eval[0] = evaluate()
+    # Publish the live preview policy FIRST so the board starts self-playing the (random) net immediately,
+    # instead of sitting idle for the seconds the initial eval takes — then the eval, the first chart
+    # point and a savable snapshot (Save works from step 0).
     publish()
+    last_eval[0] = evaluate()
     emit()
     take_snapshot()
 

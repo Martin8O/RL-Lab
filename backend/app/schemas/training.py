@@ -88,7 +88,10 @@ class AlphaZeroHyperparams(BaseModel):
     channels: int = 128  # CNN width (G6f "lite" was 64)
     blocks: int = 10  # CNN residual blocks (G6f "lite" was 4)
     norm: str = "group"  # GroupNorm in the tower (batch-independent → no BatchNorm train/eval pitfalls)
-    parallel_games: int = 64  # concurrent self-play games batched into one GPU forward per MCTS step
+    parallel_games: int = 128  # concurrent self-play games batched into one GPU forward per MCTS step
+    # (G6g review "A": raised 64→128 so a games_per_iter=128 run actually batches 128 wide — the profiled
+    # ceiling on the RTX 5070, ~12% over a 64-cohort and a fuller GPU; small games stay capped by their own
+    # games_per_iter so this only widens the high-throughput chess runs. VRAM-validated at batch 128.)
     batch_size: int = 128
     train_epochs: float = 2.0  # passes over the replay buffer per iteration (gentle — avoids overfit)
     buffer_size: int = 80_000  # replay window (self-play positions) — wider for the bigger net + batches

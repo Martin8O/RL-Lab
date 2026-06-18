@@ -70,6 +70,8 @@
     "score": "Score",
     "steps": "Steps",
     "steps_per_sec": "Steps/s",
+    "games": "Games",
+    "games_per_sec": "Games/s",
     "elapsed": "Time",
     "no_data": "Start training to see live stats"
   },
@@ -166,7 +168,14 @@
     "select_piece": "Your move — click one of your pieces",
     "select_dest": "Now click a highlighted square to move there",
     "pass": "Pass",
-    "must_pass": "No legal move — you must pass"
+    "must_pass": "No legal move — you must pass",
+    "promote_prompt": "Promote to",
+    "promote_cancel": "Cancel promotion",
+    "promote_to": "Promote to {{piece}}",
+    "piece_q": "queen",
+    "piece_r": "rook",
+    "piece_b": "bishop",
+    "piece_n": "knight"
   },
   "watch": {
     "about": "What am I watching?",

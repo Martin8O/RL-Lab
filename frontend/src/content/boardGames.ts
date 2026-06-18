@@ -15,6 +15,13 @@ export interface BoardPiece {
   glyph: string
   /** Theme token for the glyph colour. */
   color: string
+  /** The side's *representative* piece for the winner banner / status mark (chess: the king), where a
+   *  player owns many glyph types. The first piece of a player is used when none is flagged. */
+  lead?: boolean
+  /** Image asset basename under `pieceImageBase` (chess: the lichess cburnett SVGs, e.g. `"wK"`/`"bN"`).
+   *  When set + the meta has `pieceImageBase`, the renderer draws this SVG instead of the Unicode glyph
+   *  (the glyph stays as the banner/status mark + a fallback). */
+  image?: string
 }
 
 export interface BoardGameMeta {
@@ -40,6 +47,21 @@ export interface BoardGameMeta {
    * and clicks/highlights ride the transform. Omitted for placement games (orientation doesn't matter).
    */
   orient?: { bottomPlayer: number }
+  /** Which player moves first, when it ISN'T player 0 (chess: OpenSpiel makes **white = player 1** the
+   *  first mover). The side picker offers this player as "Go first" so picking white actually gives the
+   *  first move. Defaults to 0 (every other game). */
+  firstPlayer?: number
+  /** Upright-glyph games (chess, G6g): the piece glyphs are upright symbols (not directional triangles),
+   *  so when the board is flipped 180° for orientation they must be **counter-rotated** to stay upright.
+   *  Omitted for triangle games (Breakthrough), whose glyphs are *meant* to flip with the board. */
+  uprightGlyphs?: boolean
+  /** Base URL for piece image assets (chess: the lichess cburnett SVGs). When set, a cell with a piece
+   *  whose `BoardPiece.image` is set is drawn as `<base>/<image>.svg`; everything else falls back to the
+   *  Unicode glyph. Served from `frontend/public/` so it works in dev + the standalone build. */
+  pieceImageBase?: string
+  /** Draw a checkered (light/dark alternating) board (chess), the natural look for the image pieces, vs
+   *  the default flat single-surface cells used by the small games. */
+  checkered?: boolean
   /** The idle board shown when the game is selected but no session is running. */
   idle: BoardState
 }
@@ -100,6 +122,28 @@ function breakthroughIdleBoard(): BoardState {
   }
 }
 
+/** Chess's standard opening position as row-major FEN piece letters (rank 8 at row 0, uppercase = white).
+ *  Shown before a session so the board isn't empty; the live board streams the same case-preserved cells. */
+function chessIdleBoard(): BoardState {
+  const back = (lower: boolean) => (lower ? 'rnbqkbnr' : 'RNBQKBNR').split('')
+  const pawns = (lower: boolean) => Array<string>(8).fill(lower ? 'p' : 'P')
+  const empty = Array<string>(8).fill('.')
+  const cells = [
+    ...back(true), ...pawns(true), ...empty, ...empty, ...empty, ...empty, ...pawns(false), ...back(false),
+  ]
+  return {
+    cells,
+    rows: 8,
+    cols: 8,
+    legal_actions: [],
+    current_player: 1, // OpenSpiel chess: white = player 1 moves first
+    last_action: null,
+    is_terminal: false,
+    winner: null,
+    moves: [],
+  }
+}
+
 export const BOARD_GAMES: Record<string, BoardGameMeta> = {
   // Tic-Tac-Toe: glyph 'x' = player 0 (moves first, accent), 'o' = player 1 (danger). The action
   // index equals the cell index (0–8), so a legal cell is directly clickable.
@@ -152,6 +196,42 @@ export const BOARD_GAMES: Record<string, BoardGameMeta> = {
     // board flips 180° to put their pieces at the bottom (advancing up). Watch/AI keep the default view.
     orient: { bottomPlayer: 1 },
     idle: breakthroughIdleBoard(),
+  },
+  // Chess (G6g): the G6 finale, played by (from-square → to-square) clicks (actionMode 'move') with a
+  // promotion piece picker. The 12 FEN piece letters map to Unicode chess glyphs, distinguished — like
+  // Othello's discs — by GLYPH FILL, not colour, so both sides read clearly in dark AND light: white
+  // uses the *outline* set ♔♕♖♗♘♙, black the *filled* set ♚♛♜♝♞♟, both in the same --text-strong token
+  // (a coloured "black"/"white" can't be theme-proof — a dark glyph vanishes on a dark board). The king
+  // carries `lead` so the winner/turn mark is the king. Glyphs are upright symbols (uprightGlyphs), so the
+  // orientation flip counter-rotates them to stay readable.
+  // ⚠ Player↔colour is OpenSpiel's, NOT the usual "player 0 first": OpenSpiel chess has **WHITE = player 1**
+  // (moves first) and **BLACK = player 0** (verified — the initial state's current_player() is 1, moving a
+  // white pawn). So uppercase (white) maps to player 1 and lowercase (black) to player 0, white is the
+  // `bottomPlayer` (1) and the `firstPlayer` (1). Getting this right is what makes "play white" actually
+  // give you white + the first move (the alternative — swapping indices in the backend — would hide
+  // OpenSpiel's truth from every other consumer; the mapping is a rendering concern, so it lives here).
+  chess: {
+    pieces: {
+      K: { player: 1, glyph: '♔', color: 'var(--text-strong)', lead: true, image: 'wK' },
+      Q: { player: 1, glyph: '♕', color: 'var(--text-strong)', image: 'wQ' },
+      R: { player: 1, glyph: '♖', color: 'var(--text-strong)', image: 'wR' },
+      B: { player: 1, glyph: '♗', color: 'var(--text-strong)', image: 'wB' },
+      N: { player: 1, glyph: '♘', color: 'var(--text-strong)', image: 'wN' },
+      P: { player: 1, glyph: '♙', color: 'var(--text-strong)', image: 'wP' },
+      k: { player: 0, glyph: '♚', color: 'var(--text-strong)', lead: true, image: 'bK' },
+      q: { player: 0, glyph: '♛', color: 'var(--text-strong)', image: 'bQ' },
+      r: { player: 0, glyph: '♜', color: 'var(--text-strong)', image: 'bR' },
+      b: { player: 0, glyph: '♝', color: 'var(--text-strong)', image: 'bB' },
+      n: { player: 0, glyph: '♞', color: 'var(--text-strong)', image: 'bN' },
+      p: { player: 0, glyph: '♟', color: 'var(--text-strong)', image: 'bP' },
+    },
+    actionMode: 'move',
+    orient: { bottomPlayer: 1 }, // white (player 1) sits at the bottom; flip only when the human plays black
+    firstPlayer: 1, // white (player 1) moves first → the side picker offers white as "Go first"
+    uprightGlyphs: true,
+    pieceImageBase: '/pieces/cburnett', // lichess cburnett SVGs (frontend/public/pieces/cburnett)
+    checkered: true, // a real chessboard look for the image pieces
+    idle: chessIdleBoard(),
   },
 }
 

@@ -86,6 +86,7 @@ export default function EnvPreview() {
   const envName = selectedEnv?.display_name[locale] ?? t('envpreview.title')
 
   const canvasRef     = useRef<HTMLCanvasElement | null>(null)
+  const sectionRef    = useRef<HTMLElement | null>(null)     // the whole preview panel — stable-height measure
   const stageRef      = useRef<HTMLDivElement | null>(null)  // the stage box — target for fullscreen
   const cartGroupRef  = useRef<SVGGElement | null>(null)   // CartPole: horizontal cart travel
   const poleGroupRef  = useRef<SVGGElement | null>(null)   // CartPole: pole angle
@@ -537,6 +538,46 @@ export default function EnvPreview() {
     return () => document.removeEventListener('fullscreenchange', onChange)
   }, [])
 
+  // Measure for the board game's square sizing (fill the stage, grow in fullscreen — vs a fixed small
+  // board with big empty margins). We measure the STAGE (fullscreen target = whole screen) AND the whole
+  // SECTION. The board budget is derived from the *section* in normal layout, because the stage's own
+  // height flexes when the PlayControls bar below it reflows between idle (tall: side-picker + opponent +
+  // difficulty wrap to 2 rows) and playing (short: one row) — that flex was resizing/jumping the board on
+  // every Play/Watch click. The section height is stable across that reflow. Measured imperatively
+  // (clientWidth/Height) on mount + every resize/fullscreen change — NOT via ResizeObserver alone, which
+  // doesn't fire in every embedded environment; the explicit measure is the reliable path.
+  const [stageSize, setStageSize] = useState({ w: 0, h: 0 })
+  const [sectionSize, setSectionSize] = useState({ w: 0, h: 0 })
+  useEffect(() => {
+    const el = stageRef.current
+    if (!el) return
+    const sec = sectionRef.current
+    const measure = () => {
+      setStageSize({ w: el.clientWidth, h: el.clientHeight })
+      if (sec) setSectionSize({ w: sec.clientWidth, h: sec.clientHeight })
+    }
+    measure()
+    const settle = setTimeout(measure, 150)  // re-measure once the panel layout settles
+    const ro = new ResizeObserver(measure)
+    ro.observe(el)
+    if (sec) ro.observe(sec)
+    window.addEventListener('resize', measure)
+    document.addEventListener('fullscreenchange', measure)
+    return () => {
+      clearTimeout(settle)
+      ro.disconnect()
+      window.removeEventListener('resize', measure)
+      document.removeEventListener('fullscreenchange', measure)
+    }
+  }, [])
+  // Largest square the board may occupy. Fullscreen → the whole stage (= the screen), minus the status
+  // line + paddings. Normal → the stable section minus a FIXED reserve for the header + the (max, 2-row)
+  // controls bar + the board status line + paddings, so the board keeps one size whether or not a session
+  // is live (no jump). A touch conservative when the bar is a single row — stability is worth a few px.
+  const boardMaxPx = isFullscreen
+    ? Math.min(stageSize.w - 56, stageSize.h - 104)
+    : Math.min(sectionSize.w - 56, sectionSize.h - 240)
+
   function toggleFullscreen() {
     if (document.fullscreenElement) void document.exitFullscreen().catch(() => {})
     else void stageRef.current?.requestFullscreen().catch(() => {})
@@ -599,7 +640,10 @@ export default function EnvPreview() {
   let boardStatus = t('board.pick_side')
   let boardBanner: BoardBanner | null = null
   if (clientKind === 'board' && board) {
-    const pieceFor = (player: number) => Object.values(boardMeta?.pieces ?? {}).find((p) => p.player === player)
+    // The side's mark for the watch/winner banner. For a multi-glyph game (chess) prefer the piece flagged
+    // `lead` (the king) over whichever happens to be first; single-glyph games are unaffected.
+    const piecesOf = (player: number) => Object.values(boardMeta?.pieces ?? {}).filter((p) => p.player === player)
+    const pieceFor = (player: number) => piecesOf(player).find((p) => p.lead) ?? piecesOf(player)[0]
     const markFor = (player: number) => pieceFor(player)?.glyph ?? `#${player + 1}`
     // Watch / training winner banner: a colour-coded mark + "<mark> wins". The colour is what tells the
     // two players apart in same-glyph games (Connect Four), where "● wins" alone is unreadable.
@@ -642,7 +686,7 @@ export default function EnvPreview() {
   const onBoardCellClick = (action: number) => { if (boardHumanTurn) sendPlayAction(action) }
 
   return (
-    <section style={{
+    <section ref={sectionRef} style={{
       flex: '0 0 55%', display: 'flex', flexDirection: 'column',
       borderRight: '2px solid var(--border-default)', overflow: 'hidden',
     }}>
@@ -752,7 +796,7 @@ export default function EnvPreview() {
               <BoardStage
                 envName={envName} board={board} meta={boardMeta}
                 humanTurn={boardHumanTurn} humanSide={boardHumanSide} onCellClick={onBoardCellClick}
-                statusText={boardStatus} banner={boardBanner}
+                statusText={boardStatus} banner={boardBanner} maxBoardPx={boardMaxPx}
               />
             ) : clientKind === 'mpe' ? (
               <SwarmStage

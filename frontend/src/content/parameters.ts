@@ -1272,10 +1272,10 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
       cz: '**Tréninkový rozpočet** — kolik kol „odehraj dávku partií sám proti sobě a pak se z nich uč“ AlphaZero udělá.\nV každé iteraci AI odehraje novou dávku self-play partií a pak na nich natrénuje svou síť. Víc iterací = silnější síť, dokud malou hru nezvládne. Je to obdoba PPO „Celkem kroků“ pro AlphaZero (celý rozpočet je iterace × her na iteraci self-play partií).',
     },
     recommended: {
-      en: 'The ★ default is tuned per game. Watch the reward curve: while it is still climbing, more iterations keep making the net stronger; once it flattens near the top, it has learned what it can at this search depth.',
-      cz: 'Výchozí ★ je laděná pro každou hru. Sledujte křivku odměny: dokud stoupá, další iterace síť dál posilují; jakmile se ustálí poblíž stropu, naučila se, co při této hloubce hledání zvládne.',
+      en: 'The ★ default is tuned per game. Watch the reward curve: while it is still climbing, more iterations keep making the net stronger; once it flattens near the top, it has learned what it can at this search depth. For a deep game like chess you can raise this a long way (up to 500) to train for hours — or Save and Load to continue a run later, picking up from the trained net.',
+      cz: 'Výchozí ★ je laděná pro každou hru. Sledujte křivku odměny: dokud stoupá, další iterace síť dál posilují; jakmile se ustálí poblíž stropu, naučila se, co při této hloubce hledání zvládne. U hluboké hry jako šachy můžete jít hodně vysoko (až 500) a trénovat hodiny — nebo dát Uložit a Načíst a pokračovat v běhu později, navázat na natrénovanou síť.',
     },
-    range: '5 – 80',
+    range: '5 – 500',
     perEnv: {
       tictactoe: {
         en: 'Tic-Tac-Toe is tiny, so the net reaches strong (drawing) play quickly — but it is scored against a tough reference AI, so it takes a few dozen iterations for the curve to climb from losses up toward 0 (draws), which is mastery here.',
@@ -1284,6 +1284,10 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
       connect_four: {
         en: 'Connect Four is bigger, so give it the full default (around 30) to watch the net climb from losing to clearly beating the reference AI. Because AlphaZero searches ahead even when playing, it usually overtakes the plain-PPO net on the same game.',
         cz: 'Čtyři v řadě je větší, takže jí dejte plný výchozí rozpočet (kolem 30) a sledujte, jak síť stoupá od proher k jasnému vítězství nad referenční AI. Protože AlphaZero hledá dopředu i při hře, obvykle předčí síť z prostého PPO na téže hře.',
+      },
+      chess: {
+        en: 'Chess is enormous, so a short run only scratches the surface — the default is modest so a run finishes in a reasonable time and you can see the curve move. Each iteration here is real work (chess self-play games are long), so raising this makes a noticeably stronger but slower-to-train opponent. Reaching genuinely strong play takes a lot of self-play (think many iterations / a long run), so treat a short run as "plays legally and is learning", not "mastered".',
+        cz: 'Šachy jsou obrovské, takže krátký běh jen načne povrch — výchozí hodnota je skromná, aby běh skončil v rozumném čase a vy viděli, jak se křivka hýbe. Každá iterace je tu skutečná práce (šachové self-play partie jsou dlouhé), takže zvýšení dá znatelně silnějšího, ale pomaleji trénovaného soupeře. Opravdu silná hra vyžaduje hodně self-play (spousta iterací / dlouhý běh), takže krátký běh berte jako „hraje legálně a učí se“, ne „zvládnuto“.',
       },
     },
   },
@@ -1307,6 +1311,10 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
         en: 'Connect Four has real tactics (traps, threats), so more simulations noticeably sharpen the moves the net learns from — worth the extra time if you want a stronger opponent.',
         cz: 'Čtyři v řadě má skutečnou taktiku (pasti, hrozby), takže víc simulací znatelně zostří tahy, ze kterých se síť učí — stojí to za čas navíc, pokud chcete silnějšího soupeře.',
       },
+      chess: {
+        en: 'Chess is deep, so deeper search means much sharper move targets — but it is also the slowest dial here (every extra simulation runs the big network again over a 64-square board). The default keeps self-play moving; raise it for stronger play once you are ready for a longer run.',
+        cz: 'Šachy jsou hluboké, takže hlubší hledání znamená mnohem ostřejší cílové tahy — ale je to tu i nejpomalejší volič (každá simulace navíc znovu spustí velkou síť nad 64 poli). Výchozí hodnota drží self-play v pohybu; zvyšte ji pro silnější hru, až budete připraveni na delší běh.',
+      },
     },
   },
 
@@ -1316,8 +1324,8 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
       cz: '**Self-play partií na iteraci** — kolik nových partií AI odehraje sama proti sobě před každým kolem učení.\nTyto partie jsou jediná tréninková data AI — nemá žádné lidské příklady, učí se čistě z vlastní hry. Víc partií na iteraci = stabilnější, méně zašuměné učení, ale každá iterace trvá déle.',
     },
     recommended: {
-      en: '24 is a solid default — enough fresh games each round for stable learning without dragging out each iteration. Lower it for quicker rounds, raise it for smoother curves.',
-      cz: '24 je dobrá výchozí hodnota — dost nových partií v každém kole pro stabilní učení, aniž by se iterace protahovala. Snižte pro rychlejší kola, zvyšte pro hladší křivky.',
+      en: 'This also sets the **GPU batch width**: the self-play games run concurrently and their network evaluations are batched into one pass, so a higher value keeps the GPU fuller and the throughput higher (up to ~64, where chess hits its sweet spot). 24 suits the small games; chess defaults to 64 for ~2× the games-per-second.',
+      cz: 'Tohle zároveň určuje **šířku dávky pro GPU**: self-play partie běží souběžně a jejich vyhodnocení sítí se sloučí do jednoho průchodu, takže vyšší hodnota drží GPU plnější a propustnost vyšší (asi do 64, kde mají šachy optimum). 24 sedí malým hrám; šachy mají výchozích 64 pro ~2× partií za sekundu.',
     },
     range: '8 – 48',
   },
@@ -1368,6 +1376,10 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
       breakthrough: {
         en: "Score = how the net does vs the reference (medium) AI: **−1** loses all, **0** draws all, **+1** wins all (\"solved\"). A fresh net starts deep in the red (around −0.9), then climbs as it learns to break through — it beats the *easy* searcher almost at once, so it is scored against the tougher *medium* one to keep the curve honest and rising rather than instantly pinned at the top. Settling above 0 means it wins more than it loses against a real searcher.",
         cz: 'Skóre = jak si síť vede proti referenční (střední) AI: **−1** vše prohraje, **0** vše remizuje, **+1** vše vyhraje („vyřešeno“). Čerstvá síť začíná hluboko v záporu (kolem −0,9) a pak stoupá, jak se učí prorážet — *lehkého* prohledávače porazí takřka okamžitě, takže se měří proti tvrdšímu *střednímu*, aby křivka zůstala poctivá a stoupala, místo aby se hned přilepila ke stropu. Ustálení nad 0 znamená, že proti skutečnému prohledávači vyhrává víc, než prohrává.',
+      },
+      chess: {
+        en: "Score = how the net does vs a deliberately weak reference searcher: **−1** loses all, **0** draws all, **+1** wins all (\"solved\"). Chess is far too deep to beat a real engine on a short run, so the yardstick is a near-random searcher a learning net can actually catch — a fresh net already draws it (around 0, since both play randomly), then the curve climbs above 0 as self-play teaches it to win. Don't expect it near +1: this is an honest \"is it improving?\" signal, not a claim of strong chess.",
+        cz: 'Skóre = jak si síť vede proti záměrně slabému referenčnímu prohledávači: **−1** vše prohraje, **0** vše remizuje, **+1** vše vyhraje („vyřešeno“). Šachy jsou příliš hluboké na to, aby v krátkém běhu porazily skutečný engine, takže měřítkem je téměř náhodný prohledávač, který učící se síť reálně dožene — čerstvá síť ho hned remizuje (kolem 0, protože oba hrají náhodně) a pak křivka stoupá nad 0, jak ji self-play učí vyhrávat. Nečekejte hodnoty u +1: je to poctivý signál „zlepšuje se?“, ne tvrzení o silné hře.',
       },
     },
   },

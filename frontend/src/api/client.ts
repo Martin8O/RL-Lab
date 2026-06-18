@@ -308,10 +308,13 @@ export async function saveCheckpoint(label?: string): Promise<CheckpointMeta> {
   return res.json() as Promise<CheckpointMeta>
 }
 
-/** Resume training from a saved checkpoint; returns the new run's status. */
-export async function loadCheckpoint(id: string): Promise<TrainStatus> {
+/** Resume training from a saved checkpoint; returns the new run's status. When `config` (the current
+ *  sidebar settings) targets the same game + algorithm as the checkpoint, the resumed run adopts it so
+ *  the user can extend/retune (e.g. raise AlphaZero iterations); a mismatch is ignored server-side. */
+export async function loadCheckpoint(id: string, config?: TrainConfig | null): Promise<TrainStatus> {
   const res = await fetch(`${API_BASE}/api/checkpoints/${encodeURIComponent(id)}/load`, {
     method: 'POST',
+    ...(config ? { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(config) } : {}),
   })
   if (!res.ok) {
     const detail = ((await res.json().catch(() => ({}))) as { detail?: string }).detail

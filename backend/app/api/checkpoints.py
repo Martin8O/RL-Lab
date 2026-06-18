@@ -10,7 +10,7 @@ import asyncio
 from fastapi import APIRouter, HTTPException, Response
 
 from app.schemas.checkpoints import CheckpointMeta, CheckpointSaveRequest
-from app.schemas.training import TrainStatus
+from app.schemas.training import TrainConfig, TrainStatus
 from app.services.checkpoints import checkpoint_store
 from app.services.training_manager import (
     AlreadyRunningError,
@@ -37,11 +37,16 @@ async def save_checkpoint(body: CheckpointSaveRequest | None = None) -> Checkpoi
 
 
 @router.post("/{checkpoint_id}/load", response_model=TrainStatus)
-async def load_checkpoint(checkpoint_id: str) -> TrainStatus:
+async def load_checkpoint(
+    checkpoint_id: str, config: TrainConfig | None = None
+) -> TrainStatus:
     # /load spins up a worker thread, so capture the loop here for its broadcasts.
+    # `config` (the sidebar's current settings) lets the resumed run extend/retune the saved one when it
+    # targets the same game + algorithm (e.g. raise AlphaZero Iterations to keep training); a mismatch or
+    # an absent body falls back to the saved config (manager.load_checkpoint), so Load is always safe.
     training_manager.bind_loop(asyncio.get_running_loop())
     try:
-        return training_manager.load_checkpoint(checkpoint_id)
+        return training_manager.load_checkpoint(checkpoint_id, config)
     except CheckpointNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except AlreadyRunningError as exc:

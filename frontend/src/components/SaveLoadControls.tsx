@@ -8,6 +8,7 @@ import {
   loadCheckpoint,
   saveCheckpoint,
 } from '../api/client'
+import { buildTrainConfig } from '../api/trainingControls'
 import type { Algo, CheckpointMeta } from '../api/types'
 import { categoryLabel } from '../content/envCategories'
 import { formatCount } from '../format'
@@ -264,8 +265,11 @@ export default function SaveLoadControls() {
   async function handleLoad(slot: CheckpointMeta) {
     setError(null)
     try {
-      const status = await loadCheckpoint(slot.id)
-      // Mirror the resumed run into the sidebar so the controls match what's training.
+      // Send the current sidebar settings: when they target the same game + algorithm as the slot, the
+      // resumed run adopts them so the user can extend/retune (e.g. raise AlphaZero iterations to train
+      // for hours); a mismatch is ignored server-side and the saved config continues unchanged.
+      const status = await loadCheckpoint(slot.id, buildTrainConfig())
+      // Mirror the resumed run into the sidebar so the controls match what's actually training.
       const st = useAppStore.getState()
       st.clearMetrics()
       st.setSelectedEnvId(slot.env_id)
@@ -275,6 +279,9 @@ export default function SaveLoadControls() {
         st.setTotalTimesteps(status.config.total_timesteps)
         st.setHyperparams(status.config.hyperparams)
         if (status.config.evolution) st.setEvolutionParams(status.config.evolution)
+        if (status.config.q_learning) st.setQLearningParams(status.config.q_learning)
+        if (status.config.self_play) st.setSelfPlayParams(status.config.self_play)
+        if (status.config.alphazero) st.setAlphaZeroParams(status.config.alphazero)
       }
       setModal(null)
       flashToast(t('saveload.loaded'))

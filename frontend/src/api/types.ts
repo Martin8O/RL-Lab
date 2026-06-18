@@ -436,6 +436,10 @@ export interface BoardMove {
   action: number
   from_cell: number
   to_cell: number
+  /** Chess promotion (G6g): the new piece letter ('q'/'r'/'b'/'n') when this move promotes a pawn. A
+   *  promoting (from,to) carries up to four actions differing only here → the renderer shows a picker.
+   *  Absent for every non-promotion move (and all non-chess move games). Mirrors backend BoardMove. */
+  promotion?: string | null
 }
 
 export interface BoardState {

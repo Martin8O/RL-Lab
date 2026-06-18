@@ -555,17 +555,27 @@ class PlaySession:
                     # Pace AI moves so a human can follow them; the speed slider scales it. The
                     # human's own move applies instantly (no sleep on that branch).
                     time.sleep(_BOARD_MCTS_DELAY / self._current_speed())
+                # Snapshot the board before the move so a diff-decoded game (chess) can report the last
+                # move's from/to cells for the highlight (SAN can't be re-decoded post-move). Cheap; the
+                # other games ignore prev_cells. board.board_cells imported lazily inside _emit_board_frame.
+                prev_cells = board_engine.board_cells(state)
                 state.apply_action(action)
                 last_action = action
                 step += 1
-                self._emit_board_frame(state, step, 0.0, last_action)
+                self._emit_board_frame(state, step, 0.0, last_action, prev_cells)
         except Exception:  # noqa: BLE001 — never let a step fault crash the thread
             logger.exception("Board play loop failed")
             error = "Board session crashed"
         self._finalize_board(state, step, rating_player, error=error)
 
-    def _emit_board_frame(self, state: Any, step: int, score: float, last_action: int | None) -> None:
-        """Broadcast one board ply as a play_frame carrying the BoardState payload (no JPEG)."""
+    def _emit_board_frame(
+        self, state: Any, step: int, score: float, last_action: int | None,
+        prev_cells: list[str] | None = None,
+    ) -> None:
+        """Broadcast one board ply as a play_frame carrying the BoardState payload (no JPEG).
+
+        ``prev_cells`` (the board before ``last_action``) lets a diff-decoded game (chess) report the
+        last move's from/to for the highlight; ignored by every other game."""
         from app.services import board_engine
 
         self._broadcast(
@@ -573,7 +583,7 @@ class PlaySession:
                 "type": "play_frame",
                 "step": step,
                 "score": score,
-                "board": board_engine.board_payload(state, last_action),
+                "board": board_engine.board_payload(state, last_action, prev_cells),
             }
         )
 

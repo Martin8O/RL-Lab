@@ -25,6 +25,7 @@ import type {
   TrainingProgress,
   TrainState,
 } from '../api/types'
+import { boardMetaFor } from '../content/boardGames'
 
 export type Locale        = 'cz' | 'en'
 export type Theme         = 'dark' | 'light'
@@ -366,7 +367,15 @@ export const useAppStore = create<AppState>()(
         // linger and get rescaled under the new game. The env selector is disabled during a run, so
         // this only fires between runs; a no-op re-select (same id) keeps the current results.
         const cleared = selectedEnvId !== s.selectedEnvId ? EMPTY_RUN_RESULTS : {}
-        return { selectedEnvId, ...(defaults ?? {}), ...algoPatch, ...cleared }
+        // Default the human's side to the board's first mover, so pressing Play without touching the
+        // side picker gives you the opening move. Usually player 0, but OpenSpiel chess makes white =
+        // player 1 the first mover (boardMeta.firstPlayer) — without this, picking chess + Play would
+        // silently start you as black with the AI moving first.
+        const sidePatch =
+          selectedEnvId !== s.selectedEnvId
+            ? { boardSide: boardMetaFor(selectedEnvId)?.firstPlayer ?? 0 }
+            : {}
+        return { selectedEnvId, ...(defaults ?? {}), ...algoPatch, ...cleared, ...sidePatch }
       }),
       // Switching algorithm also jumps to the chart tab that algorithm feeds, so the chart
       // never sits empty after a switch (PPO → Reward, neuroevolution → Fitness).

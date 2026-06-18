@@ -1,0 +1,7 @@
+Chess piece set: "cburnett"
+Author: Colin M.L. Burnett
+Source: lichess-org/lila — https://github.com/lichess-org/lila/tree/master/public/piece/cburnett
+License: GPLv2+ (also available under BSD and GFDL upstream)
+
+These SVGs are bundled unmodified as the chess piece graphics for the RL Dashboard's
+chess board (G6g). See the upstream repository for the full licence text.

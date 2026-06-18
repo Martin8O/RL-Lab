@@ -57,14 +57,17 @@ export default function PlayControls() {
   // watch and the controls swap the checkpoint picker for side + difficulty; G6b adds an opponent picker
   // so you can instead face your **trained net** (a checkpoint).
   const isBoard      = env?.family === 'board'
-  // The coloured piece to show for each side in the side picker (G6e). For a directional game the human
-  // always plays from the bottom (advancing up), so both sides show that "up" glyph (the `bottomPlayer`'s
-  // glyph), distinguished by colour; placement games show each player's own glyph.
+  // The piece to show for each side in the side picker (G6e). For a **directional** game (Breakthrough)
+  // the human always plays from the bottom advancing up, so both sides show that "up" glyph (the
+  // `bottomPlayer`'s), told apart by colour. **Glyph-distinguished** games (chess, `uprightGlyphs`) and
+  // placement games show each side's own lead glyph instead (chess: ♔ white vs ♚ black — same colour,
+  // told apart by fill, so showing one glyph for both would be indistinguishable).
   const boardMeta    = boardMetaFor(selectedEnvId)
   const sideMark = (player: number): { glyph: string; color: string } => {
     const pieces = Object.values(boardMeta?.pieces ?? {})
-    const own = pieces.find((pc) => pc.player === player)
-    const up = boardMeta?.orient ? pieces.find((pc) => pc.player === boardMeta.orient!.bottomPlayer) : undefined
+    const ownOf = (p: number) => pieces.find((pc) => pc.player === p && pc.lead) ?? pieces.find((pc) => pc.player === p)
+    const own = ownOf(player)
+    const up = boardMeta?.orient && !boardMeta?.uprightGlyphs ? ownOf(boardMeta.orient.bottomPlayer) : undefined
     return { glyph: (up ?? own)?.glyph ?? (player === 0 ? '①' : '②'), color: own?.color ?? 'var(--text-strong)' }
   }
   const playing      = playState === 'playing'
@@ -153,8 +156,14 @@ export default function PlayControls() {
   return (
     <div style={{
       flexShrink: 0, borderTop: '1px solid var(--border-default)',
-      background: 'var(--surface-1)', padding: '0 var(--space-3)', minHeight: 52,
-      display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap',
+      // Board games carry the most controls (Play + Watch + side picker + opponent + difficulty), which
+      // wrap to TWO rows once a saved checkpoint adds the opponent picker — while the *playing* bar is one
+      // row (Stop + speed). That height swing grew/shrank the flex:1 stage above and re-centred the board
+      // (the "board jumps bigger on Play" report). Reserve the 2-row height for board games so idle and
+      // playing render at the SAME height → stable stage → the board neither resizes nor shifts. (28px
+      // control × 2 + gap ≈ 63; 76 leaves headroom. Non-board bars keep the compact single-row floor.)
+      background: 'var(--surface-1)', padding: '0 var(--space-3)', minHeight: isBoard ? 76 : 52,
+      display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap', alignContent: 'center',
     }}>
       {playing ? (
         /* Stop the active session */
@@ -222,16 +231,20 @@ export default function PlayControls() {
               <label style={labelStyle}>
                 {t('play.board_side')}
                 <div role="radiogroup" aria-label={t('play.board_side')} style={sideGroupStyle}>
-                  {[0, 1].map((p) => {
+                  {/* Offer the sides in MOVE ORDER: the first mover is "Go first". For most games that's
+                      player 0, but OpenSpiel chess makes white = player 1 the first mover (boardMeta.
+                      firstPlayer), so picking "Go first" there correctly gives you white + the opening move. */}
+                  {(() => { const first = boardMeta?.firstPlayer ?? 0; return [first, 1 - first] })().map((p, idx) => {
                     const mark = sideMark(p)
                     const active = boardSide === p
+                    const label = t(idx === 0 ? 'play.board_side_first' : 'play.board_side_second')
                     return (
                       <button
                         key={p}
                         type="button"
                         role="radio"
                         aria-checked={active}
-                        aria-label={t(p === 0 ? 'play.board_side_first' : 'play.board_side_second')}
+                        aria-label={label}
                         onClick={() => setBoardSide(p)}
                         style={{
                           ...sideBtnStyle,
@@ -242,7 +255,7 @@ export default function PlayControls() {
                         }}
                       >
                         <span aria-hidden style={{ color: mark.color, fontWeight: 800 }}>{mark.glyph}</span>
-                        {t(p === 0 ? 'play.board_side_first' : 'play.board_side_second')}
+                        {label}
                       </button>
                     )
                   })}

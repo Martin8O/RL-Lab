@@ -76,6 +76,22 @@ def test_eval_vs_mcts_parallel_is_bounded() -> None:
     assert -1.0 <= score <= 1.0
 
 
+def test_batched_search_handles_chess_planes_and_huge_action_space() -> None:
+    """G6g chess: the engine is game-agnostic, so it drives chess's (20,8,8) plane stack + 4674-move space
+    with zero changes — a tiny net runs a batched search over two opening positions and returns a legal,
+    normalized visit distribution each. Tiny (8×1, few sims) so it stays fast in the gate."""
+    game, model = _model("chess", channels=8, blocks=1)
+    assert (model.planes, model.rows, model.cols) == (20, 8, 8) and model.n_actions == 4674
+    states = [game.new_initial_state() for _ in range(2)]
+    dists = az_batch.batched_search(
+        model, states, sims=4, c_puct=2.0, dir_alpha=0.3, dir_frac=0.25,
+        add_noise=True, rng=np.random.default_rng(0),
+    )
+    for st, d in zip(states, dists, strict=True):
+        assert d.shape == (4674,) and abs(float(d.sum()) - 1.0) < 1e-6
+        assert int(d.argmax()) in set(st.legal_actions())
+
+
 def test_norm_checkpoint_roundtrips_through_blob() -> None:
     """A GroupNorm net (the G6g default) serializes + reloads byte-faithfully — the ``norm`` field in the
     blob rebuilds the right architecture, so Save/Load + Play-vs-net work for the bigger batched net."""
