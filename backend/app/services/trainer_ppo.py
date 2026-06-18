@@ -383,6 +383,7 @@ def _build_model(config: TrainConfig, gym_id: str) -> _InterruptiblePPO:
         ent_coef=hp.ent_coef,
         n_steps=hp.n_steps,
         batch_size=hp.batch_size,
+        n_epochs=hp.n_epochs,  # passes per rollout; Atari uses 4 (zoo recipe), vector envs keep 10
         policy_kwargs=policy_kwargs,
         device=device,
         verbose=0,

@@ -9,6 +9,7 @@ import { boardMetaFor } from '../content/boardGames'
 import PlayControls from './PlayControls'
 import WatchInfo from './WatchInfo'
 import SkillMeter from './SkillMeter'
+import ParamInfo from './ParamInfo'
 import {
   CART_X_LIMIT, CART_X_SCALE, MC_START, mcCarTransform,
   PEND_CX, PEND_CY, ACRO_CX, ACRO_CY, ACRO_JOINT_Y,
@@ -656,18 +657,24 @@ export default function EnvPreview() {
         <div style={{ flex: 1 }} />
 
         {/* CPU/GPU training badge — centred in this header while a run is live; GPU = accent/green,
-            CPU = muted. Derived from the selected env's hw_requirement (no new state). */}
+            CPU = muted. Reflects the ACTUAL training device, not the hw_requirement gate: only an
+            image-obs CnnPolicy trains on CUDA (Atari); every vector/discrete env trains its small
+            MlpPolicy on the CPU even on a GPU box (it is genuinely faster there — measured 3×). The
+            info popup explains the gate-vs-device distinction so an idle GPU here doesn't read as a bug. */}
         {runLive && (
-          <div style={{
-            display: 'inline-flex', alignItems: 'center', height: 'var(--control-sm)', padding: '0 11px',
-            borderRadius: 'var(--radius-pill)', fontSize: 'var(--fs-label)', whiteSpace: 'nowrap',
-            fontWeight: 'var(--fw-medium)', letterSpacing: 'var(--ls-tight)',
-            background: selectedEnv?.hw_requirement === 'gpu' ? 'var(--success-surface)' : 'var(--surface-2)',
-            border: `1px solid ${selectedEnv?.hw_requirement === 'gpu' ? 'var(--success)' : 'var(--border-default)'}`,
-            color: selectedEnv?.hw_requirement === 'gpu' ? 'var(--success)' : 'var(--text-muted)',
-          }}>
-            {selectedEnv?.hw_requirement === 'gpu' ? t('envpreview.badge_gpu') : t('envpreview.badge_cpu')}
-          </div>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2 }}>
+            <span style={{
+              display: 'inline-flex', alignItems: 'center', height: 'var(--control-sm)', padding: '0 11px',
+              borderRadius: 'var(--radius-pill)', fontSize: 'var(--fs-label)', whiteSpace: 'nowrap',
+              fontWeight: 'var(--fw-medium)', letterSpacing: 'var(--ls-tight)',
+              background: selectedEnv?.obs_type === 'image' ? 'var(--success-surface)' : 'var(--surface-2)',
+              border: `1px solid ${selectedEnv?.obs_type === 'image' ? 'var(--success)' : 'var(--border-default)'}`,
+              color: selectedEnv?.obs_type === 'image' ? 'var(--success)' : 'var(--text-muted)',
+            }}>
+              {selectedEnv?.obs_type === 'image' ? t('envpreview.badge_gpu') : t('envpreview.badge_cpu')}
+            </span>
+            <ParamInfo paramId="training_device" label={t('envpreview.device_info')} />
+          </span>
         )}
 
         <div style={{ flex: 1 }} />

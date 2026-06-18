@@ -23,6 +23,7 @@ class PPOHyperparams(BaseModel):
     ent_coef: float = 0.0
     n_steps: int = 2048
     batch_size: int = 64
+    n_epochs: int = 10  # passes over each rollout per update; Atari uses fewer (4) for throughput
     n_hidden_layers: int = 2
     neurons_per_layer: int = 64
     activation: Literal["tanh", "relu"] = "tanh"

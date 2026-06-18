@@ -108,7 +108,8 @@
     "swarm_agents": "Agenti",
     "swarm_targets": "Cíle",
     "badge_gpu": "Trénink na GPU",
-    "badge_cpu": "Trénink na CPU"
+    "badge_cpu": "Trénink na CPU",
+    "device_info": "trénovací zařízení"
   },
   "play": {
     "start": "Hrát proti AI",

@@ -92,6 +92,7 @@ export interface PPOHyperparams {
   ent_coef: number
   n_steps: number
   batch_size: number
+  n_epochs: number
   n_hidden_layers: number
   neurons_per_layer: number
   activation: 'tanh' | 'relu'

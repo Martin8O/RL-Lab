@@ -93,6 +93,37 @@ const MUJOCO_LOSS: Bilingual = {
 }
 
 export const PARAM_INFO: Record<string, ParamInfo> = {
+  // CPU/GPU training badge (parked C2 diagnostic, 2026-06-18): explains the gate-vs-device nuance the
+  // GPU-utilization probe surfaced — a "GPU game" with an idle GPU panel is not a bug.
+  training_device: {
+    general: {
+      en: '**Where this run trains — CPU or GPU.** It depends on what the agent looks at, not on how '
+        + 'powerful your computer is.\n'
+        + '**Picture games (Atari)** learn straight from the screen pixels with a **convolutional** network. '
+        + 'That is heavy maths the graphics card does best, so these train on the **GPU**.\n'
+        + '**Everything else** (CartPole, LunarLander, the robots, board games…) reads a short list of '
+        + 'numbers, so its network is tiny. A tiny network is actually **faster on the CPU** — shipping '
+        + 'such small batches over to the GPU costs more than just computing them (measured here: about '
+        + '**3× faster on the CPU**). So these train on the CPU even on a GPU machine.\n'
+        + '**Why is the GPU panel low then?** For the picture games the speed limit is the game emulators '
+        + 'stepping on the CPU, and the network is small for such a strong card — so a modest GPU reading '
+        + 'is normal, not a fault. A few games are marked "needs GPU" only because they need millions of '
+        + 'steps (a time budget), not because they run on the GPU.',
+      // RichText supports only **bold** and \n — no single-* italics (they would render literally).
+      cz: '**Kde tento běh trénuje — na CPU, nebo na GPU.** Záleží na tom, na co se agent dívá, ne na tom, '
+        + 'jak výkonný máte počítač.\n'
+        + '**Obrázkové hry (Atari)** se učí přímo z pixelů obrazovky pomocí **konvoluční** sítě. To je náročná '
+        + 'matematika, kterou nejlépe zvládne grafická karta, takže tyto trénují na **GPU**.\n'
+        + '**Všechno ostatní** (CartPole, LunarLander, roboti, deskové hry…) čte krátký seznam čísel, takže '
+        + 'jeho síť je drobná. Drobná síť je ve skutečnosti **rychlejší na CPU** — posílat tak malé dávky na '
+        + 'GPU stojí víc než je rovnou spočítat (zde naměřeno: zhruba **3× rychleji na CPU**). Proto tyto '
+        + 'trénují na CPU i na stroji s GPU.\n'
+        + '**Proč je tedy GPU panel nízko?** U obrázkových her je rychlostním stropem krokování herních '
+        + 'emulátorů na CPU a síť je na tak silnou kartu malá — takže mírné vytížení GPU je normální, ne '
+        + 'chyba. Pár her je označených „potřebuje GPU“ jen proto, že potřebují miliony kroků (časový '
+        + 'rozpočet), ne proto, že by běžely na GPU.',
+    },
+  },
   // Board games (G6a): the opponent's strength. Not a training hyperparameter — a play-time choice —
   // but it ships the same info popup as every tunable (general + per-game + a ★ recommended value).
   board_difficulty: {

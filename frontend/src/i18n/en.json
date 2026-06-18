@@ -108,7 +108,8 @@
     "swarm_agents": "Agents",
     "swarm_targets": "Targets",
     "badge_gpu": "GPU training",
-    "badge_cpu": "CPU training"
+    "badge_cpu": "CPU training",
+    "device_info": "training device"
   },
   "play": {
     "start": "Play vs AI",

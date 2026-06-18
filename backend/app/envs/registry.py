@@ -162,6 +162,13 @@ def _standard_hyperparams(q_episodes: int = 5_000) -> dict[str, dict[str, Hyperp
                 type="int", default=64, recommended=64,
                 min=32, max=512, step=32,
             ),
+            # How many passes PPO makes over each collected rollout per update. Not surfaced as a
+            # slider (an advanced knob, like n_steps/batch_size): set from the registry per family.
+            # 10 is SB3's default and right for the small vector envs; Atari overrides to 4.
+            "n_epochs": HyperparamDef(
+                type="int", default=10, recommended=10,
+                min=1, max=20, step=1,
+            ),
             "n_hidden_layers": HyperparamDef(
                 type="int", default=2, recommended=2,
                 min=1, max=4, step=1,
@@ -839,6 +846,38 @@ register(
 # ---------------------------------------------------------------------------
 
 
+def _atari_hyperparams() -> dict[str, dict[str, HyperparamDef]]:
+    """Atari-specific PPO defaults: a small rollout + a fuller minibatch for the CnnPolicy.
+
+    The shared ``_standard_hyperparams()`` carries the CartPole-shaped ``n_steps=2048`` /
+    ``batch_size=64``. For an image-obs CnnPolicy on the GPU that shape is pathological: an
+    ``8×2048 = 16384``-transition rollout split into batch-64 minibatches over 10 epochs is
+    ~2560 *tiny* gradient steps per update — each underfills the card and the per-step
+    kernel-launch overhead dominates, so the **update** phase (not collection) becomes the
+    wall-clock bottleneck while the GPU sits at ~28 % (measured — ``Local/_probe_gpu_util.py``,
+    parked C2 diagnostic). A smaller rollout (``n_steps=256`` → 2048-step buffer) with a fuller
+    minibatch (``batch_size=256`` → 8 minibatches/epoch) is the SB3-zoo Atari recipe family and
+    measured **+60 % throughput** (716 → 1146 env-steps/s on Pong/RTX 5070), turning the run into
+    the healthy *collection-bound* regime. Only the two rollout-shape knobs change; the slider
+    ranges and lr/γ/clip/ent are untouched, so the param surface is identical.
+    """
+    hp = _standard_hyperparams()
+    hp["ppo"]["n_steps"] = HyperparamDef(
+        type="int", default=256, recommended=256, min=128, max=4096, step=128,
+    )
+    hp["ppo"]["batch_size"] = HyperparamDef(
+        type="int", default=256, recommended=256, min=32, max=512, step=32,
+    )
+    # Drop 10 -> 4 passes per rollout (the SB3-zoo Atari value): shrinks the update phase further for
+    # ~+89% total throughput vs the old default (716 -> 1350 env-steps/s, measured). Fewer epochs is a
+    # genuine sample-efficiency<->throughput trade, but 4 is the proven Atari recipe, so it is a safe
+    # default here (it would be a footgun on the small vector envs, which keep 10).
+    hp["ppo"]["n_epochs"] = HyperparamDef(
+        type="int", default=4, recommended=4, min=1, max=20, step=1,
+    )
+    return hp
+
+
 def _atari_spec(
     env_id: str,
     display: str,
@@ -859,7 +898,7 @@ def _atari_spec(
         obs_type="image",
         action_space="discrete",
         supported_algos=["ppo"],  # image obs → CnnPolicy/GPU only; evo+Q-learning can't consume pixels
-        hyperparams=_standard_hyperparams(),
+        hyperparams=_atari_hyperparams(),  # small rollout + fuller batch for the CnnPolicy (+60% throughput)
         # All 18 ALE actions at fixed indices → one shared keyboard map across the whole family.
         make_kwargs={"full_action_space": True},
         solved_score=solved_score,

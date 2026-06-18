@@ -48,6 +48,7 @@ const DEFAULT_HYPERPARAMS: PPOHyperparams = {
   ent_coef:        0.0,
   n_steps:         2048,
   batch_size:      64,
+  n_epochs:        10,
   n_hidden_layers: 2,
   neurons_per_layer: 64,
   activation:      'tanh',
@@ -89,6 +90,25 @@ const DEFAULT_AZ_PARAMS: AlphaZeroHyperparams = {
   iterations:     30,
 }
 
+// The run-result state that must NOT outlive its run: chart history, the latest stats frame, the
+// session-best, and every algorithm's curve. Cleared both between runs (clearMetrics) and when the
+// user switches game — otherwise a finished run's chart/stats/skill linger and get silently rescaled
+// under the new game's [min_score, solved_score] range (e.g. CartPole's 166 reading "Superhuman" once
+// Breakout's scale is applied). Defined once so the two reset paths can't drift apart.
+const EMPTY_RUN_RESULTS = {
+  metricsHistory:   [] as TrainingMetrics[],
+  progressHistory:  [] as TrainingProgress[],
+  lastProgress:     null as TrainingProgress | null,
+  bestReward:       null as number | null,
+  evolutionHistory: [] as EvolutionMetrics[],
+  lastEvolution:    null as EvolutionMetrics | null,
+  qLearningHistory: [] as QLearningMetrics[],
+  lastQLearning:    null as QLearningMetrics | null,
+  lastQTable:       null as QTableFrame | null,
+  maHistory:        [] as MultiAgentMetrics[],
+  lastMa:           null as MultiAgentMetrics | null,
+}
+
 // Per-env defaults: when the user picks a different game, the sidebar params + step budget snap
 // to *that* env's ★ recommended values from the registry (LunarLander wants very different
 // settings than CartPole). Falls back to the previous value for any param the env doesn't define.
@@ -125,6 +145,7 @@ function envDefaults(
       ent_coef:          num('ent_coef', ppo, prev.hyperparams.ent_coef),
       n_steps:           num('n_steps', ppo, prev.hyperparams.n_steps),
       batch_size:        num('batch_size', ppo, prev.hyperparams.batch_size),
+      n_epochs:          num('n_epochs', ppo, prev.hyperparams.n_epochs),
       n_hidden_layers:   num('n_hidden_layers', ppo, prev.hyperparams.n_hidden_layers),
       neurons_per_layer: num('neurons_per_layer', ppo, prev.hyperparams.neurons_per_layer),
       activation:        (ppo.activation?.recommended as 'tanh' | 'relu') ?? prev.hyperparams.activation,
@@ -341,7 +362,11 @@ export const useAppStore = create<AppState>()(
                 return { algo, activeTab: (algo === 'neuroevolution' ? 'fitness' : 'reward') as ChartTab }
               })()
             : {}
-        return { selectedEnvId, ...(defaults ?? {}), ...algoPatch }
+        // Clear the previous run's chart/stats/skill when the game actually changes, so they don't
+        // linger and get rescaled under the new game. The env selector is disabled during a run, so
+        // this only fires between runs; a no-op re-select (same id) keeps the current results.
+        const cleared = selectedEnvId !== s.selectedEnvId ? EMPTY_RUN_RESULTS : {}
+        return { selectedEnvId, ...(defaults ?? {}), ...algoPatch, ...cleared }
       }),
       // Switching algorithm also jumps to the chart tab that algorithm feeds, so the chart
       // never sits empty after a switch (PPO → Reward, neuroevolution → Fitness).
@@ -479,13 +504,7 @@ export const useAppStore = create<AppState>()(
       setHighScores: (list) =>
         set({ highScores: Object.fromEntries(list.map((hs) => [hs.env_id, hs])) }),
 
-      clearMetrics: () =>
-        set({
-          metricsHistory: [], progressHistory: [], lastProgress: null, bestReward: null,
-          evolutionHistory: [], lastEvolution: null,
-          qLearningHistory: [], lastQLearning: null, lastQTable: null,
-          maHistory: [], lastMa: null,
-        }),
+      clearMetrics: () => set({ ...EMPTY_RUN_RESULTS }),
 
       // ─ play vs AI (E2) ────────────────────────────────────────
       setPlayMode:         (playMode)         => set({ playMode }),
