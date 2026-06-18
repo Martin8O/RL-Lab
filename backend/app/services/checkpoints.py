@@ -83,6 +83,10 @@ def _default_label(config: TrainConfig, artifact: CheckpointArtifact) -> str:
         progress = f"gen {artifact.generation}"
     elif config.algo == "q_learning":
         progress = f"ep {artifact.iteration}"  # Q-learning stores episodes elapsed in iteration
+    elif config.algo == "alphazero":
+        # AlphaZero's budget is self-play iterations, not k-steps — `iteration` holds the count, and
+        # `timesteps` is games (so `timesteps // 1000` would read a misleading "0k" for a real run).
+        progress = f"{artifact.iteration} it"
     else:
         progress = f"{artifact.timesteps // 1000}k"
     return f"{config.env_id} · {config.algo} · {progress}"

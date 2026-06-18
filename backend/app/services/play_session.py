@@ -215,13 +215,17 @@ class PlaySession:
             raise InvalidPlayConfigError(str(exc)) from exc
 
     def _load_board_net(self, config: PlayConfig) -> Any:
-        """Load a board checkpoint (``board.zip``) as a masked ``predict(obs, mask)->action`` opponent.
+        """Load a board checkpoint as a ``(state) -> action`` opponent move fn (the play lane's opponent).
 
-        Board nets have a different inference signature (they need the legal-move mask each move), so
-        they're loaded via :mod:`board_engine` (not ``predict_from_checkpoint``, which returns the
-        generic ``predict(obs)`` for the single-agent envs). Validated synchronously, like the AI policy.
+        Both board trainers' nets are returned as a single ``(state) -> action`` so ``_run_board`` is
+        algorithm-agnostic: G6b MaskablePPO is the masked policy (via ``board_move_fn``); G6f AlphaZero
+        plays at full strength with **neural-MCTS** (``az_move_fn``) — the same search it was trained
+        with, so the trained net is a genuinely strong human opponent, not the bare policy head. A
+        ``None`` seed gives a varied opponent each game (the human-play convention). Validated
+        synchronously, like the AI policy, so a bad pick surfaces to the REST caller.
         """
-        from app.services import board_engine
+        from app.envs.registry import get_env
+        from app.services import az_net, board_engine
 
         loaded = self._ckpt.load(config.checkpoint_id or "")
         if loaded is None:
@@ -231,8 +235,16 @@ class PlaySession:
                 f"Checkpoint was trained on '{loaded.config.env_id}', "
                 f"not '{config.env_id}' — cannot play it here"
             )
+        spec = get_env(config.env_id)
         try:
-            return board_engine.load_board_predict(loaded.blob)
+            game = board_engine.load_game(spec.gym_id if spec else config.env_id)
+            # AlphaZero (G6f): a CNN played with neural-MCTS, not a MaskablePPO zip.
+            if loaded.config.algo == "alphazero":
+                model, _ = az_net.build_model_from_blob(loaded.blob, game, device="cpu")
+                az_hp = loaded.config.alphazero
+                sims = az_hp.play_simulations if az_hp is not None else 60
+                return az_net.az_move_fn(model, sims, seed=None)
+            return board_engine.board_move_fn(game, board_engine.load_board_predict(loaded.blob))
         except Exception as exc:  # noqa: BLE001 — any deserialize failure → a clear, typed error
             raise InvalidPlayConfigError(f"Could not load board model: {exc}") from exc
 
@@ -498,14 +510,12 @@ class PlaySession:
         sims = board_engine.strength_sims(self._ai_strength)
         # Human controls one side in human mode; both AI sides otherwise (an AI-vs-AI watch).
         human_side = self._side if self._mode == "human" else None
-        # The AI opponent: a trained net (if a checkpoint was loaded, G6b) plays every AI-controlled
-        # side; otherwise the training-free MCTS at the chosen difficulty (G6a). With a net + mode="ai"
-        # this is a net-vs-net watch; with no net it is the MCTS-vs-MCTS watch. The net's move is masked
-        # to legal by board_move_fn, so it never proposes an illegal cell.
-        net_move = (
-            board_engine.board_move_fn(game, self._board_net)
-            if self._board_net is not None else None
-        )
+        # The AI opponent: a trained net (if a checkpoint was loaded) plays every AI-controlled side;
+        # otherwise the training-free MCTS at the chosen difficulty (G6a). With a net + mode="ai" this is
+        # a net-vs-net watch; with no net it is the MCTS-vs-MCTS watch. `_board_net` is already a
+        # (state) -> action move fn (G6b masked policy or G6f neural-MCTS — see _load_board_net), legal
+        # by construction, so it's used directly here.
+        net_move = self._board_net
         bots: dict[int, board_engine.MctsOpponent] = {}
         if net_move is None:
             for player in range(game.num_players()):

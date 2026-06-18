@@ -542,18 +542,22 @@ def board_move_fn(game: Any, predict: MaskedPredictFn) -> Callable[[Any], int]:
 
 
 def eval_vs_mcts(
-    predict: MaskedPredictFn,
+    move: Callable[[Any], int],
     game: Any,
     sims: int,
     n_games: int = 20,
     seed: int = 0,
     should_stop: Callable[[], bool] | None = None,
 ) -> float:
-    """Mean game result ∈ [−1, 1] for the net vs a fixed reference MCTS — the chart's honest skill curve.
+    """Mean game result ∈ [−1, 1] for a net player vs a fixed reference MCTS — the chart's skill curve.
 
-    The net's seat alternates each game so both sides are measured; the per-game value is
-    ``returns()[net_seat]`` (+1 win / 0 draw / −1 loss). For Tic-Tac-Toe a well-trained net converges
-    toward 0 (it draws — the game's ceiling against strong play). Reuses the G6a :class:`MctsOpponent`.
+    ``move`` is a ``(state) -> action`` player: the G6b MaskablePPO net (wrapped via
+    :func:`board_move_fn`) or the G6f AlphaZero **neural-MCTS** player (``az_net.az_move_fn``). Taking a
+    ``(state) -> action`` (not the bare masked predict) lets AlphaZero be measured at its real strength
+    — with search — so its curve reflects the move it would actually play. The net's seat alternates
+    each game so both sides are measured; the per-game value is ``returns()[net_seat]`` (+1 win / 0 draw
+    / −1 loss). For Tic-Tac-Toe a well-trained player converges toward 0 (it draws — the game's ceiling
+    against strong play). Reuses the G6a :class:`MctsOpponent` as the reference.
 
     ``should_stop`` lets a caller abort a long eval the moment a training Stop is requested (a strong
     reference like Breakthrough's medium MCTS is ~9 s for 20 games — without this, Stop waits it out);
@@ -561,7 +565,6 @@ def eval_vs_mcts(
     """
     import numpy as np
 
-    n_actions = int(game.num_distinct_actions())
     rng = np.random.default_rng(seed)
     total = 0.0
     for g in range(n_games):
@@ -579,11 +582,7 @@ def eval_vs_mcts(
                 outcomes = state.chance_outcomes()
                 state.apply_action(int(rng.choice([a for a, _ in outcomes])))
                 continue
-            player = state.current_player()
-            if player == net_seat:
-                action = int(predict(_obs_vec(state, player), _legal_mask(state, player, n_actions)))
-            else:
-                action = bot.step(state)
+            action = int(move(state)) if state.current_player() == net_seat else bot.step(state)
             state.apply_action(action)
         total += float(state.returns()[net_seat])
     return total / max(1, n_games)

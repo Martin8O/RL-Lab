@@ -60,7 +60,9 @@ def test_eval_vs_mcts_returns_score_in_range() -> None:
     def random_predict(obs, mask):  # ignores obs; picks a random legal move
         return int(rng.choice(np.flatnonzero(np.asarray(mask))))
 
-    score = board_engine.eval_vs_mcts(random_predict, game, sims=10, n_games=6, seed=0)
+    # eval_vs_mcts now takes a (state) -> action move fn; board_move_fn adapts the masked predict.
+    move = board_engine.board_move_fn(game, random_predict)
+    score = board_engine.eval_vs_mcts(move, game, sims=10, n_games=6, seed=0)
     assert -1.0 <= score <= 1.0
 
 

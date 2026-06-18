@@ -340,25 +340,41 @@ class TrainingManager:
                     resume,
                 )
             elif is_board_game(get_env(config.env_id)):
-                # Board game (Tic-Tac-Toe) → the neural board trainer (G6b, ADR-051): MaskablePPO learns
-                # by playing the G6a MCTS teacher (action mask from legal_actions()). Still algo=="ppo"
-                # in the UI (the board self-play precedent), routed here via is_board_game — the parallel
-                # to is_competitive_ma → train_tag. Reuses the standard metrics frame (ep_rew_mean = the
-                # eval-vs-reference-MCTS skill curve) + the single-policy preview publish + snapshot.
-                from app.services.trainer_board import (
-                    train_board,  # lazy: loads torch/SB3 + sb3-contrib
-                )
+                # Board game → routed by algo to one of the two board trainers (both reuse the standard
+                # metrics+progress frames = the eval-vs-reference-MCTS skill curve, the single-policy
+                # preview publish, and the snapshot). This is the parallel to is_competitive_ma → train_tag.
+                if config.algo == "alphazero":
+                    # AlphaZero-lite (G6f, ADR-055): a CNN policy+value net guides MCTS and learns by
+                    # pure self-play (no teacher) — the board branch's algorithm jump, GPU when available.
+                    from app.services.trainer_az import train_az  # lazy: loads torch via az_net
 
-                terminal = train_board(
-                    config,
-                    gym_id,
-                    control,
-                    self._emit_metrics,
-                    self._emit_progress,  # board emits progress too → the Reward tab (progressHistory) fills
-                    self._publish_predict,
-                    self._on_snapshot,
-                    resume,
-                )
+                    terminal = train_az(
+                        config,
+                        gym_id,
+                        control,
+                        self._emit_metrics,
+                        self._emit_progress,
+                        self._publish_predict,
+                        self._on_snapshot,
+                        resume,
+                    )
+                else:
+                    # MaskablePPO-vs-MCTS-teacher (G6b, ADR-051): masked PPO learns by playing the G6a
+                    # MCTS teacher (action mask from legal_actions()). Surfaced as algo=="ppo".
+                    from app.services.trainer_board import (
+                        train_board,  # lazy: loads torch/SB3 + sb3-contrib
+                    )
+
+                    terminal = train_board(
+                        config,
+                        gym_id,
+                        control,
+                        self._emit_metrics,
+                        self._emit_progress,  # board emits progress too → the Reward tab (progressHistory) fills
+                        self._publish_predict,
+                        self._on_snapshot,
+                        resume,
+                    )
             else:
                 from app.services.trainer_ppo import train_ppo  # lazy: loads torch/SB3
 

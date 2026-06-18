@@ -1,9 +1,10 @@
 # Adding an algorithm
 
-> Living document (Phase F4). The dashboard ships **three** learning methods — PPO (gradient, via
-> Stable-Baselines3), a custom **neuroevolution** (population/fitness/mutation), and tabular
-> **Q-learning** (value-based, G2b) — as **peer trainers** behind one manager (ADR-004/028). A fourth
-> (DQN, SAC…) plugs into the same seam. See also [`architecture.md`](architecture.md) and
+> Living document (Phase F4). The dashboard ships **four** learning methods — PPO (gradient, via
+> Stable-Baselines3), a custom **neuroevolution** (population/fitness/mutation), tabular **Q-learning**
+> (value-based, G2b), and **AlphaZero-lite** (CNN policy+value + neural-guided MCTS self-play, board games
+> only, G6f/ADR-055) — as **peer trainers** behind one manager (ADR-004/028). A fifth (DQN, SAC…) plugs
+> into the same seam. See also [`architecture.md`](architecture.md) and
 > [`adding-an-environment.md`](adding-an-environment.md).
 
 ## The peer-trainer contract
@@ -88,6 +89,29 @@ The third trainer, `services/trainer_q.py`, is the value-based peer and a concre
   single `algo → tabs` map (`ALGO_CHART_TABS`), so a tab the algorithm doesn't produce says so ("Q-learning
   doesn't use the Loss chart — see Reward") instead of a misleading "start training". Add a row there for
   any new algorithm and the messaging stays correct.
+
+## Worked example — AlphaZero-lite (G6f, ADR-055)
+
+The fourth trainer, `services/trainer_az.py`, is **board-only** and shows two ways the seam stretches:
+
+- **Routed by algo *within a family*.** Board games (`is_board_game`) route to the board subsystem; the
+  manager then sub-routes on `config.algo` — `"alphazero"` → `train_az`, else G6b's `train_board`. So a
+  family carries **two trainers** and the user picks (`supported_algos = ["ppo", "alphazero"]`) — the first
+  head-to-head algorithm comparison on one game.
+- **Reuses an existing frame contract — no new frame.** AlphaZero's honest curve is the same
+  eval-vs-reference-MCTS ∈ [−1, 1] as G6b, so it emits the standard `metrics` + `progress` frames and adds
+  `alphazero: [reward, loss]` to `ALGO_CHART_TABS`. Its budget is **iterations × games_per_iter self-play
+  games** (reported as `timesteps`), so the algo-aware sidebar shows AlphaZero's own sliders and **hides**
+  the PPO Total-Steps ladder (same pattern as Q-learning's Episodes / evolution's Generations). A progress
+  frame is emitted **per self-play game** so the chart advances smoothly between iterations.
+- **PyTorch CNN + OpenSpiel MCTS, decoupled the ADR-019 way.** `services/az_net.py` is a CNN over the
+  `observation_tensor` planes; inference (eval + Play) runs **neural-MCTS** (`az_move_fn`) for real strength
+  while the live preview keeps a fast raw-policy snapshot — and `board_engine.eval_vs_mcts` was generalised
+  to a `(state) -> action` move fn so both board trainers feed it.
+- **CPU "lite" — and the scope lesson.** It pins `device="cpu"`: self-play is single-position (batch-of-1)
+  forwards, which the CPU runs faster than the GPU (a GPU only pays off with **batched** self-play + a bigger
+  net — measured 6–18× at batch 64–256). That batched-GPU engine is the **G6g (chess) foundation**, not part
+  of this lite version.
 
 ## What you get for free
 

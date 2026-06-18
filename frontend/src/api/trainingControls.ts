@@ -39,6 +39,7 @@ export function useRunControls(): RunControls {
   const evolutionParams = useAppStore((s) => s.evolutionParams)
   const qLearningParams = useAppStore((s) => s.qLearningParams)
   const selfPlayParams  = useAppStore((s) => s.selfPlayParams)
+  const alphaZeroParams = useAppStore((s) => s.alphaZeroParams)
   const trainState      = useAppStore((s) => s.trainState)
   const gpuAvailable    = useAppStore((s) => s.gpuAvailable)
   const clearMetrics    = useAppStore((s) => s.clearMetrics)
@@ -81,17 +82,21 @@ export function useRunControls(): RunControls {
     if (!canRun) return
     clearMetrics()
     try {
+      const isAz = algo === 'alphazero'
       const status = await startTraining({
         env_id: selectedEnvId!,
         algo,
         seed,
-        total_timesteps: totalTimesteps,
+        // AlphaZero's budget is iterations × games_per_iter self-play games; total_timesteps mirrors
+        // that so the progress bar / status agree with the trainer (which reports games as timesteps).
+        total_timesteps: isAz ? alphaZeroParams.iterations * alphaZeroParams.games_per_iter : totalTimesteps,
         hyperparams,
         // Each block is sent only for its own algorithm; null keeps the recorded config clean.
         evolution: algo === 'neuroevolution' ? evolutionParams : null,
         q_learning: algo === 'q_learning' ? qLearningParams : null,
         // Competitive multi-agent self-play (simple_tag) is still algo "ppo" but carries the rounds.
         self_play: isSelfPlay ? selfPlayParams : null,
+        alphazero: isAz ? alphaZeroParams : null,
       })
       setTrainState(status.state)
     } catch (err) {

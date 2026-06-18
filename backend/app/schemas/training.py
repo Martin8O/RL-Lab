@@ -8,7 +8,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-Algo = Literal["ppo", "neuroevolution", "q_learning"]
+Algo = Literal["ppo", "neuroevolution", "q_learning", "alphazero"]
 TrainState = Literal[
     "idle", "running", "paused", "stopping", "stopped", "finished", "error"
 ]
@@ -56,6 +56,39 @@ class SelfPlayHyperparams(BaseModel):
     rounds: int = 8
 
 
+class AlphaZeroHyperparams(BaseModel):
+    """Tunable AlphaZero-lite knobs (the 4th algorithm, G6f — the board branch's algorithm jump).
+
+    AlphaZero learns a board game purely by **self-play**: each move runs ``simulations`` of
+    neural-guided MCTS (a CNN policy+value net guiding OpenSpiel's tree search in place of G6a's random
+    rollout), and the search's visit counts train the net — no human data and no MCTS *teacher*, unlike
+    the G6b MaskablePPO trainer it competes with on the same board. The budget is ``iterations`` ×
+    ``games_per_iter`` self-play games (this algorithm's "Total Steps"); more ``simulations`` = sharper
+    move targets and stronger play, but slower self-play. The net size + replay/exploration knobs are
+    fixed at sensible defaults rather than surfaced as sliders, to keep the panel focused.
+    """
+
+    learning_rate: float = 5e-4  # Adam step for the net update (gentler than PPO's, for stability)
+    simulations: int = 50  # neural-guided MCTS sims per move — the self-play target strength
+    games_per_iter: int = 24  # self-play games generated per iteration
+    iterations: int = 30  # training iterations — this algorithm's budget
+    # Non-UI knobs (sensible fixed defaults; not exposed as sliders). Tuned via Local/_probe_g6f_learn.py:
+    # gentle training (a few epochs over the buffer, not a fixed large step count) avoids the value-head
+    # overfit that poisons the MCTS→target feedback loop — the difference between learning and stalling.
+    c_puct: float = 2.0  # PUCT exploration constant for the self-play MCTS
+    channels: int = 64  # CNN width
+    blocks: int = 4  # CNN residual blocks
+    batch_size: int = 128
+    train_epochs: float = 2.0  # passes over the replay buffer per iteration (gentle — avoids overfit)
+    buffer_size: int = 40_000  # replay window (self-play positions)
+    temp_moves: int = 6  # opening plies sampled from the visit distribution (exploration), then greedy
+    # Inference (with search) — the net's REAL strength: a few MCTS sims guided by the CNN, used for the
+    # honest eval-vs-reference curve and the human's Play-vs-net opponent (NOT the bare policy head). The
+    # eval count is small so the per-iteration eval stays a few seconds; play can afford more per move.
+    eval_simulations: int = 30  # neural-MCTS sims per move when scoring the curve
+    play_simulations: int = 60  # neural-MCTS sims per move when a human plays the trained net
+
+
 class QLearningHyperparams(BaseModel):
     """Tunable tabular Q-learning knobs (the 3rd algorithm, G2b).
 
@@ -79,8 +112,8 @@ class TrainConfig(BaseModel):
     """Full, reproducible description of a training run (echoed back in status).
 
     ``hyperparams`` configures PPO; ``evolution`` configures neuroevolution; ``q_learning``
-    configures tabular Q-learning. Exactly one applies, selected by ``algo``; the others stay
-    None so the recorded config is clean.
+    configures tabular Q-learning; ``alphazero`` configures the AlphaZero-lite board trainer.
+    Exactly one applies, selected by ``algo``; the others stay None so the recorded config is clean.
     """
 
     env_id: str = "cartpole"
@@ -93,6 +126,9 @@ class TrainConfig(BaseModel):
     # Present only for competitive multi-agent self-play runs (simple_tag); None otherwise. The
     # per-species PPO uses ``hyperparams``; this carries only the self-play round schedule (G7b-2).
     self_play: SelfPlayHyperparams | None = None
+    # Present only for AlphaZero-lite board runs (algo=="alphazero", G6f); None otherwise. The budget
+    # is iterations × games_per_iter self-play games, so total_timesteps is set to match by the client.
+    alphazero: AlphaZeroHyperparams | None = None
 
 
 class TrainingMetrics(BaseModel):

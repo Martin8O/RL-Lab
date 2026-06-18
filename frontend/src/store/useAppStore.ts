@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type {
   Algo,
+  AlphaZeroHyperparams,
   BoardStrength,
   EnvSkill,
   EnvSpec,
@@ -79,6 +80,15 @@ const DEFAULT_SELF_PLAY_PARAMS: SelfPlayHyperparams = {
   rounds: 8,
 }
 
+// Matches the registry's ★ alphazero block (board games, G6f). All four snap from the registry on env
+// switch (TTT recommends more iterations / lighter search than Connect Four).
+const DEFAULT_AZ_PARAMS: AlphaZeroHyperparams = {
+  learning_rate:  5e-4,
+  simulations:    50,
+  games_per_iter: 24,
+  iterations:     30,
+}
+
 // Per-env defaults: when the user picks a different game, the sidebar params + step budget snap
 // to *that* env's ★ recommended values from the registry (LunarLander wants very different
 // settings than CartPole). Falls back to the previous value for any param the env doesn't define.
@@ -89,6 +99,7 @@ function envDefaults(
     evolutionParams: EvolutionHyperparams
     qLearningParams: QLearningHyperparams
     selfPlayParams: SelfPlayHyperparams
+    alphaZeroParams: AlphaZeroHyperparams
     totalTimesteps: number
   },
 ): {
@@ -96,12 +107,14 @@ function envDefaults(
   evolutionParams: EvolutionHyperparams
   qLearningParams: QLearningHyperparams
   selfPlayParams: SelfPlayHyperparams
+  alphaZeroParams: AlphaZeroHyperparams
   totalTimesteps: number
 } | null {
   if (!spec) return null
   const ppo = spec.hyperparams?.ppo ?? {}
   const evo = spec.hyperparams?.neuroevolution ?? {}
   const ql = spec.hyperparams?.q_learning ?? {}
+  const az = spec.hyperparams?.alphazero ?? {}
   const num = (key: string, block: Record<string, { recommended: number | string }>, fb: number) =>
     block[key] !== undefined ? Number(block[key].recommended) : fb
   return {
@@ -136,6 +149,13 @@ function envDefaults(
     selfPlayParams: {
       rounds: Math.round(num('rounds', ppo, prev.selfPlayParams.rounds)),
     },
+    // AlphaZero block (board games, G6f); the budget is iterations × games_per_iter, computed at submit.
+    alphaZeroParams: {
+      learning_rate:  num('learning_rate', az, prev.alphaZeroParams.learning_rate),
+      simulations:    Math.round(num('simulations', az, prev.alphaZeroParams.simulations)),
+      games_per_iter: Math.round(num('games_per_iter', az, prev.alphaZeroParams.games_per_iter)),
+      iterations:     Math.round(num('iterations', az, prev.alphaZeroParams.iterations)),
+    },
     totalTimesteps: spec.default_total_timesteps || prev.totalTimesteps,
   }
 }
@@ -145,11 +165,12 @@ interface AppState {
   locale:          Locale
   theme:           Theme
   selectedEnvId:   string | null
-  algo:            Algo       // PPO ↔ neuroevolution ↔ Q-learning
+  algo:            Algo       // PPO ↔ neuroevolution ↔ Q-learning ↔ AlphaZero
   hyperparams:     PPOHyperparams
   evolutionParams: EvolutionHyperparams
   qLearningParams: QLearningHyperparams
   selfPlayParams:  SelfPlayHyperparams   // G7b-2: competitive self-play round schedule (simple_tag)
+  alphaZeroParams: AlphaZeroHyperparams  // G6f: AlphaZero-lite board self-play knobs
   seed:            number
   totalTimesteps:  number
   emaAlpha:        number     // 1 = raw; 0.05 = heavy smoothing
@@ -207,6 +228,7 @@ interface AppState {
   setEvolutionParams: (e: Partial<EvolutionHyperparams>) => void
   setQLearningParams: (q: Partial<QLearningHyperparams>) => void
   setSelfPlayParams:  (s: Partial<SelfPlayHyperparams>) => void
+  setAlphaZeroParams: (a: Partial<AlphaZeroHyperparams>) => void
   setSeed:            (s: number)                       => void
   setTotalTimesteps:  (n: number)                       => void
   setEmaAlpha:        (a: number)                       => void
@@ -255,6 +277,7 @@ export const useAppStore = create<AppState>()(
       evolutionParams: DEFAULT_EVOLUTION_PARAMS,
       qLearningParams: DEFAULT_Q_PARAMS,
       selfPlayParams:  DEFAULT_SELF_PLAY_PARAMS,
+      alphaZeroParams: DEFAULT_AZ_PARAMS,
       seed:            42,
       totalTimesteps:  50_000,
       emaAlpha:        0.3,
@@ -327,6 +350,7 @@ export const useAppStore = create<AppState>()(
       setEvolutionParams:(e)              => set((s) => ({ evolutionParams: { ...s.evolutionParams, ...e } })),
       setQLearningParams:(q)              => set((s) => ({ qLearningParams: { ...s.qLearningParams, ...q } })),
       setSelfPlayParams: (sp)             => set((s) => ({ selfPlayParams: { ...s.selfPlayParams, ...sp } })),
+      setAlphaZeroParams:(a)              => set((s) => ({ alphaZeroParams: { ...s.alphaZeroParams, ...a } })),
       setSeed:           (seed)           => set({ seed }),
       setTotalTimesteps: (n)              => set({ totalTimesteps: n }),
       setEmaAlpha:       (emaAlpha)       => set({ emaAlpha }),
@@ -511,6 +535,7 @@ export const useAppStore = create<AppState>()(
         evolutionParams: s.evolutionParams,
         qLearningParams: s.qLearningParams,
         selfPlayParams:  s.selfPlayParams,
+        alphaZeroParams: s.alphaZeroParams,
         seed:            s.seed,
         totalTimesteps:  s.totalTimesteps,
         emaAlpha:        s.emaAlpha,

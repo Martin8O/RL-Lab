@@ -1436,15 +1436,37 @@ def _self_play_hyperparams() -> dict[str, dict[str, HyperparamDef]]:
     return hp
 
 
-def _board_hyperparams() -> dict[str, dict[str, HyperparamDef]]:
-    """Standard PPO knobs with a small ``ent_coef`` ★ — the board trainer (MaskablePPO vs the MCTS
-    teacher, G6b) benefits from a little exploration so the masked policy doesn't collapse onto one
-    line too early. The self-play ``rounds`` schedule is internal for board (not a UI knob), so this
-    is the plain PPO block, not ``_self_play_hyperparams``."""
+def _board_hyperparams(
+    az_iterations: int = 30, az_simulations: int = 50, az_games: int = 24
+) -> dict[str, dict[str, HyperparamDef]]:
+    """Board-game tunables for both trainers (routed by algo, G6b/G6f).
+
+    ``ppo`` is the standard block with a small ``ent_coef`` ★ — the MaskablePPO-vs-MCTS-teacher trainer
+    (G6b) benefits from a little exploration so the masked policy doesn't collapse onto one line too
+    early (the self-play ``rounds`` schedule is internal, not a UI knob). ``alphazero`` (G6f) is the
+    self-play AlphaZero-lite trainer's four sliders — its budget is ``iterations`` × ``games_per_iter``
+    self-play games, and ``simulations`` sets the MCTS search depth (the strength/speed dial). The block
+    is present on every board game but only *exposed* where ``alphazero`` is in ``supported_algos`` (the
+    same pattern as the ``q_learning`` block); per-game ★ values pass through ``az_iterations`` /
+    ``az_simulations``."""
     hp = _standard_hyperparams()
     hp["ppo"]["ent_coef"] = HyperparamDef(
         type="float", default=0.01, recommended=0.01, min=0.0, max=0.1, step=0.001,
     )
+    hp["alphazero"] = {
+        "learning_rate": HyperparamDef(
+            type="float", default=5e-4, recommended=5e-4, min=1e-4, max=3e-3,
+        ),
+        "simulations": HyperparamDef(  # neural-MCTS sims per move — deeper search = stronger, slower
+            type="int", default=50, recommended=az_simulations, min=20, max=160, step=10,
+        ),
+        "games_per_iter": HyperparamDef(  # self-play games generated per iteration
+            type="int", default=24, recommended=az_games, min=8, max=48, step=4,
+        ),
+        "iterations": HyperparamDef(  # the budget (this algorithm's "Total Steps")
+            type="int", default=30, recommended=az_iterations, min=5, max=80, step=5,
+        ),
+    }
     return hp
 
 
@@ -1708,8 +1730,12 @@ register(
         family="board",
         obs_type="vector",  # inert tag — board games are routed, never made via make_env
         action_space="discrete",  # Discrete(9): place a mark in one of the nine cells
-        supported_algos=["ppo"],  # surfaced as "ppo"; routed to the board trainer by is_board_game (G6b)
-        hyperparams=_board_hyperparams(),  # standard PPO knobs (ent_coef ★ 0.01); rounds is internal
+        # Two board trainers (routed by algo via is_board_game): "ppo" = MaskablePPO vs the MCTS teacher
+        # (G6b); "alphazero" = AlphaZero-lite self-play, CNN+neural-MCTS (G6f). Compare them on one game.
+        supported_algos=["ppo", "alphazero"],
+        # PPO knobs + the AlphaZero block (G6f); TTT is tiny, so more AZ iterations to reach the draw
+        # ceiling vs the medium reference, with a lighter search (the game is trivial to read).
+        hyperparams=_board_hyperparams(az_iterations=40, az_simulations=40),
         # The learning chart plots eval-vs-reference-MCTS ∈ [−1, 1] as ep_rew_mean, so the meter scale
         # already matches: solved = +1 (win), min = −1 (loss); a well-trained TTT net converges toward 0
         # (draws — the game's ceiling). Board PLAY still shows a W/D/L card, not the continuous meter.
@@ -1755,7 +1781,9 @@ register(
         family="board",
         obs_type="vector",  # inert tag — board games are routed, never made via make_env
         action_space="discrete",  # Discrete(7): drop a disc into one of the seven columns
-        supported_algos=["ppo"],  # surfaced as "ppo"; routed to the board trainer by is_board_game
+        # Both board trainers (routed by algo, is_board_game): "ppo" = MaskablePPO vs the MCTS teacher
+        # (G6b); "alphazero" = AlphaZero-lite self-play (G6f). Connect Four is the AZ validation game.
+        supported_algos=["ppo", "alphazero"],
         hyperparams=_board_hyperparams(),  # standard PPO knobs (ent_coef ★ 0.01); rounds is internal
         # Same eval-vs-reference-MCTS ∈ [−1, 1] chart scale as TTT (solved = +1, min = −1); the trainer
         # scores Connect Four against the EASY MCTS (BOARD_PROFILES) so the curve is honest on CPU.
@@ -1805,7 +1833,10 @@ register(
         family="board",
         obs_type="vector",  # inert tag — board games are routed, never made via make_env
         action_space="discrete",  # Discrete(65): 64 cell placements + a pass move
-        supported_algos=["ppo"],  # surfaced as "ppo"; routed to the board trainer by is_board_game
+        # PPO only: AlphaZero is offered on the SMALL boards (TTT, Connect Four) where it clearly learns.
+        # On this huge 8×8 game AZ's self-play targets are too noisy to learn a good value at a tolerable
+        # budget (its curve hovers/declines), so it's deferred to a stronger/longer future AZ build (G6f review).
+        supported_algos=["ppo"],
         hyperparams=_board_hyperparams(),  # standard PPO knobs (ent_coef ★ 0.01); rounds is internal
         # Same eval-vs-reference-MCTS ∈ [−1, 1] chart scale as the other board games (solved = +1, min =
         # −1); trained novice→easy and scored vs easy (BOARD_PROFILES) so the curve climbs honestly.
@@ -1855,7 +1886,10 @@ register(
         family="board",
         obs_type="vector",  # inert tag — board games are routed, never made via make_env
         action_space="discrete",  # Discrete(768): the (from-square, direction) move encoding
-        supported_algos=["ppo"],  # surfaced as "ppo"; routed to the board trainer by is_board_game
+        # PPO only: AlphaZero is offered on the SMALL boards (TTT, Connect Four). Breakthrough's huge
+        # 768-move space makes AZ's self-play targets too noisy — the *trained* net even plays worse than a
+        # fresh one at a tolerable budget (a flat −1 curve), so AZ here waits for a stronger build (G6f review).
+        supported_algos=["ppo"],
         hyperparams=_board_hyperparams(),  # standard PPO knobs (ent_coef ★ 0.01); rounds is internal
         # Same eval-vs-reference-MCTS ∈ [−1, 1] chart scale as the other board games (solved = +1, min =
         # −1); trained novice→easy and scored vs MEDIUM (BOARD_PROFILES) so the curve climbs honestly.

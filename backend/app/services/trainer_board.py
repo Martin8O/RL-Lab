@@ -166,8 +166,8 @@ def train_board(
     should_stop = lambda: control.stop_requested  # noqa: E731
     last_eval = [
         board_engine.eval_vs_mcts(
-            board_engine.build_board_predict(model), game, eval_sims, _EVAL_GAMES, config.seed,
-            should_stop=should_stop,
+            board_engine.board_move_fn(game, board_engine.build_board_predict(model)),
+            game, eval_sims, _EVAL_GAMES, config.seed, should_stop=should_stop,
         )
     ]
 
@@ -261,8 +261,8 @@ def train_board(
                 break
             # Round boundary (quiescent): eval the snapshot, refresh the preview, snapshot the checkpoint.
             last_eval[0] = board_engine.eval_vs_mcts(
-                board_engine.build_board_predict(model), game, eval_sims, _EVAL_GAMES, config.seed,
-                should_stop=should_stop,
+                board_engine.board_move_fn(game, board_engine.build_board_predict(model)),
+                game, eval_sims, _EVAL_GAMES, config.seed, should_stop=should_stop,
             )
             publish()
             emit()

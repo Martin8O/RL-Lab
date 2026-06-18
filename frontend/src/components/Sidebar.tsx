@@ -220,6 +220,7 @@ function ALGO_LABEL(t: (k: string) => string, id: string): string {
     case 'ppo':            return t('sidebar.algo_ppo')
     case 'neuroevolution': return t('sidebar.algo_evo')
     case 'q_learning':     return t('sidebar.algo_q')
+    case 'alphazero':      return t('sidebar.algo_az')
     default:               return id
   }
 }
@@ -305,6 +306,8 @@ export default function Sidebar() {
   const setQLearningParams = useAppStore((s) => s.setQLearningParams)
   const selfPlayParams  = useAppStore((s) => s.selfPlayParams)
   const setSelfPlayParams = useAppStore((s) => s.setSelfPlayParams)
+  const alphaZeroParams = useAppStore((s) => s.alphaZeroParams)
+  const setAlphaZeroParams = useAppStore((s) => s.setAlphaZeroParams)
   const seed            = useAppStore((s) => s.seed)
   const setSeed         = useAppStore((s) => s.setSeed)
   const totalTimesteps  = useAppStore((s) => s.totalTimesteps)
@@ -317,8 +320,10 @@ export default function Sidebar() {
   const ppoDefs = selectedEnv?.hyperparams?.['ppo'] ?? {}
   const evoDefs = selectedEnv?.hyperparams?.['neuroevolution'] ?? {}
   const qlDefs  = selectedEnv?.hyperparams?.['q_learning'] ?? {}
+  const azDefs  = selectedEnv?.hyperparams?.['alphazero'] ?? {}
   const isEvo = algo === 'neuroevolution'
   const isQ   = algo === 'q_learning'
+  const isAz  = algo === 'alphazero'
 
   // Per-env step ladder + the ★ recommended budget; always include the current value so the
   // <select> can render it even after a reload with a value off the ladder.
@@ -359,7 +364,7 @@ export default function Sidebar() {
       {/* Scrollable params */}
       <div style={{ flex: 1, overflowY: 'auto', padding: 'var(--space-5)' }}>
         <div style={{ ...sectionEyebrow, marginBottom: 'var(--space-4)' }}>
-          {isEvo ? t('sidebar.evo_params_title') : isQ ? t('sidebar.q_params_title') : t('sidebar.params_title')}
+          {isEvo ? t('sidebar.evo_params_title') : isQ ? t('sidebar.q_params_title') : isAz ? t('sidebar.az_params_title') : t('sidebar.params_title')}
         </div>
 
         {algo === 'ppo' && (
@@ -560,6 +565,53 @@ export default function Sidebar() {
                 min={qlDefs.episodes.min!} max={qlDefs.episodes.max!} step={qlDefs.episodes.step!}
                 recommended={qlDefs.episodes.recommended as number}
                 onChange={(v) => setQLearningParams({ episodes: Math.round(v) })}
+              />
+            )}
+          </>
+        )}
+
+        {/* AlphaZero-lite (board games, G6f): the self-play budget (iterations × games_per_iter) + the
+            neural-MCTS search depth + the net's learning rate. `iterations` is this algorithm's budget,
+            so there's no separate "Total Steps" control (it's PPO-only below). */}
+        {isAz && (
+          <>
+            {azDefs.iterations && (
+              <ParamSlider
+                id="iterations" label={t('sidebar.iterations')}
+                value={alphaZeroParams.iterations}
+                min={azDefs.iterations.min!} max={azDefs.iterations.max!} step={azDefs.iterations.step!}
+                recommended={azDefs.iterations.recommended as number}
+                onChange={(v) => setAlphaZeroParams({ iterations: Math.round(v) })}
+              />
+            )}
+
+            {azDefs.simulations && (
+              <ParamSlider
+                id="simulations" label={t('sidebar.simulations')}
+                value={alphaZeroParams.simulations}
+                min={azDefs.simulations.min!} max={azDefs.simulations.max!} step={azDefs.simulations.step!}
+                recommended={azDefs.simulations.recommended as number}
+                onChange={(v) => setAlphaZeroParams({ simulations: Math.round(v) })}
+              />
+            )}
+
+            {azDefs.games_per_iter && (
+              <ParamSlider
+                id="games_per_iter" label={t('sidebar.games_per_iter')}
+                value={alphaZeroParams.games_per_iter}
+                min={azDefs.games_per_iter.min!} max={azDefs.games_per_iter.max!} step={azDefs.games_per_iter.step!}
+                recommended={azDefs.games_per_iter.recommended as number}
+                onChange={(v) => setAlphaZeroParams({ games_per_iter: Math.round(v) })}
+              />
+            )}
+
+            {azDefs.learning_rate && (
+              <ParamSlider
+                id="az_learning_rate" label={t('sidebar.learning_rate')}
+                value={alphaZeroParams.learning_rate}
+                min={azDefs.learning_rate.min!} max={azDefs.learning_rate.max!} step={0.0001}
+                recommended={azDefs.learning_rate.recommended as number}
+                onChange={(v) => setAlphaZeroParams({ learning_rate: v })}
               />
             )}
           </>

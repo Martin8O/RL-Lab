@@ -159,12 +159,12 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
   },
   algorithm: {
     general: {
-      en: '**How the agent learns.**\n**PPO** (reinforcement learning) — tweaks one neural network with gradients after each batch of play; steady and sample-efficient.\n**Neuroevolution** — keeps a whole population of networks, scores them, and breeds the best (mutation + crossover) each generation; simple, gradient-free, like "survival of the fittest".\n**Q-learning** — builds a plain table of "how good is each action in each state" and refines it from experience; the classic value-based method, available on the small grid-world games where you can literally watch the table fill in.',
-      cz: '**Jak se agent učí.**\n**PPO** (zpětnovazební učení) — upravuje jednu neuronovou síť pomocí gradientů po každé dávce hraní; stabilní a úsporné na data.\n**Neuroevoluce** — udržuje celou populaci sítí, ohodnotí je a v každé generaci množí ty nejlepší (mutace + křížení); jednoduchá, bez gradientů, jako „přežití nejschopnějších“.\n**Q-učení** — sestavuje jednoduchou tabulku „jak dobrá je každá akce v každém stavu“ a vylepšuje ji ze zkušenosti; klasická hodnotová metoda, dostupná u malých mřížkových her, kde můžete doslova sledovat, jak se tabulka plní.',
+      en: '**How the agent learns.**\n**PPO** (reinforcement learning) — tweaks one neural network with gradients after each batch of play; steady and sample-efficient.\n**Neuroevolution** — keeps a whole population of networks, scores them, and breeds the best (mutation + crossover) each generation; simple, gradient-free, like "survival of the fittest".\n**Q-learning** — builds a plain table of "how good is each action in each state" and refines it from experience; the classic value-based method, available on the small grid-world games where you can literally watch the table fill in.\n**AlphaZero** (board games only) — a network learns purely by **playing itself**, using look-ahead search (the same kind the built-in AI uses) to pick strong moves and then training on them. No human examples — it bootstraps from nothing. The famous recipe behind superhuman chess/Go engines, scaled down here.',
+      cz: '**Jak se agent učí.**\n**PPO** (zpětnovazební učení) — upravuje jednu neuronovou síť pomocí gradientů po každé dávce hraní; stabilní a úsporné na data.\n**Neuroevoluce** — udržuje celou populaci sítí, ohodnotí je a v každé generaci množí ty nejlepší (mutace + křížení); jednoduchá, bez gradientů, jako „přežití nejschopnějších“.\n**Q-učení** — sestavuje jednoduchou tabulku „jak dobrá je každá akce v každém stavu“ a vylepšuje ji ze zkušenosti; klasická hodnotová metoda, dostupná u malých mřížkových her, kde můžete doslova sledovat, jak se tabulka plní.\n**AlphaZero** (jen deskové hry) — síť se učí výhradně **hrou sama proti sobě**; k výběru silných tahů používá prohledávání dopředu (stejného druhu jako vestavěná AI) a pak se na nich učí. Žádné lidské příklady — startuje od nuly. Slavný recept za nadlidskými šachovými/go enginy, tady ve zmenšené podobě.',
     },
     recommended: {
-      en: 'PPO — the reliable, general-purpose default that also scales to harder games. Neuroevolution is gradient-free and can be surprisingly fast on simple tasks. On the grid-world games, Q-learning is the star: it solves them cleanly and you can watch its table fill in. Try all three and compare (see the per-game note below).',
-      cz: 'PPO — spolehlivá, univerzální volba, která zvládne i těžší hry. Neuroevoluce je bezgradientní a u jednoduchých úloh bývá překvapivě rychlá. U mřížkových her je hvězdou Q-učení: vyřeší je čistě a můžete sledovat, jak se jeho tabulka plní. Vyzkoušejte všechny tři a porovnejte (viz poznámka k dané hře níže).',
+      en: 'PPO — the reliable, general-purpose default that also scales to harder games. Neuroevolution is gradient-free and can be surprisingly fast on simple tasks. On the grid-world games, Q-learning is the star. On the **board games** you also get **AlphaZero**, which learns by playing itself and searches ahead while playing — a fun head-to-head against PPO on the very same game. Try them and compare (see the per-game note below).',
+      cz: 'PPO — spolehlivá, univerzální volba, která zvládne i těžší hry. Neuroevoluce je bezgradientní a u jednoduchých úloh bývá překvapivě rychlá. U mřížkových her je hvězdou Q-učení. U **deskových her** máte navíc **AlphaZero**, který se učí hrou sám proti sobě a při hře prohledává dopředu — pěkný souboj s PPO na úplně stejné hře. Vyzkoušejte a porovnejte (viz poznámka k dané hře níže).',
     },
     perEnv: {
       cartpole: {
@@ -261,6 +261,22 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
       ant: MUJOCO_ALGO,
       reacher: MUJOCO_ALGO,
       swimmer: MUJOCO_ALGO,
+      tictactoe: {
+        en: 'Both learn Tic-Tac-Toe. **PPO** learns by playing the built-in search AI (its teacher) and reaches near-perfect, always-drawing play. **AlphaZero** learns purely by **playing itself**, with look-ahead search guiding every move — on this tiny game both reach the draw ceiling, but AlphaZero is the more powerful method and a fun side-by-side comparison. (This first AlphaZero runs on the CPU; a faster, batched GPU version arrives with the chess step.)',
+        cz: 'Piškvorky se naučí obě. **PPO** se učí hrou proti vestavěné prohledávací AI (svému učiteli) a dosáhne téměř dokonalé, vždy remízující hry. **AlphaZero** se učí čistě **hrou sám proti sobě**, kde každý tah řídí prohledávání dopředu — u téhle drobné hry dosáhnou obě remízového stropu, ale AlphaZero je silnější metoda a pěkné srovnání vedle sebe. (Tahle první verze AlphaZero běží na CPU; rychlejší, dávkovaná GPU verze přijde s krokem na šachy.)',
+      },
+      connect_four: {
+        en: 'A great place to compare the two. **PPO** learns by playing the built-in search AI and climbs to beat the easy bot. **AlphaZero** learns by **playing itself** and, because it *searches ahead* even while playing (not just reacting), it usually ends up the stronger player — watch its curve climb past PPO\'s on the same scoreboard. (This first AlphaZero runs on the CPU; a faster, batched GPU version arrives with the chess step.)',
+        cz: 'Skvělé místo pro porovnání obou. **PPO** se učí hrou proti vestavěné prohledávací AI a vyšplhá na úroveň, kde poráží lehkého bota. **AlphaZero** se učí **hrou sám proti sobě**, a protože *prohledává dopředu* i při hře (nejen reaguje), bývá nakonec silnějším hráčem — sledujte, jak jeho křivka přeroste PPO na stejné výsledkové tabuli. (Tahle první verze AlphaZero běží na CPU; rychlejší, dávkovaná GPU verze přijde s krokem na šachy.)',
+      },
+      othello: {
+        en: 'PPO only here — it learns by playing the built-in search AI. **AlphaZero** is offered on the *smaller* boards (Tic-Tac-Toe, Connect Four), where it learns well and clearly beats PPO; on this huge 8×8 game its self-play needs far more games than a comfortable run allows before it shows real progress, so it is held back for a stronger future build.',
+        cz: 'Tady jen PPO — učí se hrou proti vestavěné prohledávací AI. **AlphaZero** je k dispozici na *menších* deskách (Piškvorky, Čtyři v řadě), kde se učí dobře a jasně poráží PPO; u téhle obrovské hry 8×8 potřebuje jeho self-play mnohem víc partií, než pohodlný běh dovolí, aby ukázal skutečný pokrok, takže si ho šetříme pro silnější budoucí verzi.',
+      },
+      breakthrough: {
+        en: 'PPO only here — it learns by playing the built-in search AI. **AlphaZero** is offered on the *smaller* boards (Tic-Tac-Toe, Connect Four), where it shines. Breakthrough\'s board has a huge number of possible moves, which makes AlphaZero\'s learn-from-yourself signal too noisy at a comfortable run length (it can even end up worse than an untrained net), so it waits for a stronger, longer AlphaZero setup.',
+        cz: 'Tady jen PPO — učí se hrou proti vestavěné prohledávací AI. **AlphaZero** je k dispozici na *menších* deskách (Piškvorky, Čtyři v řadě), kde vyniká. Breakthrough má obrovské množství možných tahů, což dělá signál „uč se sám ze sebe" u AlphaZero při pohodlné délce běhu příliš zašuměný (může skončit i hůř než nenatrénovaná síť), takže čeká na silnější a delší nastavení AlphaZero.',
+      },
     },
   },
 
@@ -1207,6 +1223,78 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
       cz: 'Výchozí ★ je laděná pro každou hru (malé deterministické bludiště potřebuje pár tisíc; 500 stavů Taxi mnohem víc). Sledujte Zaplněno % a křivku odměny — pokud stále stoupají, přidejte epizody.',
     },
     range: '500 – 50000  (depends on the game)',
+  },
+
+  // ── AlphaZero-lite settings (G6f) ─────────────────────────────────────────
+  // The 4th algorithm, on the board games: a CNN that learns purely from self-play, using
+  // Monte-Carlo Tree Search guided by the net itself. These pair with the eval-vs-AI reward curve.
+
+  iterations: {
+    general: {
+      en: '**Training budget** — how many rounds of "play a batch of games against yourself, then learn from them" AlphaZero does.\nEach iteration the AI plays a fresh batch of self-play games, then trains its network on what happened. More iterations = a stronger net, up to the point the small game is mastered. This is AlphaZero\'s equivalent of PPO\'s Total Steps (the full budget is iterations × games-per-iteration self-play games).',
+      cz: '**Tréninkový rozpočet** — kolik kol „odehraj dávku partií sám proti sobě a pak se z nich uč“ AlphaZero udělá.\nV každé iteraci AI odehraje novou dávku self-play partií a pak na nich natrénuje svou síť. Víc iterací = silnější síť, dokud malou hru nezvládne. Je to obdoba PPO „Celkem kroků“ pro AlphaZero (celý rozpočet je iterace × her na iteraci self-play partií).',
+    },
+    recommended: {
+      en: 'The ★ default is tuned per game. Watch the reward curve: while it is still climbing, more iterations keep making the net stronger; once it flattens near the top, it has learned what it can at this search depth.',
+      cz: 'Výchozí ★ je laděná pro každou hru. Sledujte křivku odměny: dokud stoupá, další iterace síť dál posilují; jakmile se ustálí poblíž stropu, naučila se, co při této hloubce hledání zvládne.',
+    },
+    range: '5 – 80',
+    perEnv: {
+      tictactoe: {
+        en: 'Tic-Tac-Toe is tiny, so the net reaches strong (drawing) play quickly — but it is scored against a tough reference AI, so it takes a few dozen iterations for the curve to climb from losses up toward 0 (draws), which is mastery here.',
+        cz: 'Piškvorky jsou drobné, takže síť rychle dosáhne silné (remízové) hry — měří se ale proti tvrdší referenční AI, takže pár desítek iterací trvá, než křivka vystoupá z proher k 0 (remízy), což je tady mistrovství.',
+      },
+      connect_four: {
+        en: 'Connect Four is bigger, so give it the full default (around 30) to watch the net climb from losing to clearly beating the reference AI. Because AlphaZero searches ahead even when playing, it usually overtakes the plain-PPO net on the same game.',
+        cz: 'Čtyři v řadě je větší, takže jí dejte plný výchozí rozpočet (kolem 30) a sledujte, jak síť stoupá od proher k jasnému vítězství nad referenční AI. Protože AlphaZero hledá dopředu i při hře, obvykle předčí síť z prostého PPO na téže hře.',
+      },
+    },
+  },
+
+  simulations: {
+    general: {
+      en: '**Search depth** — how many moves AlphaZero "thinks ahead" before each move during self-play.\nUnlike plain PPO, AlphaZero pairs its network with a tree search: for every move it imagines this many continuations and lets the network judge them. More simulations = sharper, stronger moves to learn from (so a better net per game), but slower self-play. This is the main strength/speed dial.',
+      cz: '**Hloubka hledání** — kolik tahů AlphaZero „promýšlí dopředu“ před každým tahem během self-play.\nNa rozdíl od prostého PPO spojuje AlphaZero svou síť se stromovým prohledáváním: u každého tahu si představí tolik pokračování a nechá síť je ohodnotit. Víc simulací = ostřejší, silnější tahy k učení (tedy lepší síť na partii), ale pomalejší self-play. Je to hlavní volič síly/rychlosti.',
+    },
+    recommended: {
+      en: 'The ★ default balances strength against self-play speed on a GPU. Raise it for stronger play (slower runs); lower it for quicker, weaker games.',
+      cz: 'Výchozí ★ vyvažuje sílu a rychlost self-play na GPU. Zvyšte pro silnější hru (pomalejší běhy); snižte pro rychlejší, slabší partie.',
+    },
+    range: '20 – 160',
+    perEnv: {
+      tictactoe: {
+        en: 'Tic-Tac-Toe is trivial to read, so even a light search (few simulations) finds the right move — the default keeps self-play fast.',
+        cz: 'Piškvorky se čtou triviálně, takže i lehké hledání (málo simulací) najde správný tah — výchozí hodnota drží self-play rychlé.',
+      },
+      connect_four: {
+        en: 'Connect Four has real tactics (traps, threats), so more simulations noticeably sharpen the moves the net learns from — worth the extra time if you want a stronger opponent.',
+        cz: 'Čtyři v řadě má skutečnou taktiku (pasti, hrozby), takže víc simulací znatelně zostří tahy, ze kterých se síť učí — stojí to za čas navíc, pokud chcete silnějšího soupeře.',
+      },
+    },
+  },
+
+  games_per_iter: {
+    general: {
+      en: '**Self-play games per iteration** — how many fresh games the AI plays against itself before each round of learning.\nThese games are the AI\'s only training data — it has no human examples, it learns purely from its own play. More games per iteration = steadier, less noisy learning, but each iteration takes longer.',
+      cz: '**Self-play partií na iteraci** — kolik nových partií AI odehraje sama proti sobě před každým kolem učení.\nTyto partie jsou jediná tréninková data AI — nemá žádné lidské příklady, učí se čistě z vlastní hry. Víc partií na iteraci = stabilnější, méně zašuměné učení, ale každá iterace trvá déle.',
+    },
+    recommended: {
+      en: '24 is a solid default — enough fresh games each round for stable learning without dragging out each iteration. Lower it for quicker rounds, raise it for smoother curves.',
+      cz: '24 je dobrá výchozí hodnota — dost nových partií v každém kole pro stabilní učení, aniž by se iterace protahovala. Snižte pro rychlejší kola, zvyšte pro hladší křivky.',
+    },
+    range: '8 – 48',
+  },
+
+  az_learning_rate: {
+    general: {
+      en: '**Learning rate** — how big a step the network takes when it learns from each batch of self-play games.\nHigher learns faster but can wobble or overshoot; lower is steadier but slower. AlphaZero is sensitive here: too high and the network chases noisy early games and stalls, so this default is deliberately gentle.',
+      cz: '**Rychlost učení** — jak velký krok síť udělá, když se učí z každé dávky self-play partií.\nVyšší se učí rychleji, ale může kolísat nebo přestřelit; nižší je stabilnější, ale pomalejší. AlphaZero je tu citlivý: příliš vysoká a síť se honí za zašuměnými ranými partiemi a uvázne, proto je výchozí hodnota záměrně mírná.',
+    },
+    recommended: {
+      en: '5e-4 is a safe, steady default for self-play. There is rarely a reason to raise it much — gentle learning is what keeps AlphaZero stable.',
+      cz: '5e-4 je bezpečná, stabilní výchozí hodnota pro self-play. Zřídka je důvod ji výrazně zvyšovat — mírné učení je to, co drží AlphaZero stabilní.',
+    },
+    range: '1e-4 – 3e-3',
   },
 
   qtable: {

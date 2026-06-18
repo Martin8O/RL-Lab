@@ -75,7 +75,7 @@ export interface SystemInfo {
 // --- Training (B2) ---------------------------------------------------------
 // Mirrors backend/app/schemas/training.py — keep both sides in sync.
 
-export type Algo = 'ppo' | 'neuroevolution' | 'q_learning'
+export type Algo = 'ppo' | 'neuroevolution' | 'q_learning' | 'alphazero'
 export type TrainState =
   | 'idle'
   | 'running'
@@ -123,6 +123,17 @@ export interface SelfPlayHyperparams {
   rounds: number
 }
 
+/** AlphaZero-lite knobs (board games, G6f). The budget is iterations × games_per_iter self-play games;
+ *  the net size + replay/exploration + inference-search knobs are fixed defaults (not surfaced here). */
+export interface AlphaZeroHyperparams {
+  learning_rate: number
+  /** Neural-MCTS sims per move — the search depth (strength/speed dial). */
+  simulations: number
+  games_per_iter: number
+  /** Training iterations — this algorithm's budget. */
+  iterations: number
+}
+
 export interface TrainConfig {
   env_id: string
   algo: Algo
@@ -135,6 +146,8 @@ export interface TrainConfig {
   q_learning?: QLearningHyperparams | null
   /** Present only for competitive multi-agent self-play runs (simple_tag); null/omitted otherwise. */
   self_play?: SelfPlayHyperparams | null
+  /** Present only for AlphaZero-lite board runs (algo "alphazero"); null/omitted otherwise. */
+  alphazero?: AlphaZeroHyperparams | null
 }
 
 /** WS frame: {type:"metrics", ...} pushed once per PPO rollout. */

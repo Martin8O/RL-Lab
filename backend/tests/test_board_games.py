@@ -29,7 +29,7 @@ def test_tictactoe_registered() -> None:
     assert spec.gym_id == "tic_tac_toe"  # the OpenSpiel short name
     assert spec.family == "board"
     assert spec.action_space == "discrete"
-    assert spec.supported_algos == ["ppo"]  # self-play surfaced as ppo (simple_tag precedent)
+    assert spec.supported_algos == ["ppo", "alphazero"]  # both board trainers (G6b PPO + G6f AlphaZero)
     assert spec.human_playable is True
     assert spec.competitive is True
     assert spec.turn_based is True
@@ -53,7 +53,7 @@ def test_connect_four_registered() -> None:
     assert spec is not None, "connect_four not registered"
     assert spec.gym_id == "connect_four"  # the OpenSpiel short name (resolved by board_engine)
     assert spec.family == "board" and spec.action_space == "discrete"
-    assert spec.supported_algos == ["ppo"]  # routed to the board trainer by is_board_game
+    assert spec.supported_algos == ["ppo", "alphazero"]  # the AZ validation game (G6f)
     assert spec.human_playable is True and spec.competitive is True and spec.turn_based is True
     assert spec.hw_requirement == "cpu" and spec.train_implemented is True  # CPU, trains like TTT
     assert spec.min_score == -1.0 and spec.solved_score == 1.0  # same zero-sum chart scale
@@ -91,7 +91,7 @@ def test_othello_registered() -> None:
     assert spec is not None, "othello not registered"
     assert spec.gym_id == "othello"  # the OpenSpiel short name (resolved by board_engine)
     assert spec.family == "board" and spec.action_space == "discrete"
-    assert spec.supported_algos == ["ppo"]  # routed to the board trainer by is_board_game
+    assert spec.supported_algos == ["ppo"]  # PPO only — AZ is on the small boards (TTT/Connect Four), G6f
     assert spec.human_playable is True and spec.competitive is True and spec.turn_based is True
     assert spec.hw_requirement == "cpu" and spec.train_implemented is True  # CPU, trains like the others
     assert spec.min_score == -1.0 and spec.solved_score == 1.0  # same zero-sum chart scale
@@ -226,16 +226,16 @@ def test_breakthrough_profile_trains_cheap_scores_vs_medium() -> None:
 def test_eval_vs_mcts_aborts_immediately_when_should_stop() -> None:
     """A long reference eval must yield the moment training Stop is requested (G6e review fix): with
     ``should_stop`` already True it returns at once without playing a game, so Stop isn't held up."""
-    calls = {"predict": 0}
+    calls = {"move": 0}
 
-    def predict(_obs: object, _mask: object) -> int:
-        calls["predict"] += 1  # must never be reached — the abort fires before any move
+    def move(_state: object) -> int:
+        calls["move"] += 1  # must never be reached — the abort fires before any move
         return 0
 
     game = board_engine.load_game("tic_tac_toe")
-    score = board_engine.eval_vs_mcts(predict, game, sims=10, n_games=20, should_stop=lambda: True)
+    score = board_engine.eval_vs_mcts(move, game, sims=10, n_games=20, should_stop=lambda: True)
     assert score == 0.0  # no games scored
-    assert calls["predict"] == 0  # aborted before playing a single move
+    assert calls["move"] == 0  # aborted before playing a single move
 
 
 # -- the game-agnostic board engine -----------------------------------------
