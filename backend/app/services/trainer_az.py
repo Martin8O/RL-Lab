@@ -31,7 +31,7 @@ from app.schemas.training import (
     TrainingProgress,
     TrainState,
 )
-from app.services import az_net, board_engine
+from app.services import az_batch, az_net, board_engine
 from app.services.checkpoints import CheckpointArtifact
 from app.services.train_control import TrainControl
 
@@ -76,12 +76,11 @@ def train_az(
 
     hp: AlphaZeroHyperparams = config.alphazero or AlphaZeroHyperparams()
     game = board_engine.load_game(gym_id)
-    # CPU on purpose, even on a CUDA box: AlphaZero self-play is thousands of **single-position** MCTS
-    # forwards on a small CNN over a tiny board — latency-bound, batch-of-1 work where a GPU's per-call
-    # launch + host↔device transfer overhead makes it *slower* than the CPU (measured ~2× on Connect
-    # Four: 17 ms/move CPU vs 35 ms/move GPU). The GPU only pays off with a big net + **batched**
-    # self-play (a future chess-scale build), so `az_net.best_device()` is reserved for that.
-    device = "cpu"
+    # GPU when available (G6g): self-play now runs `parallel_games` games concurrently and batches every
+    # MCTS step's leaf evaluations into one wide forward (az_batch), so the GPU is the workhorse. G6f's
+    # single-position (batch-1) forwards were the regime where a GPU sits idle/slower; the batched engine
+    # measured ~6× faster than that sequential path on Connect Four. CPU is the graceful fallback.
+    device = az_net.best_device()
     started_at = time.monotonic()
 
     # Same reference MCTS the PPO baseline is scored against (board_engine.board_profile, G6c), so the
@@ -92,7 +91,9 @@ def train_az(
     if resume_blob is not None:
         model, games_done = az_net.build_model_from_blob(resume_blob, game, device=device)
     else:
-        model = az_net.AZModel(game, channels=hp.channels, blocks=hp.blocks, device=device)
+        model = az_net.AZModel(
+            game, channels=hp.channels, blocks=hp.blocks, device=device, norm=hp.norm
+        )
         games_done = 0
     model.net.eval()
     optimizer = torch.optim.Adam(model.net.parameters(), lr=hp.learning_rate, weight_decay=1e-4)
@@ -100,6 +101,9 @@ def train_az(
     buffer: deque[tuple[Any, Any, float]] = deque(maxlen=hp.buffer_size)
     rng = np.random.default_rng(config.seed)
     games_per_iter = max(1, hp.games_per_iter)
+    # Batched self-play cohort width: run up to this many games concurrently (one GPU forward per MCTS
+    # step over the cohort). Capped by games_per_iter — no point batching more than an iteration makes.
+    parallel = max(1, min(hp.parallel_games, games_per_iter))
     # Budget in self-play games — the AZ analogue of "Total Steps" (reported as timesteps below). On
     # resume, continue the counter and run another full `iterations` schedule on top.
     total_target = games_done + hp.iterations * games_per_iter
@@ -117,7 +121,7 @@ def train_az(
                 "state_dict": {k: v.cpu() for k, v in model.net.state_dict().items()},
                 "planes": model.planes, "rows": model.rows, "cols": model.cols,
                 "n_actions": model.n_actions, "num_players": model.num_players,
-                "channels": model.channels, "blocks": model.blocks,
+                "channels": model.channels, "blocks": model.blocks, "norm": model.norm,
                 "games_played": games_done,
             },
             buf,
@@ -126,10 +130,11 @@ def train_az(
 
     def evaluate() -> float:
         # Score the net at its REAL strength — neural-MCTS, not the bare policy head — vs the reference,
-        # so the curve reflects the move AZ would actually play (and clearly clears the PPO baseline).
-        return board_engine.eval_vs_mcts(
-            az_net.az_move_fn(model, hp.eval_simulations, hp.c_puct, config.seed),
-            game, eval_sims, _EVAL_GAMES, config.seed, should_stop=should_stop,
+        # so the curve reflects the move AZ would actually play (and clearly clears the PPO baseline). The
+        # net's eval moves are BATCHED across the eval games (az_batch) so this stays fast on the GPU.
+        return az_batch.eval_vs_mcts_parallel(
+            model, game, eval_sims, _EVAL_GAMES, hp.eval_simulations, hp.c_puct,
+            config.seed, should_stop=should_stop,
         )
 
     def publish() -> None:
@@ -138,20 +143,23 @@ def train_az(
             predict = az_net.build_az_predict(model, deterministic=False)
             on_policy(board_engine.board_move_fn(game, predict))
 
-    def emit_progress() -> None:
+    def emit_progress(extra: int = 0) -> None:
         # The ~live progress frame (the Reward chart reads progressHistory). Emitted at every iteration
-        # boundary AND after each self-play game, so the chart advances smoothly as games accrue instead
-        # of jumping once per iteration (~every n×games seconds) — that lag read as a "stuck"/laggy chart.
-        # ep_rew_mean holds the last eval between iterations (a step curve in y, smooth in x = games).
+        # boundary AND (via the self-play per-game callback) as each cohort game finishes, so the chart
+        # advances smoothly as games accrue instead of jumping once per iteration — that lag read as a
+        # "stuck"/laggy chart. `extra` is the games finished in the in-flight cohort (games_done is only
+        # incremented at the cohort boundary). ep_rew_mean holds the last eval between iterations (a step
+        # curve in y, smooth in x = games).
         if on_progress is None:
             return
         elapsed = time.monotonic() - started_at
+        done = games_done + extra
         on_progress(
             TrainingProgress(
                 iteration=iteration[0],
-                timesteps=games_done,
+                timesteps=done,
                 total_timesteps=total_target,
-                steps_per_sec=games_done / elapsed if elapsed > 0 else 0.0,
+                steps_per_sec=done / elapsed if elapsed > 0 else 0.0,
                 ep_rew_mean=last_eval[0],
                 ep_len_mean=None,
                 elapsed=elapsed,
@@ -201,20 +209,18 @@ def train_az(
     for it in range(hp.iterations):
         if control.stop_requested:
             break
-        # Self-play: generate games_per_iter games into the replay buffer (pause/stop between games —
-        # each board game is well under a second, so this is responsive enough without interrupting MCTS).
-        for _ in range(games_per_iter):
-            control.wait_if_paused()
-            if control.stop_requested:
-                break
-            examples, returns = az_net.self_play_game(
-                model, hp.simulations, hp.c_puct, dir_alpha, 0.25, hp.temp_moves,
-                rng, seed=config.seed + games_done,
-            )
-            for obs, target, player in examples:
-                buffer.append((obs, target, returns[player]))
-            games_done += 1
-            emit_progress()  # keep the chart moving smoothly between iteration boundaries
+        control.wait_if_paused()
+        # Batched parallel self-play (G6g): generate games_per_iter games in cohorts of `parallel`, one
+        # wide GPU forward per MCTS step over the cohort. The per-game callback advances the live chart as
+        # each game finishes; should_stop aborts between plies (a cohort is seconds) for a responsive Stop.
+        examples, returns = az_batch.self_play_parallel(
+            model, games_per_iter, parallel, hp.simulations, hp.c_puct, dir_alpha, 0.25,
+            hp.temp_moves, rng, base_seed=config.seed + games_done,
+            on_game_done=emit_progress, should_stop=should_stop,
+        )
+        for obs, target, value in examples:
+            buffer.append((obs, target, value))
+        games_done += len(returns)
         if control.stop_requested:
             break
         # Train the net on the replay buffer (gentle: a few epochs, not a fixed large step count).

@@ -43,42 +43,60 @@ _NET_CLASS: Any = None
 def _net_class() -> Any:
     """Lazily define + cache the AlphaZero CNN (keeps ``torch`` off this module's import path).
 
-    A small **residual conv tower** (BatchNorm-free, so single-position self-play forwards and batched
-    training share one mode — none of the BN train/eval running-stat pitfalls) feeding two heads: a
-    **policy** head (logits over every action) and a **value** head (``tanh`` ∈ [−1, 1]). Sized for
-    small boards; ``channels``/``blocks`` are tunable. Mirrors ``board_engine._self_play_env_class``.
+    A **residual conv tower** feeding two heads: a **policy** head (logits over every action) and a
+    **value** head (``tanh`` ∈ [−1, 1]). ``channels``/``blocks`` are tunable (G6f's "lite" net was
+    64×4; the G6g batched-GPU build defaults to a bigger 128×10 ResNet for stronger play).
+
+    The optional ``norm`` is **GroupNorm**, deliberately *not* BatchNorm: GroupNorm is
+    batch-size-independent (identical in train and eval, no running statistics), so the same net is
+    correct for batch-1 inference (the cosmetic preview / Play), the wide batched self-play forwards
+    (G6g), and the training minibatches — none of BatchNorm's train/eval running-stat pitfalls that
+    made G6f keep the net norm-free. ``norm="none"`` builds ``nn.Identity`` placeholders (no
+    parameters), so a G6f ``norm``-less checkpoint loads into this class byte-identically. Mirrors
+    ``board_engine._self_play_env_class``.
     """
     global _NET_CLASS
     if _NET_CLASS is not None:
         return _NET_CLASS
 
+    import math
+
     import torch
     from torch import nn
 
+    def _norm(c: int, norm: str) -> Any:
+        # GroupNorm group count must divide the channels; gcd(c, 32) gives ~32 groups for 64/128 and a
+        # valid divisor for the tiny test nets (e.g. 8 → 8 groups). "none" ⇒ a param-free Identity.
+        return nn.GroupNorm(max(1, math.gcd(c, 32)), c) if norm == "group" else nn.Identity()
+
     class _ResBlock(nn.Module):  # type: ignore[misc]
-        def __init__(self, c: int) -> None:
+        def __init__(self, c: int, norm: str) -> None:
             super().__init__()
             self.c1 = nn.Conv2d(c, c, 3, padding=1)
+            self.n1 = _norm(c, norm)
             self.c2 = nn.Conv2d(c, c, 3, padding=1)
+            self.n2 = _norm(c, norm)
 
         def forward(self, x: Any) -> Any:
-            z = torch.relu(self.c1(x))
-            z = self.c2(z)
+            z = torch.relu(self.n1(self.c1(x)))
+            z = self.n2(self.c2(z))
             return torch.relu(x + z)
 
     class AZNet(nn.Module):  # type: ignore[misc]
         def __init__(
-            self, planes: int, h: int, w: int, n_actions: int, channels: int, blocks: int
+            self, planes: int, h: int, w: int, n_actions: int, channels: int, blocks: int,
+            norm: str = "none",
         ) -> None:
             super().__init__()
             self.stem = nn.Conv2d(planes, channels, 3, padding=1)
-            self.tower = nn.ModuleList([_ResBlock(channels) for _ in range(blocks)])
+            self.stem_norm = _norm(channels, norm)
+            self.tower = nn.ModuleList([_ResBlock(channels, norm) for _ in range(blocks)])
             self.policy = nn.Linear(channels * h * w, n_actions)
             self.value_hidden = nn.Linear(channels * h * w, channels)
             self.value_out = nn.Linear(channels, 1)
 
         def forward(self, x: Any) -> tuple[Any, Any]:
-            z = torch.relu(self.stem(x))
+            z = torch.relu(self.stem_norm(self.stem(x)))
             for block in self.tower:
                 z = block(z)
             z = z.flatten(1)
@@ -99,7 +117,8 @@ class AZModel:
     """
 
     def __init__(
-        self, game: Any, channels: int = 64, blocks: int = 4, device: str = "cpu"
+        self, game: Any, channels: int = 64, blocks: int = 4, device: str = "cpu",
+        norm: str = "none",
     ) -> None:
         shape = game.observation_tensor_shape()
         if len(shape) != 3:  # AZ needs a (planes, rows, cols) board stack — every 2-player board game has one
@@ -110,9 +129,10 @@ class AZModel:
         self.num_players = int(game.num_players())
         self.channels = channels
         self.blocks = blocks
+        self.norm = norm
         self.device = device
         self.net = _net_class()(
-            self.planes, self.rows, self.cols, self.n_actions, channels, blocks
+            self.planes, self.rows, self.cols, self.n_actions, channels, blocks, norm
         ).to(device)
 
     # -- serialization (the decoupled CNN snapshot — ADR-019/044) ----------------------------------
@@ -128,7 +148,7 @@ class AZModel:
                 "state_dict": {k: v.cpu() for k, v in self.net.state_dict().items()},
                 "planes": self.planes, "rows": self.rows, "cols": self.cols,
                 "n_actions": self.n_actions, "num_players": self.num_players,
-                "channels": self.channels, "blocks": self.blocks,
+                "channels": self.channels, "blocks": self.blocks, "norm": self.norm,
             },
             buf,
         )
@@ -138,11 +158,31 @@ class AZModel:
         """An independent **CPU** copy of the net (no shared tensor storage with the live GPU model),
         for the decoupled preview/play snapshot — forwarding it can never perturb training (ADR-019)."""
         clone = _net_class()(
-            self.planes, self.rows, self.cols, self.n_actions, self.channels, self.blocks
+            self.planes, self.rows, self.cols, self.n_actions, self.channels, self.blocks, self.norm
         )
         clone.load_state_dict({k: v.cpu() for k, v in self.net.state_dict().items()})
         clone.eval()
         return clone
+
+    def infer_batch(self, obs_batch: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+        """Batched forward over a stack of observations → ``(logits[B, n_actions], values[B])``.
+
+        The batched-GPU inference primitive (G6g): the parallel-self-play MCTS gathers ONE leaf per
+        in-flight game and evaluates them all in a single forward here, so the GPU runs at a healthy
+        batch instead of G6f's batch-1 forwards (measured idle/slower on a GPU). ``obs_batch`` is a
+        ``[B, planes·rows·cols]`` or ``[B, planes, rows, cols]`` float array; the net stays in eval
+        mode (no grad). Returns numpy so the (pure-Python) tree search stays torch-free."""
+        import torch
+
+        x = torch.as_tensor(np.asarray(obs_batch, dtype=np.float32), device=self.device).reshape(
+            -1, self.planes, self.rows, self.cols
+        )
+        with torch.no_grad():
+            logits, value = self.net(x)
+        return (
+            logits.detach().cpu().numpy().astype(np.float64),
+            value.squeeze(1).detach().cpu().numpy().astype(np.float64),
+        )
 
 
 def load_az_model(blob: bytes, device: str = "cpu") -> Any:
@@ -158,7 +198,10 @@ def build_model_from_blob(blob: bytes, game: Any, device: str = "cpu") -> tuple[
     Returns ``(model, games_played)`` — used by the trainer's resume path and by Play/Watch to build a
     neural-MCTS opponent. The blob carries the architecture, so the rebuilt net matches the saved one."""
     data = load_az_model(blob, device=device)
-    model = AZModel(game, channels=data["channels"], blocks=data["blocks"], device=device)
+    model = AZModel(
+        game, channels=data["channels"], blocks=data["blocks"], device=device,
+        norm=data.get("norm", "none"),  # G6f blobs predate norm → the param-free Identity net
+    )
     model.net.load_state_dict(data["state_dict"])
     model.net.eval()
     return model, int(data.get("games_played", 0))
@@ -217,7 +260,7 @@ def load_az_predict(blob: bytes, deterministic: bool = True) -> Callable[[Any, A
     data = load_az_model(blob, device="cpu")
     net = _net_class()(
         data["planes"], data["rows"], data["cols"], data["n_actions"],
-        data["channels"], data["blocks"],
+        data["channels"], data["blocks"], data.get("norm", "none"),
     )
     net.load_state_dict(data["state_dict"])
     net.eval()

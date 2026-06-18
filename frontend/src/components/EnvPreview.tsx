@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAppStore } from '../store/useAppStore'
 import { fetchCheckpoints, sendPlayAction, setFrameHandler, setPlayFrameHandler, setPreview, startPlay, stopPlay, watchPreview } from '../api/client'
+import { trainsOnGpu } from '../api/device'
 import type { AgentSprite, BoardState, CheckpointMeta, GridLayout, PlayFrame, PreviewFrame, WorldEntity } from '../api/types'
 import { keymapFor } from '../content/playKeymaps'
 import { DEFAULT_AGENT, DEFAULT_GRIDS, isGridEnv } from '../content/gridMaps'
@@ -66,6 +67,8 @@ export default function EnvPreview() {
   const backendStatus = useAppStore((s) => s.backendStatus)
   const selectedEnvId = useAppStore((s) => s.selectedEnvId)
   const envs          = useAppStore((s) => s.envs)
+  const algo          = useAppStore((s) => s.algo)
+  const gpuAvailable  = useAppStore((s) => s.gpuAvailable)
   const locale        = useAppStore((s) => s.locale)
   const playState     = useAppStore((s) => s.playState)
   const playMode      = useAppStore((s) => s.playMode)
@@ -657,25 +660,29 @@ export default function EnvPreview() {
         <div style={{ flex: 1 }} />
 
         {/* CPU/GPU training badge — centred in this header while a run is live; GPU = accent/green,
-            CPU = muted. Reflects the ACTUAL training device, not the hw_requirement gate: only an
-            image-obs CnnPolicy trains on CUDA (Atari); every vector/discrete env trains its small
-            MlpPolicy on the CPU even on a GPU box (it is genuinely faster there — measured 3×). The
-            info popup explains the gate-vs-device distinction so an idle GPU here doesn't read as a bug. */}
-        {runLive && (
+            CPU = muted. Reflects the ACTUAL training device (env + algorithm), not the hw_requirement
+            gate: an image-obs CnnPolicy trains on CUDA (Atari), and a board game trains on the GPU under
+            AlphaZero's batched self-play (G6g) but on the CPU under MaskablePPO; every other vector/
+            discrete env trains its small MlpPolicy on the CPU even on a GPU box (genuinely faster there —
+            measured 3×). The info popup explains the gate-vs-device distinction so an idle GPU isn't a bug. */}
+        {runLive && (() => {
+          const onGpu = trainsOnGpu(selectedEnv, algo, gpuAvailable)
+          return (
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2 }}>
             <span style={{
               display: 'inline-flex', alignItems: 'center', height: 'var(--control-sm)', padding: '0 11px',
               borderRadius: 'var(--radius-pill)', fontSize: 'var(--fs-label)', whiteSpace: 'nowrap',
               fontWeight: 'var(--fw-medium)', letterSpacing: 'var(--ls-tight)',
-              background: selectedEnv?.obs_type === 'image' ? 'var(--success-surface)' : 'var(--surface-2)',
-              border: `1px solid ${selectedEnv?.obs_type === 'image' ? 'var(--success)' : 'var(--border-default)'}`,
-              color: selectedEnv?.obs_type === 'image' ? 'var(--success)' : 'var(--text-muted)',
+              background: onGpu ? 'var(--success-surface)' : 'var(--surface-2)',
+              border: `1px solid ${onGpu ? 'var(--success)' : 'var(--border-default)'}`,
+              color: onGpu ? 'var(--success)' : 'var(--text-muted)',
             }}>
-              {selectedEnv?.obs_type === 'image' ? t('envpreview.badge_gpu') : t('envpreview.badge_cpu')}
+              {onGpu ? t('envpreview.badge_gpu') : t('envpreview.badge_cpu')}
             </span>
             <ParamInfo paramId="training_device" label={t('envpreview.device_info')} />
           </span>
-        )}
+          )
+        })()}
 
         <div style={{ flex: 1 }} />
 

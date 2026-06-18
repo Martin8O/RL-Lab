@@ -61,12 +61,16 @@ class AlphaZeroHyperparams(BaseModel):
     """Tunable AlphaZero-lite knobs (the 4th algorithm, G6f — the board branch's algorithm jump).
 
     AlphaZero learns a board game purely by **self-play**: each move runs ``simulations`` of
-    neural-guided MCTS (a CNN policy+value net guiding OpenSpiel's tree search in place of G6a's random
-    rollout), and the search's visit counts train the net — no human data and no MCTS *teacher*, unlike
-    the G6b MaskablePPO trainer it competes with on the same board. The budget is ``iterations`` ×
+    neural-guided MCTS (a CNN policy+value net guiding tree search in place of G6a's random rollout), and
+    the search's visit counts train the net — no human data and no MCTS *teacher*, unlike the G6b
+    MaskablePPO trainer it competes with on the same board. The budget is ``iterations`` ×
     ``games_per_iter`` self-play games (this algorithm's "Total Steps"); more ``simulations`` = sharper
     move targets and stronger play, but slower self-play. The net size + replay/exploration knobs are
     fixed at sensible defaults rather than surfaced as sliders, to keep the panel focused.
+
+    G6g rebuilt the engine to be **GPU-bound**: ``parallel_games`` self-play games run concurrently and
+    every MCTS step batches their leaf evaluations into one wide GPU forward (G6f did batch-1 forwards,
+    where a GPU sits idle/slower), feeding a bigger ResNet (``channels`` × ``blocks`` with GroupNorm).
     """
 
     learning_rate: float = 5e-4  # Adam step for the net update (gentler than PPO's, for stability)
@@ -77,11 +81,17 @@ class AlphaZeroHyperparams(BaseModel):
     # gentle training (a few epochs over the buffer, not a fixed large step count) avoids the value-head
     # overfit that poisons the MCTS→target feedback loop — the difference between learning and stalling.
     c_puct: float = 2.0  # PUCT exploration constant for the self-play MCTS
-    channels: int = 64  # CNN width
-    blocks: int = 4  # CNN residual blocks
+    # The batched-GPU engine (G6g): a bigger ResNet (128 channels × 10 residual blocks) with batch-size-
+    # independent GroupNorm, and `parallel_games` self-play games run concurrently so each MCTS step is one
+    # wide GPU forward (G6f's batch-1 forwards left the GPU idle/slower — measured). `parallel_games` is the
+    # batch cap; the effective batch is min(parallel_games, games_per_iter).
+    channels: int = 128  # CNN width (G6f "lite" was 64)
+    blocks: int = 10  # CNN residual blocks (G6f "lite" was 4)
+    norm: str = "group"  # GroupNorm in the tower (batch-independent → no BatchNorm train/eval pitfalls)
+    parallel_games: int = 64  # concurrent self-play games batched into one GPU forward per MCTS step
     batch_size: int = 128
     train_epochs: float = 2.0  # passes over the replay buffer per iteration (gentle — avoids overfit)
-    buffer_size: int = 40_000  # replay window (self-play positions)
+    buffer_size: int = 80_000  # replay window (self-play positions) — wider for the bigger net + batches
     temp_moves: int = 6  # opening plies sampled from the visit distribution (exploration), then greedy
     # Inference (with search) — the net's REAL strength: a few MCTS sims guided by the CNN, used for the
     # honest eval-vs-reference curve and the human's Play-vs-net opponent (NOT the bare policy head). The

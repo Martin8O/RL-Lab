@@ -101,7 +101,10 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
         + 'powerful your computer is.\n'
         + '**Picture games (Atari)** learn straight from the screen pixels with a **convolutional** network. '
         + 'That is heavy maths the graphics card does best, so these train on the **GPU**.\n'
-        + '**Everything else** (CartPole, LunarLander, the robots, board games…) reads a short list of '
+        + '**Board games with AlphaZero** also train on the **GPU**: AlphaZero plays many self-play games '
+        + 'at once and learns with a bigger network, and that batched work is exactly what a graphics card '
+        + 'is fast at. (The same board game under PPO uses a tiny network and trains on the CPU.)\n'
+        + '**Everything else** (CartPole, LunarLander, the robots…) reads a short list of '
         + 'numbers, so its network is tiny. A tiny network is actually **faster on the CPU** — shipping '
         + 'such small batches over to the GPU costs more than just computing them (measured here: about '
         + '**3× faster on the CPU**). So these train on the CPU even on a GPU machine.\n'
@@ -114,7 +117,10 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
         + 'jak výkonný máte počítač.\n'
         + '**Obrázkové hry (Atari)** se učí přímo z pixelů obrazovky pomocí **konvoluční** sítě. To je náročná '
         + 'matematika, kterou nejlépe zvládne grafická karta, takže tyto trénují na **GPU**.\n'
-        + '**Všechno ostatní** (CartPole, LunarLander, roboti, deskové hry…) čte krátký seznam čísel, takže '
+        + '**Deskové hry s AlphaZero** trénují také na **GPU**: AlphaZero hraje mnoho self-play partií '
+        + 'najednou a učí se s větší sítí, a přesně taková dávková práce grafické kartě sedí. (Stejná desková '
+        + 'hra s PPO používá drobnou síť a trénuje na CPU.)\n'
+        + '**Všechno ostatní** (CartPole, LunarLander, roboti…) čte krátký seznam čísel, takže '
         + 'jeho síť je drobná. Drobná síť je ve skutečnosti **rychlejší na CPU** — posílat tak malé dávky na '
         + 'GPU stojí víc než je rovnou spočítat (zde naměřeno: zhruba **3× rychleji na CPU**). Proto tyto '
         + 'trénují na CPU i na stroji s GPU.\n'
@@ -293,12 +299,12 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
       reacher: MUJOCO_ALGO,
       swimmer: MUJOCO_ALGO,
       tictactoe: {
-        en: 'Both learn Tic-Tac-Toe. **PPO** learns by playing the built-in search AI (its teacher) and reaches near-perfect, always-drawing play. **AlphaZero** learns purely by **playing itself**, with look-ahead search guiding every move — on this tiny game both reach the draw ceiling, but AlphaZero is the more powerful method and a fun side-by-side comparison. (This first AlphaZero runs on the CPU; a faster, batched GPU version arrives with the chess step.)',
-        cz: 'Piškvorky se naučí obě. **PPO** se učí hrou proti vestavěné prohledávací AI (svému učiteli) a dosáhne téměř dokonalé, vždy remízující hry. **AlphaZero** se učí čistě **hrou sám proti sobě**, kde každý tah řídí prohledávání dopředu — u téhle drobné hry dosáhnou obě remízového stropu, ale AlphaZero je silnější metoda a pěkné srovnání vedle sebe. (Tahle první verze AlphaZero běží na CPU; rychlejší, dávkovaná GPU verze přijde s krokem na šachy.)',
+        en: 'Both learn Tic-Tac-Toe. **PPO** learns by playing the built-in search AI (its teacher) and reaches near-perfect, always-drawing play. **AlphaZero** learns purely by **playing itself**, with look-ahead search guiding every move — on this tiny game both reach the draw ceiling, but AlphaZero is the more powerful method and a fun side-by-side comparison. (AlphaZero now trains on the GPU, playing many self-play games in parallel.)',
+        cz: 'Piškvorky se naučí obě. **PPO** se učí hrou proti vestavěné prohledávací AI (svému učiteli) a dosáhne téměř dokonalé, vždy remízující hry. **AlphaZero** se učí čistě **hrou sám proti sobě**, kde každý tah řídí prohledávání dopředu — u téhle drobné hry dosáhnou obě remízového stropu, ale AlphaZero je silnější metoda a pěkné srovnání vedle sebe. (AlphaZero teď trénuje na GPU a hraje mnoho self-play partií najednou.)',
       },
       connect_four: {
-        en: 'A great place to compare the two. **PPO** learns by playing the built-in search AI and climbs to beat the easy bot. **AlphaZero** learns by **playing itself** and, because it *searches ahead* even while playing (not just reacting), it usually ends up the stronger player — watch its curve climb past PPO\'s on the same scoreboard. (This first AlphaZero runs on the CPU; a faster, batched GPU version arrives with the chess step.)',
-        cz: 'Skvělé místo pro porovnání obou. **PPO** se učí hrou proti vestavěné prohledávací AI a vyšplhá na úroveň, kde poráží lehkého bota. **AlphaZero** se učí **hrou sám proti sobě**, a protože *prohledává dopředu* i při hře (nejen reaguje), bývá nakonec silnějším hráčem — sledujte, jak jeho křivka přeroste PPO na stejné výsledkové tabuli. (Tahle první verze AlphaZero běží na CPU; rychlejší, dávkovaná GPU verze přijde s krokem na šachy.)',
+        en: 'A great place to compare the two. **PPO** learns by playing the built-in search AI and climbs to beat the easy bot. **AlphaZero** learns by **playing itself** and, because it *searches ahead* even while playing (not just reacting), it usually ends up the stronger player — watch its curve climb past PPO\'s on the same scoreboard. (AlphaZero now trains on the GPU, playing many self-play games in parallel.)',
+        cz: 'Skvělé místo pro porovnání obou. **PPO** se učí hrou proti vestavěné prohledávací AI a vyšplhá na úroveň, kde poráží lehkého bota. **AlphaZero** se učí **hrou sám proti sobě**, a protože *prohledává dopředu* i při hře (nejen reaguje), bývá nakonec silnějším hráčem — sledujte, jak jeho křivka přeroste PPO na stejné výsledkové tabuli. (AlphaZero teď trénuje na GPU a hraje mnoho self-play partií najednou.)',
       },
       othello: {
         en: 'PPO only here — it learns by playing the built-in search AI. **AlphaZero** is offered on the *smaller* boards (Tic-Tac-Toe, Connect Four), where it learns well and clearly beats PPO; on this huge 8×8 game its self-play needs far more games than a comfortable run allows before it shows real progress, so it is held back for a stronger future build.',

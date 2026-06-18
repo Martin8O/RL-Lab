@@ -1,5 +1,6 @@
 import { useState, type CSSProperties } from 'react'
 import { useTranslation } from 'react-i18next'
+import { trainsOnGpu } from '../api/device'
 import { useAppStore } from '../store/useAppStore'
 
 // Live CPU/GPU telemetry, floated bottom-right inside the chart panel (G4b). Reads the 1 Hz
@@ -69,13 +70,18 @@ export default function HwStats() {
   const hw = useAppStore((s) => s.lastHwStats)
   const selectedEnvId = useAppStore((s) => s.selectedEnvId)
   const envs = useAppStore((s) => s.envs)
+  const algo = useAppStore((s) => s.algo)
+  const gpuAvailable = useAppStore((s) => s.gpuAvailable)
 
   // Only while a run is live (matches the EnvPreview badge: the manager streams telemetry through
   // the 'stopping' wind-down too, until the run actually ends).
   const active = trainState === 'running' || trainState === 'paused' || trainState === 'stopping'
   if (!active || !hw) return null
 
-  const showGpu = envs.find((e) => e.id === selectedEnvId)?.hw_requirement === 'gpu'
+  // Show the GPU column when the run actually trains on the GPU (env + algorithm), matching the
+  // EnvPreview device badge — so board AlphaZero (batched self-play, G6g) reveals its GPU use, while
+  // a CPU run (MlpPolicy / MaskablePPO) hides the idle GPU column.
+  const showGpu = trainsOnGpu(envs.find((e) => e.id === selectedEnvId), algo, gpuAvailable)
 
   const toggle = (
     <button
