@@ -1292,28 +1292,46 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
     },
   },
 
-  simulations: {
+  gumbel_sims: {
     general: {
-      en: '**Search depth** — how many moves AlphaZero "thinks ahead" before each move during self-play.\nUnlike plain PPO, AlphaZero pairs its network with a tree search: for every move it imagines this many continuations and lets the network judge them. More simulations = sharper, stronger moves to learn from (so a better net per game), but slower self-play. This is the main strength/speed dial.',
-      cz: '**Hloubka hledání** — kolik tahů AlphaZero „promýšlí dopředu“ před každým tahem během self-play.\nNa rozdíl od prostého PPO spojuje AlphaZero svou síť se stromovým prohledáváním: u každého tahu si představí tolik pokračování a nechá síť je ohodnotit. Víc simulací = ostřejší, silnější tahy k učení (tedy lepší síť na partii), ale pomalejší self-play. Je to hlavní volič síly/rychlosti.',
+      en: '**Search depth** — how many moves AlphaZero "thinks ahead" before each of its own moves during self-play.\nAlphaZero pairs its network with a tree search: for every move it tries out this many continuations, lets the network judge them, and plays the one that looked best. More search = sharper moves to learn from, but slower self-play. This version uses **Gumbel search**, a smarter way of spending those simulations that finds a strong move with far fewer of them — so this dial sits much lower than a classic search would need.',
+      cz: '**Hloubka hledání** — kolik tahů AlphaZero „promýšlí dopředu“ před každým svým tahem během self-play.\nAlphaZero spojuje svou síť se stromovým prohledáváním: u každého tahu vyzkouší tolik pokračování, nechá je síť ohodnotit a zahraje to, které vypadalo nejlépe. Víc hledání = ostřejší tahy k učení, ale pomalejší self-play. Tato verze používá **Gumbel hledání**, chytřejší způsob, jak ty simulace utratit, který najde silný tah s mnohem menším počtem — proto je tento volič mnohem níž, než by klasické hledání potřebovalo.',
     },
     recommended: {
-      en: 'The ★ default balances strength against self-play speed on a GPU. Raise it for stronger play (slower runs); lower it for quicker, weaker games.',
-      cz: 'Výchozí ★ vyvažuje sílu a rychlost self-play na GPU. Zvyšte pro silnější hru (pomalejší běhy); snižte pro rychlejší, slabší partie.',
+      en: '16 is plenty thanks to Gumbel search — it reaches the move quality a plain search would need 50+ simulations for, at a fraction of the cost (so self-play runs roughly twice as fast). Raise it for an even deeper look on hard games; lower it for the quickest, lightest training.',
+      cz: '16 bohatě stačí díky Gumbel hledání — dosáhne kvality tahu, na kterou by prosté hledání potřebovalo 50+ simulací, za zlomek nákladů (takže self-play běží zhruba dvakrát rychleji). Zvyšte pro ještě hlubší pohled u těžkých her; snižte pro nejrychlejší, nejlehčí trénink.',
     },
-    range: '20 – 160',
+    range: '4 – 64',
     perEnv: {
       tictactoe: {
-        en: 'Tic-Tac-Toe is trivial to read, so even a light search (few simulations) finds the right move — the default keeps self-play fast.',
-        cz: 'Piškvorky se čtou triviálně, takže i lehké hledání (málo simulací) najde správný tah — výchozí hodnota drží self-play rychlé.',
+        en: 'Tic-Tac-Toe is trivial to read, so even the lightest search finds the right move — the default keeps self-play fast.',
+        cz: 'Piškvorky se čtou triviálně, takže i to nejlehčí hledání najde správný tah — výchozí hodnota drží self-play rychlé.',
       },
       connect_four: {
-        en: 'Connect Four has real tactics (traps, threats), so more simulations noticeably sharpen the moves the net learns from — worth the extra time if you want a stronger opponent.',
-        cz: 'Čtyři v řadě má skutečnou taktiku (pasti, hrozby), takže víc simulací znatelně zostří tahy, ze kterých se síť učí — stojí to za čas navíc, pokud chcete silnějšího soupeře.',
+        en: 'Connect Four has real tactics (traps, threats), so a touch more search noticeably sharpens the moves the net learns from — but Gumbel keeps even the default surprisingly strong.',
+        cz: 'Čtyři v řadě má skutečnou taktiku (pasti, hrozby), takže o trochu víc hledání znatelně zostří tahy, ze kterých se síť učí — ale Gumbel drží i výchozí hodnotu překvapivě silnou.',
       },
       chess: {
-        en: 'Chess is deep, so deeper search means much sharper move targets — but it is also the slowest dial here (every extra simulation runs the big network again over a 64-square board). The default keeps self-play moving; raise it for stronger play once you are ready for a longer run.',
-        cz: 'Šachy jsou hluboké, takže hlubší hledání znamená mnohem ostřejší cílové tahy — ale je to tu i nejpomalejší volič (každá simulace navíc znovu spustí velkou síť nad 64 poli). Výchozí hodnota drží self-play v pohybu; zvyšte ji pro silnější hru, až budete připraveni na delší běh.',
+        en: 'Chess is deep, so more search means sharper move targets — and it is the most expensive dial here (every simulation runs the big network again over a 64-square board). Gumbel is what makes the low default workable: raise it for stronger play once you are ready for a longer run.',
+        cz: 'Šachy jsou hluboké, takže víc hledání znamená ostřejší cílové tahy — a je to tu nejdražší volič (každá simulace znovu spustí velkou síť nad 64 poli). Gumbel je to, co dělá nízkou výchozí hodnotu použitelnou: zvyšte ji pro silnější hru, až budete připraveni na delší běh.',
+      },
+    },
+  },
+
+  gumbel_considered: {
+    general: {
+      en: '**Considered moves** — how many candidate moves the search seriously compares before each of its own moves.\nRather than spread its thinking thinly over every legal move, Gumbel search shortlists this many of the most promising ones and runs a little knockout tournament between them (repeatedly dropping the weaker half), so the simulations go where they matter most. On positions with fewer legal moves than this, it simply considers them all.',
+      cz: '**Zvažované tahy** — kolik kandidátních tahů hledání před každým svým tahem doopravdy porovná.\nMísto aby své přemýšlení tence rozprostřelo přes každý možný tah, Gumbel hledání vybere tolik nejnadějnějších a uspořádá mezi nimi malý vyřazovací turnaj (opakovaně vyřadí slabší polovinu), takže simulace jdou tam, kde nejvíc záleží. V pozicích s méně možnými tahy, než je tato hodnota, zváží prostě všechny.',
+    },
+    recommended: {
+      en: '16 is a good balance: broad enough not to overlook a strong move, focused enough that each candidate gets a real look. On small boards it is automatically capped at the number of legal moves. Lower it to look harder at fewer moves; raise it on move-rich games to widen the shortlist.',
+      cz: '16 je dobrý kompromis: dost široký, aby nepřehlédl silný tah, a dost soustředěný, aby každý kandidát dostal skutečný pohled. Na malých deskách se automaticky omezí na počet možných tahů. Snižte pro tvrdší pohled na méně tahů; zvyšte u her bohatých na tahy, abyste rozšířili užší výběr.',
+    },
+    range: '2 – 32',
+    perEnv: {
+      chess: {
+        en: 'Chess often has 30+ legal moves, so this is where the setting bites: 16 focuses the search on the most promising moves instead of thinning it across all of them. Widen it to scan more candidates (slower), narrow it to think harder about a few.',
+        cz: 'Šachy mají často 30+ možných tahů, takže právě tady se nastavení projeví: 16 soustředí hledání na nejnadějnější tahy místo toho, aby ho ztenčilo přes všechny. Rozšiřte pro prohledání více kandidátů (pomalejší), zužte pro tvrdší přemýšlení nad několika málo.',
       },
     },
   },

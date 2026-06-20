@@ -124,12 +124,15 @@ export interface SelfPlayHyperparams {
   rounds: number
 }
 
-/** AlphaZero-lite knobs (board games, G6f). The budget is iterations × games_per_iter self-play games;
- *  the net size + replay/exploration + inference-search knobs are fixed defaults (not surfaced here). */
+/** AlphaZero knobs (board games, G6f/G6h). The budget is iterations × games_per_iter self-play games;
+ *  the net size + replay + PUCT-fallback knobs are fixed backend defaults (not surfaced here). Self-play
+ *  uses Gumbel search (use_gumbel default true backend-side), so the search dial is gumbel_sims. */
 export interface AlphaZeroHyperparams {
   learning_rate: number
-  /** Neural-MCTS sims per move — the search depth (strength/speed dial). */
-  simulations: number
+  /** Gumbel-search simulations per move — the search depth (strength/speed dial). */
+  gumbel_sims: number
+  /** Root moves Sequential Halving compares (m; auto-capped at the legal-move count). */
+  gumbel_considered: number
   games_per_iter: number
   /** Training iterations — this algorithm's budget. */
   iterations: number

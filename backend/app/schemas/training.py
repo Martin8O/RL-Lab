@@ -71,10 +71,20 @@ class AlphaZeroHyperparams(BaseModel):
     G6g rebuilt the engine to be **GPU-bound**: ``parallel_games`` self-play games run concurrently and
     every MCTS step batches their leaf evaluations into one wide GPU forward (G6f did batch-1 forwards,
     where a GPU sits idle/slower), feeding a bigger ResNet (``channels`` × ``blocks`` with GroupNorm).
+
+    G6h swaps the self-play **search**: ``use_gumbel`` runs Gumbel AlphaZero (Gumbel-Top-``gumbel_considered``
+    + Sequential Halving over ``gumbel_sims`` simulations) instead of PUCT. Gumbel provably improves the
+    policy at far fewer simulations, so the self-play search budget drops (``gumbel_sims`` ★16 vs the old
+    ``simulations`` ★30–50) for an equal-or-better target and ~2× the games/s. ``simulations`` is kept as
+    the PUCT fallback (``use_gumbel=False``); the per-iteration **eval** stays PUCT/argmax (honest yardstick).
     """
 
     learning_rate: float = 5e-4  # Adam step for the net update (gentler than PPO's, for stability)
-    simulations: int = 50  # neural-guided MCTS sims per move — the self-play target strength
+    # Gumbel self-play search (G6h, the default) — a low-sim, best-arm-identification root search.
+    use_gumbel: bool = True  # self-play uses Gumbel-Top-k + Sequential Halving (False ⇒ PUCT `simulations`)
+    gumbel_sims: int = 16  # simulations per move under Gumbel — far fewer than PUCT for the same strength
+    gumbel_considered: int = 16  # root moves Sequential Halving picks among (m; capped by the legal count)
+    simulations: int = 50  # PUCT fallback: neural-MCTS sims per move when use_gumbel is False
     games_per_iter: int = 24  # self-play games generated per iteration
     iterations: int = 30  # training iterations — this algorithm's budget
     # Non-UI knobs (sensible fixed defaults; not exposed as sliders). Tuned via Local/_probe_g6f_learn.py:

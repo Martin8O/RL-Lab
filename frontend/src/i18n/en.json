@@ -52,6 +52,8 @@
     "episodes": "Episodes",
     "iterations": "Iterations",
     "simulations": "Search Depth",
+    "gumbel_sims": "Search Depth",
+    "gumbel_considered": "Considered Moves",
     "games_per_iter": "Games / Iteration",
     "seed": "Seed",
     "total_steps": "Total Steps",

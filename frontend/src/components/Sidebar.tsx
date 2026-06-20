@@ -81,7 +81,8 @@ const LOG_SCALE = new Set<string>(['learning_rate'])
 function formatValue(id: string, v: number | string): string {
   if (typeof v === 'string') return v
   switch (id) {
-    case 'learning_rate': {
+    case 'learning_rate':
+    case 'az_learning_rate': {  // AlphaZero's lr slider — same scientific format (else it rounds 5e-4 → "0")
       const exp = Math.floor(Math.log10(v))
       return `${(v / Math.pow(10, exp)).toFixed(2)}e${exp}`
     }
@@ -577,9 +578,9 @@ export default function Sidebar() {
           </>
         )}
 
-        {/* AlphaZero-lite (board games, G6f): the self-play budget (iterations × games_per_iter) + the
-            neural-MCTS search depth + the net's learning rate. `iterations` is this algorithm's budget,
-            so there's no separate "Total Steps" control (it's PPO-only below). */}
+        {/* AlphaZero (board games, G6f/G6h): the self-play budget (iterations × games_per_iter) + the
+            Gumbel search depth + considered-move breadth + the net's learning rate. `iterations` is this
+            algorithm's budget, so there's no separate "Total Steps" control (it's PPO-only below). */}
         {isAz && (
           <>
             {azDefs.iterations && (
@@ -592,13 +593,23 @@ export default function Sidebar() {
               />
             )}
 
-            {azDefs.simulations && (
+            {azDefs.gumbel_sims && (
               <ParamSlider
-                id="simulations" label={t('sidebar.simulations')}
-                value={alphaZeroParams.simulations}
-                min={azDefs.simulations.min!} max={azDefs.simulations.max!} step={azDefs.simulations.step!}
-                recommended={azDefs.simulations.recommended as number}
-                onChange={(v) => setAlphaZeroParams({ simulations: Math.round(v) })}
+                id="gumbel_sims" label={t('sidebar.gumbel_sims')}
+                value={alphaZeroParams.gumbel_sims}
+                min={azDefs.gumbel_sims.min!} max={azDefs.gumbel_sims.max!} step={azDefs.gumbel_sims.step!}
+                recommended={azDefs.gumbel_sims.recommended as number}
+                onChange={(v) => setAlphaZeroParams({ gumbel_sims: Math.round(v) })}
+              />
+            )}
+
+            {azDefs.gumbel_considered && (
+              <ParamSlider
+                id="gumbel_considered" label={t('sidebar.gumbel_considered')}
+                value={alphaZeroParams.gumbel_considered}
+                min={azDefs.gumbel_considered.min!} max={azDefs.gumbel_considered.max!} step={azDefs.gumbel_considered.step!}
+                recommended={azDefs.gumbel_considered.recommended as number}
+                onChange={(v) => setAlphaZeroParams({ gumbel_considered: Math.round(v) })}
               />
             )}
 

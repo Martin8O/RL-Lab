@@ -738,24 +738,10 @@ export default function RewardChart() {
     steps = lastProgress?.timesteps ?? lastMetrics?.timesteps
     trainPct = total > 0 && steps != null ? Math.min(100, (steps / total) * 100) : null
     score = lastProgress?.ep_rew_mean ?? lastMetrics?.ep_rew_mean ?? null
+    // PPO sends SB3's own fps; AlphaZero (G6h) sends a steady 1 Hz, trailing-window games/s from its
+    // progress ticker — both are already smooth + match the count growth, so just read steps_per_sec.
     sps = lastProgress?.steps_per_sec
     elapsed = lastProgress?.elapsed ?? lastMetrics?.elapsed
-    // AlphaZero reports games/s as a *cumulative* average (done / elapsed), which the long startup eval
-    // drags toward 0 early on and never recovers — making a healthy ~2 games/s read as "0–1". Show a
-    // RECENT rate instead — but a 2-point delta is far too noisy: a whole cohort advances in lockstep
-    // and several games end on the same ply, so consecutive per-game frames are bursty (dt≈0 spikes,
-    // then gaps) → the chip flickered 0,8,1,3,… Average over a ~6 s trailing window for a steady recent
-    // games/s. PPO keeps SB3's own fps; evolution/Q-learning keep their per-report 2-point rate (sparse).
-    if (isAz && progressHistory.length >= 2) {
-      const b = progressHistory[progressHistory.length - 1]
-      let a = progressHistory[0]
-      for (let i = progressHistory.length - 2; i >= 0; i--) {
-        a = progressHistory[i]
-        if (b.elapsed - a.elapsed >= 6) break  // spanned ~6 s of wall-clock → a stable average
-      }
-      const dt = b.elapsed - a.elapsed
-      if (dt > 0) sps = (b.timesteps - a.timesteps) / dt
-    }
   }
 
   // Skill %: Score across the env's [min_score, solved_score] range, so it reads consistently

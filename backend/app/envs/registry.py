@@ -1476,18 +1476,19 @@ def _self_play_hyperparams() -> dict[str, dict[str, HyperparamDef]]:
 
 
 def _board_hyperparams(
-    az_iterations: int = 30, az_simulations: int = 50, az_games: int = 24
+    az_iterations: int = 30, az_games: int = 24
 ) -> dict[str, dict[str, HyperparamDef]]:
-    """Board-game tunables for both trainers (routed by algo, G6b/G6f).
+    """Board-game tunables for both trainers (routed by algo, G6b/G6f/G6h).
 
     ``ppo`` is the standard block with a small ``ent_coef`` ★ — the MaskablePPO-vs-MCTS-teacher trainer
     (G6b) benefits from a little exploration so the masked policy doesn't collapse onto one line too
-    early (the self-play ``rounds`` schedule is internal, not a UI knob). ``alphazero`` (G6f) is the
-    self-play AlphaZero-lite trainer's four sliders — its budget is ``iterations`` × ``games_per_iter``
-    self-play games, and ``simulations`` sets the MCTS search depth (the strength/speed dial). The block
-    is present on every board game but only *exposed* where ``alphazero`` is in ``supported_algos`` (the
-    same pattern as the ``q_learning`` block); per-game ★ values pass through ``az_iterations`` /
-    ``az_simulations``."""
+    early (the self-play ``rounds`` schedule is internal, not a UI knob). ``alphazero`` (G6f/G6h) is the
+    self-play AlphaZero trainer's four sliders — its budget is ``iterations`` × ``games_per_iter``
+    self-play games, and ``gumbel_sims`` sets the (Gumbel) search depth (the strength/speed dial). The
+    block is present on every board game but only *exposed* where ``alphazero`` is in ``supported_algos``
+    (the same pattern as the ``q_learning`` block); per-game ★ values pass through ``az_iterations`` /
+    ``az_games``. The Gumbel knobs' ★ are game-independent (Gumbel's whole point is that a low, fixed sim
+    count suffices), so they aren't parameterised here."""
     hp = _standard_hyperparams()
     hp["ppo"]["ent_coef"] = HyperparamDef(
         type="float", default=0.01, recommended=0.01, min=0.0, max=0.1, step=0.001,
@@ -1496,8 +1497,17 @@ def _board_hyperparams(
         "learning_rate": HyperparamDef(
             type="float", default=5e-4, recommended=5e-4, min=1e-4, max=3e-3,
         ),
-        "simulations": HyperparamDef(  # neural-MCTS sims per move — deeper search = stronger, slower
-            type="int", default=50, recommended=az_simulations, min=20, max=160, step=10,
+        # Gumbel self-play search depth (G6h). Gumbel-Top-k + Sequential Halving reaches a good move in far
+        # fewer sims than PUCT, so the ★ is a low 16 (the old PUCT ``simulations`` ★ was 30–50) — fewer net
+        # forwards per move ⇒ ~2× the games/s for an equal-or-better target. Raise for a deeper search.
+        "gumbel_sims": HyperparamDef(
+            type="int", default=16, recommended=16, min=4, max=64, step=4,
+        ),
+        # How many root moves Sequential Halving considers (m). Capped at the legal-move count per position,
+        # so on small boards (TTT ≤9) it just means "all"; on chess it focuses the search on the 16 most
+        # promising moves. 16 is the paper's default and a good balance of breadth vs per-move depth.
+        "gumbel_considered": HyperparamDef(
+            type="int", default=16, recommended=16, min=2, max=32, step=2,
         ),
         # Self-play games per iteration. Doubles as the **GPU batch width**: self-play runs this many
         # games concurrently and batches their MCTS leaf-evals into one forward (capped by the internal
@@ -1780,7 +1790,7 @@ register(
         supported_algos=["ppo", "alphazero"],
         # PPO knobs + the AlphaZero block (G6f); TTT is tiny, so more AZ iterations to reach the draw
         # ceiling vs the medium reference, with a lighter search (the game is trivial to read).
-        hyperparams=_board_hyperparams(az_iterations=40, az_simulations=40),
+        hyperparams=_board_hyperparams(az_iterations=40),
         # The learning chart plots eval-vs-reference-MCTS ∈ [−1, 1] as ep_rew_mean, so the meter scale
         # already matches: solved = +1 (win), min = −1 (loss); a well-trained TTT net converges toward 0
         # (draws — the game's ceiling). Board PLAY still shows a W/D/L card, not the continuous meter.
@@ -1996,11 +2006,12 @@ register(
         # ★ AZ budget tuned for chess on the GPU: a **64-wide self-play cohort** (games_per_iter) is the
         # profiled throughput sweet spot — it ~doubles games/s over the old 24 by keeping the GPU batch
         # full (the bottleneck is the pure-Python MCTS tree, not the GPU forward, so a wider cohort is the
-        # main lever; ~2 games/s vs ~1). A modest default iteration count keeps a first run to ~10 min;
-        # raise Iterations (up to 500) for an hours-long, stronger run — Load continues from the saved net.
-        # The recommended sims/iterations sit on the slider step grid (30 ∈ step-10, 15 ∈ step-5) so the
-        # green ★ tick is exactly selectable (off-grid values land just left/right of it).
-        hyperparams=_board_hyperparams(az_iterations=15, az_simulations=30, az_games=64),
+        # main lever). G6h's Gumbel search (★16 sims) adds another ~2× by needing far fewer forwards per
+        # move than the old PUCT-30 — so chess self-play is materially faster *and* the target is better.
+        # A modest default iteration count keeps a first run to ~10 min; raise Iterations (up to 500) for an
+        # hours-long, stronger run — Load continues from the saved net. The recommended iterations sit on
+        # the slider step grid (15 ∈ step-5) so the green ★ tick is exactly selectable.
+        hyperparams=_board_hyperparams(az_iterations=15, az_games=64),
         # Same eval-vs-reference-MCTS ∈ [−1, 1] chart scale as the other board games (solved = +1, min =
         # −1); scored vs the cheap NOVICE reference so a fresh net starts near 0 and the curve can climb.
         solved_score=1.0,

@@ -320,6 +320,39 @@ _DIFF_MOVE_GAMES: frozenset[str] = frozenset({"chess"})
 _PAWNS = frozenset({"P", "p"})
 _PROMO_PIECES = frozenset({"Q", "R", "B", "N", "q", "r", "b", "n"})
 
+# Standard piece values (FEN letters, case-insensitive) for scoring an UNRESOLVED chess game by material.
+# King omitted — it is always present, so it never shifts the balance. ``_MATERIAL_NORM`` maps a typical
+# decisive edge into (−1, 1); the clamp keeps |score| < 1 so a material lead never reads as a real
+# (checkmate) win, which stays reserved for ±1.
+_PIECE_VALUE: dict[str, float] = {"p": 1.0, "n": 3.0, "b": 3.0, "r": 5.0, "q": 9.0}
+_MATERIAL_NORM = 10.0
+
+
+def _material_balance(cells: list[str], seat: int) -> float:
+    """Signed, normalized material balance ∈ (−1, 1) from ``seat``'s perspective over ``_board_grid`` cells
+    (case-preserved FEN letters; uppercase = white = player 0). Pure helper so the sign convention is unit
+    testable without a live pyspiel state."""
+    white = sum(_PIECE_VALUE.get(c.lower(), 0.0) for c in cells if c.isupper())
+    black = sum(_PIECE_VALUE.get(c.lower(), 0.0) for c in cells if c.islower())
+    diff = (white - black) if seat == 0 else (black - white)
+    return float(max(-0.99, min(0.99, diff / _MATERIAL_NORM)))
+
+
+def material_score(state: Any, seat: int) -> float:
+    """Material-balance score ∈ (−1, 1) for an unresolved chess position, from ``seat``'s perspective."""
+    return _material_balance(_board_grid(state)[2], seat)
+
+
+def unresolved_value_fn(gym_id: str) -> Callable[[Any, int], float] | None:
+    """A scorer for a ply-capped (unresolved) eval game, or ``None`` to score it a flat draw (0).
+
+    A near-random early chess net almost never delivers mate inside the eval ply cap, so without this every
+    eval game hits the cap and scores 0 — pinning the reported AZ score at **0.0** even while the net is
+    learning to win material (the user-flagged "AZ score 0.0", G6h). Material gives a continuous, *objective*
+    signal (unlike the net's own value head, which would be circular). Only chess defines one; the small
+    bounded boards never reach a cap, so they pass ``None`` and keep the exact prior draw-is-0 behavior."""
+    return material_score if gym_id == "chess" else None
+
 
 def _diff_from_to(before: list[str], after: list[str]) -> tuple[int, int, str | None] | None:
     """Decode ``(from_cell, to_cell, promotion)`` by diffing two board-cell grids (chess, G6g).

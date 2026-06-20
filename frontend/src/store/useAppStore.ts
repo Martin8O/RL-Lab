@@ -82,13 +82,15 @@ const DEFAULT_SELF_PLAY_PARAMS: SelfPlayHyperparams = {
   rounds: 8,
 }
 
-// Matches the registry's ★ alphazero block (board games, G6f). All four snap from the registry on env
-// switch (TTT recommends more iterations / lighter search than Connect Four).
+// Matches the registry's ★ alphazero block (board games, G6f/G6h). All snap from the registry on env
+// switch (TTT recommends more iterations than Connect Four; chess a wider self-play cohort). Self-play
+// uses Gumbel search (G6h), so the search dial is gumbel_sims (a low ★16 — Gumbel needs far fewer sims).
 const DEFAULT_AZ_PARAMS: AlphaZeroHyperparams = {
-  learning_rate:  5e-4,
-  simulations:    50,
-  games_per_iter: 24,
-  iterations:     30,
+  learning_rate:     5e-4,
+  gumbel_sims:       16,
+  gumbel_considered: 16,
+  games_per_iter:    24,
+  iterations:        30,
 }
 
 // The run-result state that must NOT outlive its run: chart history, the latest stats frame, the
@@ -171,12 +173,13 @@ function envDefaults(
     selfPlayParams: {
       rounds: Math.round(num('rounds', ppo, prev.selfPlayParams.rounds)),
     },
-    // AlphaZero block (board games, G6f); the budget is iterations × games_per_iter, computed at submit.
+    // AlphaZero block (board games, G6f/G6h); the budget is iterations × games_per_iter, computed at submit.
     alphaZeroParams: {
-      learning_rate:  num('learning_rate', az, prev.alphaZeroParams.learning_rate),
-      simulations:    Math.round(num('simulations', az, prev.alphaZeroParams.simulations)),
-      games_per_iter: Math.round(num('games_per_iter', az, prev.alphaZeroParams.games_per_iter)),
-      iterations:     Math.round(num('iterations', az, prev.alphaZeroParams.iterations)),
+      learning_rate:     num('learning_rate', az, prev.alphaZeroParams.learning_rate),
+      gumbel_sims:       Math.round(num('gumbel_sims', az, prev.alphaZeroParams.gumbel_sims)),
+      gumbel_considered: Math.round(num('gumbel_considered', az, prev.alphaZeroParams.gumbel_considered)),
+      games_per_iter:    Math.round(num('games_per_iter', az, prev.alphaZeroParams.games_per_iter)),
+      iterations:        Math.round(num('iterations', az, prev.alphaZeroParams.iterations)),
     },
     totalTimesteps: spec.default_total_timesteps || prev.totalTimesteps,
   }
