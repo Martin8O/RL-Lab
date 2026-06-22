@@ -1348,6 +1348,24 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
     range: '8 – 48',
   },
 
+  actor_processes: {
+    general: {
+      en: '**Self-play workers** — how many separate worker processes generate self-play games in parallel.\nGenerating the games is the slow part of training, and a single worker leaves your graphics card (GPU) only about half busy — it spends a lot of time waiting on one CPU core that drives the game logic. Running two workers side by side, each with its own copy of the network, lets the GPU stay busy while one worker thinks and the other computes, so games are produced faster. Needs a GPU; on a CPU-only machine this setting is ignored (one worker is used).',
+      cz: '**Pracovní procesy self-play** — kolik samostatných procesů (worker processes) souběžně generuje self-play partie.\nGenerování partií je pomalá část tréninku a jeden worker nechá grafickou kartu (GPU) vytíženou jen asi z poloviny — hodně času čeká na jedno jádro procesoru (CPU core), které řídí logiku hry. Když běží dva workeři vedle sebe, každý s vlastní kopií sítě, GPU zůstává vytížené, zatímco jeden worker přemýšlí a druhý počítá, takže partie vznikají rychleji. Vyžaduje GPU; na počítači jen s CPU se nastavení ignoruje (použije se jeden worker).',
+    },
+    recommended: {
+      en: '1 keeps the classic single-worker training (fine on every machine). On a GPU, **2 is the sweet spot** — it produces chess self-play roughly 1.6× faster and pushes GPU usage from ~50 % to ~95 %. Going higher does not help here (on Windows the GPU cannot be shared cleanly across more than two processes, so 3–4 actually run slower). Only the heavy games (chess) gain from this; the small boards already train fast with one worker.',
+      cz: '1 zachová klasický trénink s jedním workerem (funguje na každém stroji). Na GPU je **2 optimum** — vyrobí šachové self-play zhruba 1,6× rychleji a zvedne vytížení GPU z ~50 % na ~95 %. Víc už tu nepomůže (ve Windows nejde GPU čistě sdílet mezi více než dvěma procesy, takže 3–4 běží naopak pomaleji). Těží z toho jen těžké hry (šachy); malé desky se s jedním workerem učí rychle už teď.',
+    },
+    range: '1 – 4',
+    perEnv: {
+      chess: {
+        en: 'Chess is the one game heavy enough to benefit: its big network keeps two workers genuinely busy, so 2 is the recommended setting on a GPU for ~1.6× faster self-play.',
+        cz: 'Šachy jsou jediná hra dost těžká na to, aby se to vyplatilo: jejich velká síť udrží dva workery skutečně vytížené, takže 2 je na GPU doporučené nastavení pro ~1,6× rychlejší self-play.',
+      },
+    },
+  },
+
   az_learning_rate: {
     general: {
       en: '**Learning rate** — how big a step the network takes when it learns from each batch of self-play games.\nHigher learns faster but can wobble or overshoot; lower is steadier but slower. AlphaZero is sensitive here: too high and the network chases noisy early games and stalls, so this default is deliberately gentle.',

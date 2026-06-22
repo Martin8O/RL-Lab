@@ -91,6 +91,7 @@ const DEFAULT_AZ_PARAMS: AlphaZeroHyperparams = {
   gumbel_considered: 16,
   games_per_iter:    24,
   iterations:        30,
+  actor_processes:   1,  // G6i: >1 parallelises self-play across GPU worker processes (★2 for chess)
 }
 
 // The run-result state that must NOT outlive its run: chart history, the latest stats frame, the
@@ -180,6 +181,7 @@ function envDefaults(
       gumbel_considered: Math.round(num('gumbel_considered', az, prev.alphaZeroParams.gumbel_considered)),
       games_per_iter:    Math.round(num('games_per_iter', az, prev.alphaZeroParams.games_per_iter)),
       iterations:        Math.round(num('iterations', az, prev.alphaZeroParams.iterations)),
+      actor_processes:   Math.round(num('actor_processes', az, prev.alphaZeroParams.actor_processes)),
     },
     totalTimesteps: spec.default_total_timesteps || prev.totalTimesteps,
   }

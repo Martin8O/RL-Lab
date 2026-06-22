@@ -87,6 +87,15 @@ class AlphaZeroHyperparams(BaseModel):
     simulations: int = 50  # PUCT fallback: neural-MCTS sims per move when use_gumbel is False
     games_per_iter: int = 24  # self-play games generated per iteration
     iterations: int = 30  # training iterations — this algorithm's budget
+    # Parallel self-play across independent GPU actor processes (G6i, ADR-062). 1 ⇒ today's single
+    # in-process threaded actor (byte-identical, the default). >1 ⇒ that many separate worker processes,
+    # each with its OWN CUDA net, self-playing locally (no inference server, no per-round IPC) into a shared
+    # result queue. Risk-gated on the RTX 5070: 2 workers give ~1.6× chess self-play at GPU 49→94 % (the
+    # in-process actor shares the GIL with the learner thread and starves during training bursts; separate
+    # processes escape that AND add a core). 2 is the Windows sweet spot — 3 ≈ worse, 4 collapses (Windows
+    # WDDM has no MPS to share the GPU). Only takes effect on CUDA; on CPU it falls back to the single actor
+    # (the 128×10 net is too heavy for parallel CPU workers — measured ~10× slower).
+    actor_processes: int = 1
     # Non-UI knobs (sensible fixed defaults; not exposed as sliders). Tuned via Local/_probe_g6f_learn.py:
     # gentle training (a few epochs over the buffer, not a fixed large step count) avoids the value-head
     # overfit that poisons the MCTS→target feedback loop — the difference between learning and stalling.

@@ -55,6 +55,7 @@
     "gumbel_sims": "Hloubka hledání",
     "gumbel_considered": "Zvažované tahy",
     "games_per_iter": "Her / iterace",
+    "actor_processes": "Procesy self-play",
     "seed": "Semeno",
     "total_steps": "Celkem kroků",
     "run": "Spustit",

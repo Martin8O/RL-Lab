@@ -55,6 +55,7 @@
     "gumbel_sims": "Search Depth",
     "gumbel_considered": "Considered Moves",
     "games_per_iter": "Games / Iteration",
+    "actor_processes": "Self-play Workers",
     "seed": "Seed",
     "total_steps": "Total Steps",
     "run": "Run",

@@ -632,6 +632,16 @@ export default function Sidebar() {
                 onChange={(v) => setAlphaZeroParams({ learning_rate: v })}
               />
             )}
+
+            {azDefs.actor_processes && (
+              <ParamSlider
+                id="actor_processes" label={t('sidebar.actor_processes')}
+                value={alphaZeroParams.actor_processes}
+                min={azDefs.actor_processes.min!} max={azDefs.actor_processes.max!} step={azDefs.actor_processes.step!}
+                recommended={azDefs.actor_processes.recommended as number}
+                onChange={(v) => setAlphaZeroParams({ actor_processes: Math.round(v) })}
+              />
+            )}
           </>
         )}
 

@@ -32,7 +32,7 @@ from app.schemas.training import (
     TrainingProgress,
     TrainState,
 )
-from app.services import az_batch, az_net, board_engine
+from app.services import az_batch, az_net, az_parallel, board_engine
 from app.services.checkpoints import CheckpointArtifact
 from app.services.train_control import TrainControl
 
@@ -122,6 +122,11 @@ def train_az(
     # single-position (batch-1) forwards were the regime where a GPU sits idle/slower; the batched engine
     # measured ~6× faster than that sequential path on Connect Four. CPU is the graceful fallback.
     device = az_net.best_device()
+    # G6i (ADR-062): >1 ⇒ run self-play in independent GPU worker PROCESSES instead of the in-process
+    # actor thread (escapes the GIL the learner thread otherwise contends for; ~1.6× chess on the RTX
+    # 5070). CUDA-only — the 128×10 net is too heavy for parallel CPU workers (measured ~10× slower), so
+    # on CPU we keep the single in-process actor (=1 stays byte-identical to G6h on every machine).
+    use_parallel = hp.actor_processes > 1 and device == "cuda"
     started_at = time.monotonic()
 
     # Same reference MCTS the PPO baseline is scored against (board_engine.board_profile, G6c), so the
@@ -153,12 +158,14 @@ def train_az(
     # random rollouts), so the GPU stays free for the actor's self-play *through* the eval. The actor
     # re-syncs from the learner after every training round (the decoupled-snapshot pattern, ADR-008/019).
     # Two threads ⇒ the run is policy-level reproducible (seeded), not bit-reproducible — like the SuperSuit
-    # multi-agent path (ADR-038).
-    actor_model = az_net.AZModel(
-        game, channels=model.channels, blocks=model.blocks, device=device, norm=model.norm
-    )
-    actor_model.net.load_state_dict(model.net.state_dict())
-    actor_model.net.eval()
+    # multi-agent path (ADR-038). (Skipped under use_parallel: the worker processes build their own nets.)
+    actor_model = None
+    if not use_parallel:
+        actor_model = az_net.AZModel(
+            game, channels=model.channels, blocks=model.blocks, device=device, norm=model.norm
+        )
+        actor_model.net.load_state_dict(model.net.state_dict())
+        actor_model.net.eval()
 
     buffer: deque[tuple[Any, Any, float]] = deque(maxlen=hp.buffer_size)
     buffer_lock = threading.Lock()  # the actor extends it; the learner snapshots it per training round
@@ -166,6 +173,10 @@ def train_az(
     games_per_iter = max(1, hp.games_per_iter)
     # Rolling self-play cohort width: keep up to this many games concurrent (one GPU forward per MCTS step).
     parallel = max(1, min(hp.parallel_games, games_per_iter))
+    # G6i: with worker processes the GPU-batch budget (parallel_games) is split across them — 2 workers ×
+    # 64 = the probe's measured-good chess config (peak VRAM ~4.5 GB, GPU 94 %). The =1 path is unchanged
+    # (the `parallel`-wide in-process actor above).
+    per_worker_parallel = max(1, hp.parallel_games // max(1, hp.actor_processes))
     games_base = games_done  # the count at run start (resume continues from here)
     # Budget in self-play games — the AZ analogue of "Total Steps" (reported as timesteps). The actor keeps
     # producing while the learner finishes its rounds, so the actual count may run a little past this.
@@ -232,6 +243,8 @@ def train_az(
         # The background self-play producer: a continuous rolling cohort (games complete one-by-one and are
         # replaced → a smooth counter + a full GPU batch) feeding the shared buffer + the live counter. It
         # picks up the learner's latest net between games (decoupled snapshot). Runs until stop.
+        # (Only started when not use_parallel, so actor_model is always built here.)
+        assert actor_model is not None
         actor_rng = np.random.default_rng(config.seed + 99_991)  # a distinct, seeded stream
         for game_examples, _ret in az_batch.self_play_rolling(
             actor_model, parallel, search_sims, hp.c_puct, dir_alpha, 0.25, hp.temp_moves, actor_rng,
@@ -326,15 +339,36 @@ def train_az(
     # freeze (the headless profile showed ~57 % of wall-clock frozen before this).
     publish()  # initial preview from the (random) net, immediately
     ticker = threading.Thread(target=_progress_ticker, name="az-progress-ticker", daemon=True)
-    actor = threading.Thread(target=_actor, name="az-actor", daemon=True)
     ticker.start()
-    actor.start()
+    # The self-play producer: either today's in-process actor thread (=1) or, under use_parallel, a pool of
+    # independent GPU worker processes (G6i). Both feed the SAME shared buffer + live_games counter the
+    # learner loop, ticker, eval and snapshot read, so only the producer differs — the rest is identical.
+    parallel_actor: az_parallel.ParallelActor | None = None
+    actor: threading.Thread | None = None
+    if use_parallel:
+        parallel_actor = az_parallel.ParallelActor(
+            gym_id=gym_id, n_workers=hp.actor_processes, per_worker_parallel=per_worker_parallel,
+            build={"channels": model.channels, "blocks": model.blocks, "norm": model.norm},
+            search=az_parallel.build_search(
+                sims=search_sims, c_puct=hp.c_puct, dir_alpha=dir_alpha, dir_frac=0.25,
+                temp_moves=hp.temp_moves, gumbel=hp.use_gumbel,
+                gumbel_considered=hp.gumbel_considered, ply_cap=ply_cap,
+            ),
+            base_seed=config.seed + 99_991, initial_state_dict=az_parallel.cpu_state_dict(model.net),
+            buffer=buffer, buffer_lock=buffer_lock, live_games=live_games, control=control,
+        )
+        parallel_actor.start()
+        actor_alive = parallel_actor.is_alive
+    else:
+        actor = threading.Thread(target=_actor, name="az-actor", daemon=True)
+        actor.start()
+        actor_alive = actor.is_alive
     try:
         for it in range(hp.iterations):
             # Wait for the actor to produce this round's games (it keeps playing, so the counter keeps
             # moving — the wait never freezes the UI). Poll cheaply; honour pause/stop.
             target_games = games_base + (it + 1) * games_per_iter
-            while live_games[0] < target_games and not control.stop_requested and actor.is_alive():
+            while live_games[0] < target_games and not control.stop_requested and actor_alive():
                 control.wait_if_paused()
                 if stop_event.is_set():
                     break
@@ -350,10 +384,15 @@ def train_az(
                 last_loss[0] = az_net.train_on_buffer(
                     model, optimizer, data, hp.batch_size, steps, rng
                 )
-            # Hand the freshly trained net to the actor (a decoupled CPU snapshot it reloads between games).
-            with sync_lock:
-                shared_sd[0] = {k: v.detach().cpu() for k, v in model.net.state_dict().items()}
-                pending_sync[0] = True
+            # Hand the freshly trained net to the actor (a decoupled CPU snapshot it reloads between games):
+            # an in-memory state_dict for the in-process actor, or an atomic shared-file publish the worker
+            # processes pick up by mtime (G6i). Both are infrequent (once per iteration), never per-round.
+            if parallel_actor is not None:
+                parallel_actor.publish_net(az_parallel.cpu_state_dict(model.net))
+            else:
+                with sync_lock:
+                    shared_sd[0] = {k: v.detach().cpu() for k, v in model.net.state_dict().items()}
+                    pending_sync[0] = True
             iteration[0] = it + 1
             # Eval periodically (the actor self-plays through it on the free GPU). Always eval the first +
             # last round so the curve starts and ends on a real point.
@@ -364,8 +403,11 @@ def train_az(
             emit()
             take_snapshot()
     finally:
-        stop_event.set()  # retire the actor (it checks this between plies)
-        actor.join(timeout=10.0)
+        stop_event.set()  # retire the in-process actor (it checks this between plies)
+        if parallel_actor is not None:
+            parallel_actor.stop()  # Windows-hardened: drain → cancel_join_thread → terminate the workers
+        if actor is not None:
+            actor.join(timeout=10.0)
         stop_ticker.set()  # retire the ticker
         ticker.join(timeout=2.0)
 

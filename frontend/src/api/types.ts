@@ -136,6 +136,9 @@ export interface AlphaZeroHyperparams {
   games_per_iter: number
   /** Training iterations — this algorithm's budget. */
   iterations: number
+  /** Parallel self-play worker processes (G6i). 1 = single in-process actor; >1 = that many GPU
+   *  worker processes (CUDA-only; 2 is the chess sweet spot, ~1.6×). */
+  actor_processes: number
 }
 
 export interface TrainConfig {

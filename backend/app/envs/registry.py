@@ -1476,7 +1476,7 @@ def _self_play_hyperparams() -> dict[str, dict[str, HyperparamDef]]:
 
 
 def _board_hyperparams(
-    az_iterations: int = 30, az_games: int = 24
+    az_iterations: int = 30, az_games: int = 24, az_actors: int = 1
 ) -> dict[str, dict[str, HyperparamDef]]:
     """Board-game tunables for both trainers (routed by algo, G6b/G6f/G6h).
 
@@ -1520,6 +1520,14 @@ def _board_hyperparams(
         # for hours; resume (Load) continues from the saved net and runs another full schedule on top.
         "iterations": HyperparamDef(
             type="int", default=30, recommended=az_iterations, min=5, max=500, step=5,
+        ),
+        # Parallel self-play across independent GPU actor processes (G6i). 1 = the single in-process actor
+        # (the default, every machine). >1 = that many worker processes, each with its own CUDA net,
+        # generating self-play in parallel — only effective on a GPU. Risk-gated on the RTX 5070: 2 is the
+        # Windows sweet spot (~1.6× chess, GPU 49→94 %); 3 ≈ worse, 4 collapses (no MPS on Windows). ★ 2 for
+        # the high-throughput games (chess), 1 for the small boards where one actor already saturates.
+        "actor_processes": HyperparamDef(
+            type="int", default=1, recommended=az_actors, min=1, max=4, step=1,
         ),
     }
     return hp
@@ -2011,7 +2019,9 @@ register(
         # A modest default iteration count keeps a first run to ~10 min; raise Iterations (up to 500) for an
         # hours-long, stronger run — Load continues from the saved net. The recommended iterations sit on
         # the slider step grid (15 ∈ step-5) so the green ★ tick is exactly selectable.
-        hyperparams=_board_hyperparams(az_iterations=15, az_games=64),
+        # ★ 2 actor processes (G6i): chess is the one game heavy enough to benefit — 2 GPU worker processes
+        # give ~1.6× the self-play throughput at GPU ~94 % on the RTX 5070 (the Windows sweet spot).
+        hyperparams=_board_hyperparams(az_iterations=15, az_games=64, az_actors=2),
         # Same eval-vs-reference-MCTS ∈ [−1, 1] chart scale as the other board games (solved = +1, min =
         # −1); scored vs the cheap NOVICE reference so a fresh net starts near 0 and the curve can climb.
         solved_score=1.0,
