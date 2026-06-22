@@ -433,11 +433,17 @@ def train_on_buffer(
     batch_size: int,
     steps: int,
     rng: np.random.Generator,
+    should_stop: Callable[[], bool] | None = None,
 ) -> float:
     """Run ``steps`` minibatch SGD updates on the replay ``buffer`` → mean loss.
 
     Loss = policy cross-entropy against the MCTS visit distribution (illegal moves carry 0 target mass,
     so the full-softmax CE ignores them) + value MSE against the game outcome — the AlphaZero objective.
+
+    ``should_stop`` (optional) is polled per step so a user Stop interrupts this loop promptly: a chess
+    update over a full replay buffer is ~1000 GPU minibatch steps (~10 s), and without this a Stop landing
+    mid-update has to wait it out (the AZ analogue of ADR-039's interruptible PPO update). Breaking early
+    only affects the abort path — it never changes a non-stopped run's training, so reproducibility holds.
     """
     import torch
     import torch.nn.functional as F
@@ -447,7 +453,11 @@ def train_on_buffer(
     model.net.train()
     n = len(buffer)
     total_loss = 0.0
+    done = 0
     for _ in range(steps):
+        if should_stop is not None and should_stop():
+            break
+        done += 1
         idx = rng.integers(0, n, size=min(batch_size, n))
         obs = torch.as_tensor(
             np.stack([buffer[i][0] for i in idx]), dtype=torch.float32, device=model.device
@@ -468,7 +478,7 @@ def train_on_buffer(
         optimizer.step()
         total_loss += float(loss.item())
     model.net.eval()  # leave it in eval mode for the next self-play / snapshot
-    return total_loss / max(1, steps)
+    return total_loss / max(1, done)  # mean over steps ACTUALLY run (may be < steps if interrupted)
 
 
 def best_device() -> str:

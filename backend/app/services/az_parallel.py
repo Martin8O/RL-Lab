@@ -42,10 +42,11 @@ from typing import Any
 
 import numpy as np
 
-# Bounded window (s) to keep draining finished games after stop while the spawned workers wind down,
-# before force-terminating stragglers. Self-play plies are short, so a worker exits its current ply
-# quickly once it sees the stop event; this only guards against a worker mid-net-reload.
-_DRAIN_AFTER_STOP_S = 6.0
+# Brief window (s) to catch finished games after stop while the spawned workers exit, before
+# force-terminating any straggler. self_play_rolling checks should_stop every ply (one short forward),
+# so a worker leaves its loop within a ply of seeing the stop event; in-flight games are disposable (the
+# buffer is already full), so this stays short — Stop responsiveness matters more than the last few games.
+_DRAIN_AFTER_STOP_S = 1.5
 
 
 def _publish_net_file(state_dict_cpu: dict[str, Any], path: str) -> None:
@@ -234,10 +235,11 @@ class ParallelActor:
             with contextlib.suppress(queue.Empty):
                 self._ingest(self._result_q.get(timeout=0.1))
         # A terminated spawn-worker's Queue feeder thread would otherwise deadlock the parent at join —
-        # cancel it before terminating (the fix proven in the probe's run_workers).
+        # cancel it before terminating (the fix proven in the probe's run_workers). Terminate any worker
+        # still alive after the grace window immediately (don't wait it out — its in-flight game is
+        # disposable), then join briefly to reap the process.
         self._result_q.cancel_join_thread()
         for p in self._procs:
-            p.join(timeout=1.0)
             if p.is_alive():
                 p.terminate()
         for p in self._procs:

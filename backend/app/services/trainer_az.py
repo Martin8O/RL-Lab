@@ -381,8 +381,10 @@ def train_az(
                 data = list(buffer)
             if data:
                 steps = max(10, int(hp.train_epochs * len(data) / hp.batch_size))
+                # should_stop makes the (long, ~1000-step on chess) update interruptible so a user Stop
+                # doesn't wait it out — the dominant Stop-latency term once self-play runs in parallel.
                 last_loss[0] = az_net.train_on_buffer(
-                    model, optimizer, data, hp.batch_size, steps, rng
+                    model, optimizer, data, hp.batch_size, steps, rng, should_stop=should_stop
                 )
             # Hand the freshly trained net to the actor (a decoupled CPU snapshot it reloads between games):
             # an in-memory state_dict for the in-process actor, or an atomic shared-file publish the worker
