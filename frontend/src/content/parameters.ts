@@ -130,6 +130,34 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
         + 'rozpočet), ne proto, že by běžely na GPU.',
     },
   },
+  // Hardware monitor panel (G4b) — a read-only explainer for the live CPU/GPU readings floated on the
+  // chart during a run. Metric-only (no recommended/range/perEnv), like training_device above.
+  hw_stats: {
+    general: {
+      en: '**Live hardware readings while a run trains.** They show how hard your computer is working — '
+        + 'useful to confirm the GPU is actually busy on a GPU game, or just out of curiosity.\n'
+        + '**CPU · Util** — how hard this app is working the processor. It can climb past 100% because a '
+        + 'modern CPU has many cores, so "150%" just means it is using about one and a half cores.\n'
+        + '**CPU · RAM** — ordinary memory in use / total, in gigabytes.\n'
+        + '**GPU · Util** — how busy the graphics card is. High during picture-game (Atari) and AlphaZero '
+        + 'training; low or hidden otherwise (most games train on the CPU — see the training-device note).\n'
+        + '**GPU · VRAM** — the graphics card\'s own memory in use / total. A big model uses more.\n'
+        + '**GPU · Temp / Power** — how hot the card is and how many watts it is drawing right now.\n'
+        + 'The **GPU column appears only when the run actually trains on the graphics card**; a CPU run '
+        + 'hides it rather than showing an idle card. Any reading that is unavailable shows "—".',
+      cz: '**Živé údaje o hardwaru během tréninku.** Ukazují, jak moc váš počítač pracuje — hodí se ověřit, '
+        + 'že GPU u obrázkové hry opravdu pracuje, nebo jen ze zvědavosti.\n'
+        + '**CPU · Util** — jak moc tato aplikace zatěžuje procesor. Může přesáhnout 100 %, protože moderní '
+        + 'procesor má mnoho jader, takže „150 %“ znamená využití zhruba jednoho a půl jádra.\n'
+        + '**CPU · RAM** — běžná paměť používaná / celkem, v gigabajtech.\n'
+        + '**GPU · Util** — jak je grafická karta vytížená. Vysoko při tréninku obrázkových her (Atari) a '
+        + 'AlphaZero; jinak nízko nebo skrytá (většina her trénuje na CPU — viz poznámka o zařízení tréninku).\n'
+        + '**GPU · VRAM** — vlastní paměť grafické karty používaná / celkem. Větší model spotřebuje víc.\n'
+        + '**GPU · Temp / Power** — jak je karta horká a kolik wattů právě odebírá.\n'
+        + 'Sloupec **GPU se zobrazí jen tehdy, když běh skutečně trénuje na grafické kartě**; běh na CPU ho '
+        + 'skryje, místo aby ukazoval nečinnou kartu. Jakýkoli nedostupný údaj se zobrazí jako „—“.',
+    },
+  },
   // Board games (G6a): the opponent's strength. Not a training hyperparameter — a play-time choice —
   // but it ships the same info popup as every tunable (general + per-game + a ★ recommended value).
   board_difficulty: {

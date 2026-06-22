@@ -225,6 +225,7 @@ function Modal({ title, hint, onClose, children }: {
 export default function SaveLoadControls() {
   const { t } = useTranslation()
   const trainState = useAppStore((s) => s.trainState)
+  const bumpCheckpoints = useAppStore((s) => s.bumpCheckpoints)
 
   const [slots, setSlots] = useState<CheckpointMeta[]>([])
   const [saving, setSaving] = useState(false)
@@ -254,6 +255,7 @@ export default function SaveLoadControls() {
     try {
       await saveCheckpoint()
       refresh()
+      bumpCheckpoints()  // so the AI-play picker shows the new save without a reload
       flashToast(t('saveload.saved'))
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
@@ -296,6 +298,7 @@ export default function SaveLoadControls() {
     try {
       await deleteCheckpoint(slot.id)
       refresh()
+      bumpCheckpoints()  // keep the AI-play picker in sync after a delete
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     }

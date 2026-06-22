@@ -2,6 +2,7 @@ import { useState, type CSSProperties } from 'react'
 import { useTranslation } from 'react-i18next'
 import { trainsOnGpu } from '../api/device'
 import { useAppStore } from '../store/useAppStore'
+import ParamInfo from './ParamInfo'
 
 // Live CPU/GPU telemetry, floated bottom-right inside the chart panel (G4b). Reads the 1 Hz
 // `hwstats` frame the training manager broadcasts for *any* active run (store.lastHwStats) — so it
@@ -129,7 +130,12 @@ export default function HwStats() {
           )}
         </div>
       )}
-      {toggle}
+      {/* Stacked top-right controls: collapse toggle + a data-driven "what do these numbers mean?"
+          popup (reuses ParamInfo with the `hw_stats` content entry, like every other tunable). */}
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+        {toggle}
+        <ParamInfo paramId="hw_stats" label={t('hwstats.info_title')} />
+      </div>
     </div>
   )
 }

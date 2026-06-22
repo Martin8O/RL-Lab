@@ -70,11 +70,12 @@ def test_mujoco_skill_floor_calibration() -> None:
 
 
 def test_hopper_walker_human_play_slowdown() -> None:
-    """Hopper/Walker2d render at 125 fps and fall in ~1 s, so human play stretches their per-step
-    wall-clock (human_play_slowdown ≈8 → ~5× longer once the 30 fps cap + render cost are included).
-    The other envs run slow enough already and keep the default 1.0 (no slow-down)."""
-    assert get_env("hopper").human_play_slowdown == 8.0
-    assert get_env("walker2d").human_play_slowdown == 8.0
+    """Hopper/Walker2d render at 125 fps and fall in ~1 s, so human play gets a MODEST slow-down
+    (human_play_slowdown 2.5 → ~10–15 fps, ~15 s) so a beginner can see the robot move and fall — the
+    earlier 8× overshot into an unplayably choppy slideshow. The other envs run slow enough already
+    and keep the default 1.0 (no slow-down)."""
+    assert get_env("hopper").human_play_slowdown == 2.5
+    assert get_env("walker2d").human_play_slowdown == 2.5
     for env_id in ("halfcheetah", "ant", "reacher", "swimmer"):
         assert get_env(env_id).human_play_slowdown == 1.0
 

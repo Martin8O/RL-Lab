@@ -54,3 +54,12 @@ describe('useAppStore — run results clear on env switch', () => {
     expect(s.lastProgress).not.toBeNull()
   })
 })
+
+describe('useAppStore — checkpoint refresh signal', () => {
+  it('bumpCheckpoints increments the nonce so other pickers re-fetch', () => {
+    const before = useAppStore.getState().checkpointsNonce
+    useAppStore.getState().bumpCheckpoints()
+    useAppStore.getState().bumpCheckpoints()
+    expect(useAppStore.getState().checkpointsNonce).toBe(before + 2)
+  })
+})

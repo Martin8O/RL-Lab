@@ -240,7 +240,8 @@
     "temp": "Teplota",
     "power": "Příkon",
     "toggle_show": "Zobrazit hardwarové statistiky",
-    "toggle_hide": "Skrýt hardwarové statistiky"
+    "toggle_hide": "Skrýt hardwarové statistiky",
+    "info_title": "Monitor hardwaru"
   },
   "leaderboard": {
     "title": "Top-5 dětí",

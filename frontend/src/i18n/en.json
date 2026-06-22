@@ -240,7 +240,8 @@
     "temp": "Temp",
     "power": "Power",
     "toggle_show": "Show hardware stats",
-    "toggle_hide": "Hide hardware stats"
+    "toggle_hide": "Hide hardware stats",
+    "info_title": "Hardware monitor"
   },
   "leaderboard": {
     "title": "Top-5 Children",

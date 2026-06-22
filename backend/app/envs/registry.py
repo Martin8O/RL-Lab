@@ -2038,13 +2038,15 @@ register(
     )
 )
 
-# Hopper and Walker2d render at 125 fps and fall fast, so even with human play capped at the 30 fps
-# frame rate a person gets only ~8 s before the topple — too short to actually play. Stretch their
-# human-play wall-clock ~5× (the user's request) so there is real time to react; the other MuJoCo
-# envs already run slow enough (20–50 fps) and never fall this fast, so they keep the default 1.0.
-# Set post-construction (a single data tweak on two of six rows) rather than threading a mostly-1.0
-# column through the whole _MUJOCO_GAMES table.
+# Hopper and Walker2d render at 125 fps and fall in ~1 s, so even with human play capped at the 30 fps
+# frame rate the topple is over almost instantly. A MODEST slow-down lets a beginner actually see the
+# robot move and fall (≈2.5× → ~10–15 fps, ~15 s) — the earlier 8× overshot into an unplayably choppy
+# ~3.5 fps slideshow. These are high-DoF robots (3 and 6 continuous joints): they are not really
+# keyboard-playable at any pacing, so Play is just a quick "feel how hard this is" and the real payoff
+# is watching the trained AI (the play guide says so). The other MuJoCo envs already run slow enough
+# (20–50 fps) and never fall this fast, so they keep the default 1.0. Set post-construction (a single
+# data tweak on two of six rows) rather than threading a mostly-1.0 column through _MUJOCO_GAMES.
 for _slow_id in ("hopper", "walker2d"):
     _slow_spec = get_env(_slow_id)
     if _slow_spec is not None:
-        _slow_spec.human_play_slowdown = 8.0
+        _slow_spec.human_play_slowdown = 2.5

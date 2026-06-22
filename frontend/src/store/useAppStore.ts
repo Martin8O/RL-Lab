@@ -229,6 +229,7 @@ interface AppState {
   maHistory:       MultiAgentMetrics[]   // G7b-2: per-round ecosystem frames — the two-line chart
   lastMa:          MultiAgentMetrics | null
   highScores:      Record<string, HighScore>  // all-time best per env id
+  checkpointsNonce: number                     // bumped on save/delete so other pickers (AI-play) re-fetch
 
   // ─ play vs AI (E2) ─────────────────────────────────────────
   playState:        PlayState            // idle until a session starts
@@ -276,6 +277,7 @@ interface AppState {
   seedMa:             (m: MultiAgentMetrics)            => void
   setHighScore:       (hs: HighScore)                   => void
   setHighScores:      (list: HighScore[])               => void
+  bumpCheckpoints:    ()                                => void
   clearMetrics:       ()                                => void
 
   // play vs AI (E2)
@@ -335,6 +337,7 @@ export const useAppStore = create<AppState>()(
       maHistory:       [],
       lastMa:          null,
       highScores:      {},
+      checkpointsNonce: 0,
 
       playState:        'idle',
       playScore:        0,
@@ -517,6 +520,10 @@ export const useAppStore = create<AppState>()(
       setHighScore:  (hs)   => set((s) => ({ highScores: { ...s.highScores, [hs.env_id]: hs } })),
       setHighScores: (list) =>
         set({ highScores: Object.fromEntries(list.map((hs) => [hs.env_id, hs])) }),
+
+      // A new checkpoint was saved/deleted somewhere — bump so components that fetch the list on their
+      // own (the AI-play picker in PlayControls) re-fetch without a page reload.
+      bumpCheckpoints: () => set((s) => ({ checkpointsNonce: s.checkpointsNonce + 1 })),
 
       clearMetrics: () => set({ ...EMPTY_RUN_RESULTS }),
 

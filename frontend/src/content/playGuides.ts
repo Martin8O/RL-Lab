@@ -79,14 +79,17 @@ const MUJOCO_WALK_TIP: Bilingual = {
     + 'so the robot pushes off and swings a leg through, then catches itself, rather than holding the '
     + 'keys down. On the bigger robots only the main joints are mapped (the feet and ankles stay '
     + 'relaxed), so you are nudging the legs, not micro-managing every joint. Lower the play speed '
-    + '(down to 0.1×) to give yourself time to react. Switch to "Watch AI" once a model has been '
-    + 'trained for this on a GPU.',
+    + '(down to 0.1×) to give yourself time to react — but do not expect to keep it going for long by '
+    + 'hand; that is completely normal for these many-jointed robots, and the real payoff is watching a '
+    + 'trained AI move smoothly. Switch to "Watch AI" once a model has been trained for this on a GPU.',
   cz: 'Řídit několik kloubů nohou najednou je rukama vážně těžké — přesně proto se na to cvičí AI. '
     + 'Zkuste najít rytmus: klouby tlačte a pouštějte v opakujícím se vzoru, ať se robot odrazí a '
     + 'prošvihne nohu vpřed a pak se zachytí, místo držení kláves. U větších robotů jsou namapované '
     + 'jen hlavní klouby (chodidla a kotníky zůstávají uvolněné), takže nohama jen pošťuchujete, ne '
-    + 'řídíte každý kloub zvlášť. Snížením rychlosti hraní (až na 0,1×) získáte čas reagovat. Až '
-    + 'bude na to natrénovaný model na GPU, přepněte na „Sledovat AI“.',
+    + 'řídíte každý kloub zvlášť. Snížením rychlosti hraní (až na 0,1×) získáte čas reagovat — ale '
+    + 'nečekejte, že robota udržíte v chodu dlouho rukama; u těchto víceklouobových robotů je to úplně '
+    + 'normální a skutečnou odměnou je sledovat, jak se plynule pohybuje natrénovaná AI. Až bude na to '
+    + 'natrénovaný model na GPU, přepněte na „Sledovat AI“.',
 }
 
 export const PLAY_GUIDES: Record<string, PlayGuide> = {

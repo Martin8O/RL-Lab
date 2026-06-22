@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
+import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import { useAppStore } from '../store/useAppStore'
 import { PARAM_INFO } from '../content/parameters'
@@ -72,7 +73,10 @@ function InfoModal({ paramId, label, onClose }: { paramId: string; label: string
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
 
-  return (
+  // Portal to <body> so the centered overlay escapes any transformed/filtered ancestor (the HW-stats
+  // panel uses backdrop-filter, which would otherwise trap this position:fixed modal inside it — the
+  // ADR-034 pattern, same as PlayInstructions). Harmless for the sidebar popups (already centered).
+  return createPortal(
     <div
       onClick={onClose}
       style={{
@@ -142,7 +146,8 @@ function InfoModal({ paramId, label, onClose }: { paramId: string; label: string
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }
 

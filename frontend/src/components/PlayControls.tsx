@@ -43,6 +43,7 @@ export default function PlayControls() {
   const boardStrength    = useAppStore((s) => s.boardStrength)
   const setBoardSide     = useAppStore((s) => s.setBoardSide)
   const setBoardStrength = useAppStore((s) => s.setBoardStrength)
+  const checkpointsNonce = useAppStore((s) => s.checkpointsNonce)
 
   const [checkpoints, setCheckpoints] = useState<CheckpointMeta[]>([])
   const [error, setError] = useState<string | null>(null)
@@ -77,12 +78,13 @@ export default function PlayControls() {
   // Board: face the trained net when a valid checkpoint is picked, else the built-in MCTS.
   const useBoardNet  = isBoard && boardOpponent !== '' && envCheckpoints.some((c) => c.id === boardOpponent)
 
-  // Load checkpoints when the backend comes online and whenever a play session ends (a new
-  // checkpoint may have been saved meanwhile). Cheap, read-only.
+  // Load checkpoints when the backend comes online, whenever a play session ends, and whenever a
+  // checkpoint is saved/deleted elsewhere (checkpointsNonce) — so a fresh Save shows up in the AI-play
+  // picker without a page reload. Cheap, read-only.
   useEffect(() => {
     if (backendStatus !== 'online') return
     void fetchCheckpoints().then(setCheckpoints).catch(() => {})
-  }, [backendStatus, playState])
+  }, [backendStatus, playState, checkpointsNonce])
 
   // Keep the AI checkpoint selection valid: default to the newest matching checkpoint, and drop a
   // stale pick if the env changed out from under it (the "AI plays" button needs a valid model).
