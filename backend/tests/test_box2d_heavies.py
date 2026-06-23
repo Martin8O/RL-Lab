@@ -37,7 +37,7 @@ def test_bipedalwalker_registered(eid: str) -> None:
     assert spec.family == "box2d"
     assert spec.obs_type == "vector"
     assert spec.action_space == "box"  # continuous Box(4) — the G1b seam
-    assert spec.supported_algos == ["ppo"]  # evolution opted out as data (hard 4-DoF locomotion)
+    assert spec.supported_algos == ["ppo", "sac"]  # PPO + SAC (S5a); evolution opted out (hard 4-DoF)
     assert spec.hw_requirement == "gpu"  # training gated to a powerful machine
     assert spec.human_playable is True   # but playable by hand now
     assert spec.competitive is False

@@ -43,6 +43,8 @@ function slotProgress(s: CheckpointMeta): { frac: number; text: string } {
 function algoLabel(t: (k: string) => string, algo: Algo): string {
   if (algo === 'neuroevolution') return t('sidebar.algo_evo')
   if (algo === 'q_learning') return t('sidebar.algo_q')
+  if (algo === 'alphazero') return t('sidebar.algo_az')
+  if (algo === 'sac') return t('sidebar.algo_sac')
   return t('sidebar.algo_ppo')
 }
 

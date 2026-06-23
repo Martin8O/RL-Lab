@@ -466,6 +466,7 @@ const ALGO_CHART_TABS: Record<string, ChartTab[]> = {
   neuroevolution: ['fitness'],
   q_learning: ['reward'],
   alphazero: ['reward', 'loss'],  // eval-vs-MCTS curve (Reward) + the net's training loss (Loss)
+  sac: ['reward', 'loss'],  // S5a: episode return (Reward) + the soft-Q critic loss (Loss)
 }
 
 function algoLabel(t: (k: string) => string, algo: string): string {
@@ -474,6 +475,7 @@ function algoLabel(t: (k: string) => string, algo: string): string {
     case 'neuroevolution': return t('sidebar.algo_evo')
     case 'q_learning': return t('sidebar.algo_q')
     case 'alphazero': return t('sidebar.algo_az')
+    case 'sac': return t('sidebar.algo_sac')
     default: return algo
   }
 }

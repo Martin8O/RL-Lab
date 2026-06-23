@@ -89,6 +89,8 @@ function formatValue(id: string, v: number | string): string {
     case 'gamma':          return v.toFixed(4)
     case 'clip_range':     return v.toFixed(2)
     case 'ent_coef':       return v.toFixed(3)
+    case 'sac_tau':        return v.toFixed(3)  // small soft-update coefficient (≈0.005)
+    case 'sac_buffer_size': return formatCount(v)  // 1000000 → "1M" (the shared count formatter)
     case 'q_learning_rate':
     case 'epsilon_start':
     case 'epsilon_end':
@@ -229,6 +231,7 @@ function ALGO_LABEL(t: (k: string) => string, id: string): string {
     case 'neuroevolution': return t('sidebar.algo_evo')
     case 'q_learning':     return t('sidebar.algo_q')
     case 'alphazero':      return t('sidebar.algo_az')
+    case 'sac':            return t('sidebar.algo_sac')
     default:               return id
   }
 }
@@ -316,6 +319,8 @@ export default function Sidebar() {
   const setSelfPlayParams = useAppStore((s) => s.setSelfPlayParams)
   const alphaZeroParams = useAppStore((s) => s.alphaZeroParams)
   const setAlphaZeroParams = useAppStore((s) => s.setAlphaZeroParams)
+  const sacParams       = useAppStore((s) => s.sacParams)
+  const setSacParams    = useAppStore((s) => s.setSacParams)
   const seed            = useAppStore((s) => s.seed)
   const setSeed         = useAppStore((s) => s.setSeed)
   const totalTimesteps  = useAppStore((s) => s.totalTimesteps)
@@ -329,13 +334,19 @@ export default function Sidebar() {
   const evoDefs = selectedEnv?.hyperparams?.['neuroevolution'] ?? {}
   const qlDefs  = selectedEnv?.hyperparams?.['q_learning'] ?? {}
   const azDefs  = selectedEnv?.hyperparams?.['alphazero'] ?? {}
+  const sacDefs = selectedEnv?.hyperparams?.['sac'] ?? {}
+  const sacEntChoices = sacDefs.ent_coef?.choices ?? null  // SAC entropy: ["auto", "0.1", "0.2"]
   const isEvo = algo === 'neuroevolution'
   const isQ   = algo === 'q_learning'
   const isAz  = algo === 'alphazero'
+  const isSac = algo === 'sac'
 
   // Per-env step ladder + the ★ recommended budget; always include the current value so the
-  // <select> can render it even after a reload with a value off the ladder.
-  const defaultSteps = selectedEnv?.default_total_timesteps ?? 50_000
+  // <select> can render it even after a reload with a value off the ladder. SAC (off-policy) is far more
+  // sample-efficient, so it uses its own much smaller ★ budget (sac_total_timesteps) — the ladder + ★
+  // then reflect SAC's real budget (~500k for BipedalWalker), not the PPO 5M.
+  const defaultSteps =
+    (isSac && selectedEnv?.sac_total_timesteps) || selectedEnv?.default_total_timesteps || 50_000
   const stepsOptions = Array.from(new Set([...stepsLadder(defaultSteps), totalTimesteps])).sort((a, b) => a - b)
 
   return (
@@ -372,7 +383,7 @@ export default function Sidebar() {
       {/* Scrollable params */}
       <div style={{ flex: 1, overflowY: 'auto', padding: 'var(--space-5)' }}>
         <div style={{ ...sectionEyebrow, marginBottom: 'var(--space-4)' }}>
-          {isEvo ? t('sidebar.evo_params_title') : isQ ? t('sidebar.q_params_title') : isAz ? t('sidebar.az_params_title') : t('sidebar.params_title')}
+          {isEvo ? t('sidebar.evo_params_title') : isQ ? t('sidebar.q_params_title') : isAz ? t('sidebar.az_params_title') : isSac ? t('sidebar.sac_params_title') : t('sidebar.params_title')}
         </div>
 
         {algo === 'ppo' && (
@@ -645,6 +656,83 @@ export default function Sidebar() {
           </>
         )}
 
+        {/* SAC (S5a — off-policy continuous control): the learning rate + discount, the target soft-update
+            (tau), the replay-buffer size, how often it updates (train_freq), and the entropy temperature
+            (auto-tuned by default, or pinned). batch_size / learning_starts / gradient_steps are fixed
+            backend defaults. SAC reuses the PPO "Total Steps" budget below (it runs that many env steps). */}
+        {isSac && (
+          <>
+            {sacDefs.learning_rate && (
+              <ParamSlider
+                id="learning_rate" label={t('sidebar.learning_rate')}
+                value={sacParams.learning_rate}
+                min={sacDefs.learning_rate.min!} max={sacDefs.learning_rate.max!} step={0.01}
+                recommended={sacDefs.learning_rate.recommended as number}
+                onChange={(v) => setSacParams({ learning_rate: v })}
+              />
+            )}
+
+            {sacDefs.gamma && (
+              <ParamSlider
+                id="gamma" label={t('sidebar.gamma')}
+                value={sacParams.gamma}
+                min={sacDefs.gamma.min!} max={sacDefs.gamma.max!} step={sacDefs.gamma.step!}
+                recommended={sacDefs.gamma.recommended as number}
+                onChange={(v) => setSacParams({ gamma: v })}
+              />
+            )}
+
+            {sacDefs.tau && (
+              <ParamSlider
+                id="sac_tau" label={t('sidebar.sac_tau')}
+                value={sacParams.tau}
+                min={sacDefs.tau.min!} max={sacDefs.tau.max!} step={sacDefs.tau.step!}
+                recommended={sacDefs.tau.recommended as number}
+                onChange={(v) => setSacParams({ tau: v })}
+              />
+            )}
+
+            {sacDefs.buffer_size && (
+              <ParamSlider
+                id="sac_buffer_size" label={t('sidebar.sac_buffer_size')}
+                value={sacParams.buffer_size}
+                min={sacDefs.buffer_size.min!} max={sacDefs.buffer_size.max!} step={sacDefs.buffer_size.step!}
+                recommended={sacDefs.buffer_size.recommended as number}
+                onChange={(v) => setSacParams({ buffer_size: Math.round(v) })}
+              />
+            )}
+
+            {sacDefs.train_freq && (
+              <ParamSlider
+                id="sac_train_freq" label={t('sidebar.sac_train_freq')}
+                value={sacParams.train_freq}
+                min={sacDefs.train_freq.min!} max={sacDefs.train_freq.max!} step={sacDefs.train_freq.step!}
+                recommended={sacDefs.train_freq.recommended as number}
+                onChange={(v) => setSacParams({ train_freq: Math.round(v) })}
+              />
+            )}
+
+            {sacEntChoices && (
+              <div style={{ marginBottom: 14 }}>
+                <div style={{ marginBottom: 6 }}>
+                  <span style={fieldLabel}>
+                    {t('sidebar.sac_ent_coef')}
+                    <ParamInfo paramId="sac_ent_coef" label={t('sidebar.sac_ent_coef')} />
+                  </span>
+                </div>
+                <Segmented
+                  value={sacParams.ent_coef}
+                  onChange={(v) => setSacParams({ ent_coef: v })}
+                  options={sacEntChoices.map((c) => ({
+                    id: c,
+                    label: c === 'auto' ? `★ ${t('sidebar.sac_ent_auto')}` : c,
+                  }))}
+                />
+              </div>
+            )}
+          </>
+        )}
+
         {/* Divider */}
         <div style={{ height: 1, background: 'var(--border-default)', margin: 'var(--space-3) 0 var(--space-4)' }} />
 
@@ -677,8 +765,9 @@ export default function Sidebar() {
           </div>
         </div>
 
-        {/* Total Steps — PPO only (evolution uses Generations, Q-learning uses Episodes) */}
-        {algo === 'ppo' && (
+        {/* Total Steps — PPO + SAC (both run an env-step budget; evolution uses Generations, Q-learning
+            Episodes, AlphaZero Iterations). */}
+        {(algo === 'ppo' || algo === 'sac') && (
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <label style={fieldLabel}>
               {t('sidebar.total_steps')}

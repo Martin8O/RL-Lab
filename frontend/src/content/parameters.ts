@@ -30,18 +30,22 @@ export interface ParamInfo {
 // here and referenced from each robot's perEnv key below. Only `reward` (whose numbers differ per
 // robot) is written per-env. Mirrors the shared-constant pattern in playGuides.ts (BIPEDAL_* etc.).
 const MUJOCO_ALGO: Bilingual = {
-  en: 'Only PPO is offered here. These MuJoCo robots are continuous-control tasks — the agent outputs '
-    + 'smooth joint torques, not button presses — and PPO is the method that learns a gait or a reach. '
-    + 'Neuroevolution is turned off as data (population search is impractical on hard multi-joint '
-    + 'control). Training takes millions of steps, so it is reserved for a GPU machine and Run is '
-    + 'disabled here; you can play it by hand now and watch a trained AI once one exists. (On the GPU '
-    + 'desktop, SAC and TD3 are the algorithms that really shine on MuJoCo.)',
-  cz: 'Tady je k dispozici jen PPO. Tito roboti MuJoCo jsou úlohy spojitého řízení — agent vydává '
-    + 'plynulé momenty v kloubech, ne stisky tlačítek — a PPO je metoda, která se naučí chůzi či '
-    + 'dosažení. Neuroevoluce je vypnutá jako data (populační hledání je u těžkého víceklouobového '
-    + 'řízení nepraktické). Trénink zabere miliony kroků, takže je vyhrazen pro stroj s GPU a Spustit '
-    + 'je zde zakázané; rukama si to zahrajete už teď a natrénovanou AI uvidíte, jakmile bude existovat. '
-    + '(Na stroji s GPU na MuJoCo opravdu vynikají algoritmy SAC a TD3.)',
+  en: 'Two algorithms here: **PPO** and **SAC**. These MuJoCo robots are continuous-control tasks — the '
+    + 'agent outputs smooth joint torques, not button presses. **PPO** (on-policy) learns a gait but '
+    + 'needs many millions of steps. **SAC** (off-policy, Soft Actor-Critic) keeps a replay buffer of '
+    + 'past experience and is the algorithm that really shines on MuJoCo — far more sample-efficient and '
+    + 'a higher ceiling (it is the method that actually solves the hardest robots). A great head-to-head: '
+    + 'train both on the same robot and compare. Neuroevolution is turned off as data (population search '
+    + 'is impractical on hard multi-joint control). Training takes a lot of compute, so it is reserved '
+    + 'for a GPU machine; you can play it by hand now and watch a trained AI.',
+  cz: 'Tady jsou dva algoritmy: **PPO** a **SAC**. Tito roboti MuJoCo jsou úlohy spojitého řízení — agent '
+    + 'vydává plynulé momenty v kloubech, ne stisky tlačítek. **PPO** (on-policy) se chůzi naučí, ale '
+    + 'potřebuje mnoho milionů kroků. **SAC** (off-policy, Soft Actor-Critic) si drží paměť minulých '
+    + 'zkušeností (replay buffer) a je to algoritmus, který na MuJoCo opravdu vyniká — mnohem úspornější '
+    + 'na data a s vyšším stropem (je to metoda, která ty nejtěžší roboty skutečně vyřeší). Skvělý '
+    + 'souboj: natrénujte na stejném robotovi oba a porovnejte. Neuroevoluce je vypnutá jako data '
+    + '(populační hledání je u těžkého víceklouobového řízení nepraktické). Trénink je výpočetně náročný, '
+    + 'takže je vyhrazen pro stroj s GPU; rukama si to zahrajete už teď a natrénovanou AI můžete sledovat.',
 }
 
 const MUJOCO_LR: Bilingual = {
@@ -224,12 +228,12 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
   },
   algorithm: {
     general: {
-      en: '**How the agent learns.**\n**PPO** (reinforcement learning) — tweaks one neural network with gradients after each batch of play; steady and sample-efficient.\n**Neuroevolution** — keeps a whole population of networks, scores them, and breeds the best (mutation + crossover) each generation; simple, gradient-free, like "survival of the fittest".\n**Q-learning** — builds a plain table of "how good is each action in each state" and refines it from experience; the classic value-based method, available on the small grid-world games where you can literally watch the table fill in.\n**AlphaZero** (board games only) — a network learns purely by **playing itself**, using look-ahead search (the same kind the built-in AI uses) to pick strong moves and then training on them. No human examples — it bootstraps from nothing. The famous recipe behind superhuman chess/Go engines, scaled down here.',
-      cz: '**Jak se agent učí.**\n**PPO** (zpětnovazební učení) — upravuje jednu neuronovou síť pomocí gradientů po každé dávce hraní; stabilní a úsporné na data.\n**Neuroevoluce** — udržuje celou populaci sítí, ohodnotí je a v každé generaci množí ty nejlepší (mutace + křížení); jednoduchá, bez gradientů, jako „přežití nejschopnějších“.\n**Q-učení** — sestavuje jednoduchou tabulku „jak dobrá je každá akce v každém stavu“ a vylepšuje ji ze zkušenosti; klasická hodnotová metoda, dostupná u malých mřížkových her, kde můžete doslova sledovat, jak se tabulka plní.\n**AlphaZero** (jen deskové hry) — síť se učí výhradně **hrou sama proti sobě**; k výběru silných tahů používá prohledávání dopředu (stejného druhu jako vestavěná AI) a pak se na nich učí. Žádné lidské příklady — startuje od nuly. Slavný recept za nadlidskými šachovými/go enginy, tady ve zmenšené podobě.',
+      en: '**How the agent learns.**\n**PPO** (reinforcement learning) — tweaks one neural network with gradients after each batch of play; steady and sample-efficient.\n**Neuroevolution** — keeps a whole population of networks, scores them, and breeds the best (mutation + crossover) each generation; simple, gradient-free, like "survival of the fittest".\n**Q-learning** — builds a plain table of "how good is each action in each state" and refines it from experience; the classic value-based method, available on the small grid-world games where you can literally watch the table fill in.\n**AlphaZero** (board games only) — a network learns purely by **playing itself**, using look-ahead search (the same kind the built-in AI uses) to pick strong moves and then training on them. No human examples — it bootstraps from nothing. The famous recipe behind superhuman chess/Go engines, scaled down here.\n**SAC** (Soft Actor-Critic, continuous-control games only) — an **off-policy** method that stores past experience in a replay buffer and reuses it, so it learns from far fewer steps than PPO; it also rewards staying a little unpredictable (entropy), which helps it explore. The right tool for the smooth joint-torque robots — it actually solves the hardest of them.',
+      cz: '**Jak se agent učí.**\n**PPO** (zpětnovazební učení) — upravuje jednu neuronovou síť pomocí gradientů po každé dávce hraní; stabilní a úsporné na data.\n**Neuroevoluce** — udržuje celou populaci sítí, ohodnotí je a v každé generaci množí ty nejlepší (mutace + křížení); jednoduchá, bez gradientů, jako „přežití nejschopnějších“.\n**Q-učení** — sestavuje jednoduchou tabulku „jak dobrá je každá akce v každém stavu“ a vylepšuje ji ze zkušenosti; klasická hodnotová metoda, dostupná u malých mřížkových her, kde můžete doslova sledovat, jak se tabulka plní.\n**AlphaZero** (jen deskové hry) — síť se učí výhradně **hrou sama proti sobě**; k výběru silných tahů používá prohledávání dopředu (stejného druhu jako vestavěná AI) a pak se na nich učí. Žádné lidské příklady — startuje od nuly. Slavný recept za nadlidskými šachovými/go enginy, tady ve zmenšené podobě.\n**SAC** (Soft Actor-Critic, jen hry se spojitým řízením) — **off-policy** metoda, která ukládá minulé zkušenosti do paměti (replay buffer) a znovu je využívá, takže se učí z mnohem méně kroků než PPO; navíc odměňuje trochu nepředvídatelné chování (entropii), což pomáhá zkoumat. Správný nástroj pro roboty s plynulými momenty v kloubech — ty nejtěžší skutečně vyřeší.',
     },
     recommended: {
-      en: 'PPO — the reliable, general-purpose default that also scales to harder games. Neuroevolution is gradient-free and can be surprisingly fast on simple tasks. On the grid-world games, Q-learning is the star. On the **board games** you also get **AlphaZero**, which learns by playing itself and searches ahead while playing — a fun head-to-head against PPO on the very same game. Try them and compare (see the per-game note below).',
-      cz: 'PPO — spolehlivá, univerzální volba, která zvládne i těžší hry. Neuroevoluce je bezgradientní a u jednoduchých úloh bývá překvapivě rychlá. U mřížkových her je hvězdou Q-učení. U **deskových her** máte navíc **AlphaZero**, který se učí hrou sám proti sobě a při hře prohledává dopředu — pěkný souboj s PPO na úplně stejné hře. Vyzkoušejte a porovnejte (viz poznámka k dané hře níže).',
+      en: 'PPO — the reliable, general-purpose default that also scales to harder games. Neuroevolution is gradient-free and can be surprisingly fast on simple tasks. On the grid-world games, Q-learning is the star. On the **board games** you also get **AlphaZero**, which learns by playing itself and searches ahead while playing — a fun head-to-head against PPO on the very same game. On the **continuous-control games** (the robots, BipedalWalker, Pendulum) you also get **SAC**, which is far more sample-efficient than PPO and the method that really shines there — another great PPO-vs-SAC comparison on one task. Try them and compare (see the per-game note below).',
+      cz: 'PPO — spolehlivá, univerzální volba, která zvládne i těžší hry. Neuroevoluce je bezgradientní a u jednoduchých úloh bývá překvapivě rychlá. U mřížkových her je hvězdou Q-učení. U **deskových her** máte navíc **AlphaZero**, který se učí hrou sám proti sobě a při hře prohledává dopředu — pěkný souboj s PPO na úplně stejné hře. U **her se spojitým řízením** (roboti, BipedalWalker, Pendulum) máte navíc **SAC**, který je mnohem úspornější na data než PPO a je to metoda, která tam opravdu vyniká — další skvělé srovnání PPO vs SAC na jedné úloze. Vyzkoušejte a porovnejte (viz poznámka k dané hře níže).',
     },
     perEnv: {
       cartpole: {
@@ -249,20 +253,20 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
         cz: 'Acrobot zvládnou obě. PPO se za pár set tisíc kroků spolehlivě naučí „pumpovat“ a dosáhne cíle (kolem −100). Neuroevoluce se tu také plynule zlepšuje, protože i drobná síť objeví rytmické houpání. Pěkná úloha, kde uspějí obě.',
       },
       pendulum: {
-        en: 'Both work on Pendulum. PPO is the natural fit for smooth continuous control and learns a clean swing-up-and-hold. Neuroevolution also works — its networks output a continuous torque — and is worth comparing, though PPO is usually the steadier of the two here.',
-        cz: 'Na Pendulu fungují obě. PPO je přirozená volba pro plynulé spojité řízení a naučí se čisté vyhoupnutí a udržení. Neuroevoluce také funguje — její sítě vydávají spojitý točivý moment — a stojí za porovnání, i když PPO tu bývá stabilnější.',
+        en: 'All three work on Pendulum. **SAC** is the standout — off-policy and very sample-efficient, it nails the swing-up-and-hold in a fraction of the steps PPO needs (a perfect first place to feel the PPO-vs-SAC difference). **PPO** is the steady on-policy baseline. **Neuroevolution** also works (its networks output a continuous torque) and is worth comparing.',
+        cz: 'Na Pendulu fungují všechny tři. **SAC** vyniká — je off-policy a velmi úsporný na data, takže vyhoupnutí a udržení zvládne ve zlomku kroků oproti PPO (ideální místo, kde pocítíte rozdíl PPO vs SAC). **PPO** je stabilní on-policy základ. **Neuroevoluce** také funguje (její sítě vydávají spojitý moment) a stojí za porovnání.',
       },
       mountaincarcontinuous: {
-        en: 'A continuous exploration trap. PPO often stalls near 0: it rarely stumbles onto the flag, and the small force penalty discourages trying. Neuroevolution tends to do better — among a whole population some network reaches the flag and that success spreads. A great task for comparing the two.',
-        cz: 'Spojitá past na zkoumání. PPO často uvázne poblíž 0: na vlajku jen zřídka náhodou narazí a malá penalizace za sílu odrazuje od zkoušení. Neuroevoluce tu bývá lepší — v celé populaci některá síť dojede k vlajce a úspěch se rozšíří. Skvělá úloha pro porovnání obou.',
+        en: 'A continuous exploration trap. **PPO** often stalls near 0: it rarely stumbles onto the flag, and the small force penalty discourages trying. **Neuroevolution** tends to do better — among a whole population some network reaches the flag and that success spreads. **SAC** explores via its entropy bonus and its replay buffer remembers the rare flag-reaching runs, so it can break the trap too. A great task for comparing all three.',
+        cz: 'Spojitá past na zkoumání. **PPO** často uvázne poblíž 0: na vlajku jen zřídka náhodou narazí a malá penalizace za sílu odrazuje od zkoušení. **Neuroevoluce** tu bývá lepší — v celé populaci některá síť dojede k vlajce a úspěch se rozšíří. **SAC** zkoumá díky bonusu za entropii a jeho replay buffer si pamatuje vzácné úspěšné jízdy k vlajce, takže past také prolomí. Skvělá úloha pro porovnání všech tří.',
       },
       bipedalwalker: {
-        en: 'Only PPO is offered here. Walking is a hard continuous-control task with four leg joints, and PPO is the method that actually learns a gait (given a few million steps). Neuroevolution is deliberately turned off — population search is impractical on this. Training is reserved for a GPU machine, so Run is disabled here; you can still play it by hand now and watch a trained AI once one exists.',
-        cz: 'Tady je k dispozici jen PPO. Chůze je těžká úloha spojitého řízení se čtyřmi klouby nohou a PPO je metoda, která chůzi skutečně zvládne (za pár milionů kroků). Neuroevoluce je záměrně vypnutá — populační hledání je tu nepraktické. Trénink je vyhrazen pro stroj s GPU, takže Spustit je zde zakázané; rukama si to ale zahrajete už teď a natrénovanou AI uvidíte, jakmile bude existovat.',
+        en: 'PPO and SAC are offered here. Walking is a hard continuous-control task with four leg joints. **PPO** learns a gait given a few million steps; **SAC** (off-policy) is usually more sample-efficient and a strong choice for this kind of locomotion. Neuroevolution is deliberately turned off — population search is impractical here. Training is reserved for a GPU machine; you can still play it by hand now and watch a trained AI.',
+        cz: 'Tady jsou k dispozici PPO a SAC. Chůze je těžká úloha spojitého řízení se čtyřmi klouby nohou. **PPO** se chůzi naučí za pár milionů kroků; **SAC** (off-policy) bývá úspornější na data a je pro tento druh pohybu silnou volbou. Neuroevoluce je záměrně vypnutá — populační hledání je tu nepraktické. Trénink je vyhrazen pro stroj s GPU; rukama si to ale zahrajete už teď a natrénovanou AI můžete sledovat.',
       },
       bipedalwalkerhardcore: {
-        en: 'Only PPO, same as the standard course — and the hardcore terrain (ladders, stumps, pits) makes it one of the hardest continuous-control benchmarks, needing the largest budget. Training is GPU-only (Run disabled here); play it by hand now.',
-        cz: 'Jen PPO, stejně jako u standardní dráhy — a hardcore terén (žebříky, pařezy, jámy) z ní dělá jeden z nejtěžších benchmarků spojitého řízení, který potřebuje největší rozpočet. Trénink je jen na GPU (Spustit je zde zakázané); rukama si to zahrajete už teď.',
+        en: 'PPO and SAC, same as the standard course — and the hardcore terrain (ladders, stumps, pits) makes it one of the hardest continuous-control benchmarks, needing the largest budget. SAC\'s sample efficiency helps here. Training is GPU-only; play it by hand now.',
+        cz: 'PPO a SAC, stejně jako u standardní dráhy — a hardcore terén (žebříky, pařezy, jámy) z ní dělá jeden z nejtěžších benchmarků spojitého řízení, který potřebuje největší rozpočet. Úspornost SAC tu pomáhá. Trénink je jen na GPU; rukama si to zahrajete už teď.',
       },
       carracing: {
         en: 'Only PPO is offered here: on a GPU it trains a convolutional network (CnnPolicy) straight from the 96×96 picture — a different policy from the small games\' MLP. Neuroevolution is turned off as data (a flat-vector genome cannot take pixels). Training needs a CUDA GPU, so Run is enabled on a GPU machine (and stays disabled on a CPU-only box); you can also play it by hand and watch your trained AI drive.',
@@ -836,8 +840,8 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
 
   total_steps: {
     general: {
-      en: '**Training budget** — how many environment steps the agent gets to learn from before stopping.\nMore steps mean more practice and usually a better policy, up to the point where it has mastered the task.',
-      cz: '**Tréninkový rozpočet** — kolik kroků v prostředí agent dostane na učení, než se zastaví.\nVíce kroků znamená více cviku a obvykle lepší strategii, dokud úlohu nezvládne.',
+      en: '**Training budget** — how many environment steps the agent gets to learn from before stopping.\nMore steps mean more practice and usually a better policy, up to the point where it has mastered the task.\n**SAC** is off-policy and far more sample-efficient than PPO, so its recommended budget is much smaller (it reuses past experience from its replay buffer) — the ★ here already reflects that when SAC is selected.',
+      cz: '**Tréninkový rozpočet** — kolik kroků v prostředí agent dostane na učení, než se zastaví.\nVíce kroků znamená více cviku a obvykle lepší strategii, dokud úlohu nezvládne.\n**SAC** je off-policy a mnohem úspornější na data než PPO, takže jeho doporučený rozpočet je výrazně menší (znovu využívá minulé zkušenosti z paměti) — ★ to při zvoleném SAC už zohledňuje.',
     },
     recommended: {
       en: 'Enough steps for the agent to master the task — easy games need only a little, harder ones far more (see the per-game note).',
@@ -949,6 +953,55 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
           + 'rozpočtu plně zvládnout. Čekejte pomalý, postupný pokrok a buďte trpěliví. (Trénink běží '
           + 'na stroji s GPU; tady je Spustit do té doby zakázané.)',
       },
+    },
+  },
+
+  // ── SAC settings (S5a — Soft Actor-Critic, continuous control) ────────────
+
+  sac_tau: {
+    general: {
+      en: '**Target-network update rate (τ).** SAC keeps a slow-moving "target" copy of its value network for stable learning. τ is how much the target drifts toward the live network each step.\nToo high → the target chases the live net and training wobbles. Too low → the target lags and learning crawls. The tiny default is almost always right.',
+      cz: '**Rychlost aktualizace cílové sítě (τ).** SAC si drží pomalu se měnící „cílovou“ kopii své hodnotové sítě pro stabilní učení. τ udává, jak moc se cíl každý krok posune k živé síti.\nPříliš vysoká → cíl honí živou síť a učení se rozkmitá. Příliš nízká → cíl zaostává a učení se vleče. Drobná výchozí hodnota je téměř vždy správně.',
+    },
+    recommended: {
+      en: 'The ★ default 0.005 is the standard SAC value — keep it unless you have a specific reason to change it.',
+      cz: 'Doporučená ★ výchozí hodnota 0,005 je standardní hodnota SAC — neměňte ji, pokud k tomu nemáte konkrétní důvod.',
+    },
+    range: '0.001 – 0.05',
+  },
+
+  sac_buffer_size: {
+    general: {
+      en: '**Replay buffer size.** SAC is *off-policy*: it stores past transitions (state, action, reward, next state) in a big buffer and re-learns from random samples of them, which is why it needs far fewer real steps than PPO.\nA bigger buffer remembers more varied experience (more stable) but uses more memory; a small one forgets old lessons quickly.',
+      cz: '**Velikost paměti přehrávání (replay buffer).** SAC je *off-policy*: minulé přechody (stav, akce, odměna, další stav) ukládá do velké paměti a znovu se učí z jejich náhodných vzorků, a právě proto potřebuje mnohem méně reálných kroků než PPO.\nVětší paměť si pamatuje pestřejší zkušenost (stabilnější), ale zabere víc paměti; malá rychle zapomíná staré lekce.',
+    },
+    recommended: {
+      en: 'The ★ default (1M transitions) is the standard for continuous control. Lower it only if memory is tight.',
+      cz: 'Doporučená ★ výchozí hodnota (1M přechodů) je standard pro spojité řízení. Snižte ji jen při nedostatku paměti.',
+    },
+    range: '100k – 1M',
+  },
+
+  sac_train_freq: {
+    general: {
+      en: '**Update frequency.** How many environment steps SAC collects before it runs a learning update (it does one gradient step per collected step, so the ratio stays balanced).\n1 = learn after every step (the most sample-efficient, the default). Larger values collect more before each update — a little faster in wall-clock, a little less sample-efficient.',
+      cz: '**Frekvence aktualizace.** Kolik kroků v prostředí SAC nasbírá, než spustí učící aktualizaci (na každý nasbíraný krok udělá jeden gradientní krok, takže poměr zůstává vyvážený).\n1 = učit se po každém kroku (nejúspornější na data, výchozí). Vyšší hodnoty nasbírají víc před každou aktualizací — o něco rychlejší v reálném čase, o něco méně úsporné na data.',
+    },
+    recommended: {
+      en: 'The ★ default 1 is the most sample-efficient and the usual choice. Raise it only to trade a little efficiency for throughput.',
+      cz: 'Doporučená ★ výchozí hodnota 1 je nejúspornější na data a obvyklá volba. Zvyšte ji jen pro výměnu trochy úspornosti za propustnost.',
+    },
+    range: '1 – 64',
+  },
+
+  sac_ent_coef: {
+    general: {
+      en: '**Entropy temperature.** SAC deliberately rewards the agent for staying a little unpredictable (high "entropy"), which keeps it exploring instead of locking onto one habit too early. This controls how strong that bonus is.\n**auto** lets SAC tune it automatically as training goes — this is SAC\'s signature trick and almost always the best choice. A fixed number pins it instead (higher = more random/exploratory, lower = more decisive).',
+      cz: '**Teplota entropie.** SAC záměrně odměňuje agenta za to, že zůstane trochu nepředvídatelný (vysoká „entropie“), což ho nutí dál zkoumat místo brzkého zaseknutí na jednom zvyku. Tohle řídí, jak silný ten bonus je.\n**auto** nechá SAC hodnotu ladit automaticky během tréninku — to je typický trik SAC a téměř vždy nejlepší volba. Pevné číslo ji místo toho zafixuje (vyšší = náhodnější/zkoumavější, nižší = rozhodnější).',
+    },
+    recommended: {
+      en: 'Leave it on **auto** (★) — self-tuned entropy is one of the main reasons SAC works so well. Pin a fixed value only to experiment.',
+      cz: 'Nechte na **auto** (★) — samoladěná entropie je jedním z hlavních důvodů, proč SAC funguje tak dobře. Pevnou hodnotu zafixujte jen kvůli experimentu.',
     },
   },
 

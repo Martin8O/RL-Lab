@@ -20,6 +20,7 @@ import type {
   QLearningMetrics,
   QTableFrame,
   HwStats,
+  SACHyperparams,
   SelfPlayHyperparams,
   TrainingMetrics,
   TrainingProgress,
@@ -94,6 +95,17 @@ const DEFAULT_AZ_PARAMS: AlphaZeroHyperparams = {
   actor_processes:   1,  // G6i: >1 parallelises self-play across GPU worker processes (★2 for chess)
 }
 
+// Matches the registry's ★ SAC block (S5a — off-policy continuous control; SB3's MuJoCo recipe). Snaps
+// from the registry on env switch like the other algorithms. ent_coef is a string ("auto" self-tunes).
+const DEFAULT_SAC_PARAMS: SACHyperparams = {
+  learning_rate: 3e-4,
+  gamma:         0.99,
+  tau:           0.005,
+  buffer_size:   1_000_000,
+  train_freq:    1,
+  ent_coef:      'auto',
+}
+
 // The run-result state that must NOT outlive its run: chart history, the latest stats frame, the
 // session-best, and every algorithm's curve. Cleared both between runs (clearMetrics) and when the
 // user switches game — otherwise a finished run's chart/stats/skill linger and get silently rescaled
@@ -113,6 +125,15 @@ const EMPTY_RUN_RESULTS = {
   lastMa:           null as MultiAgentMetrics | null,
 }
 
+// The ★ step budget for the active algorithm: SAC (off-policy, ~5–10× more sample-efficient) reaches a
+// strong policy in far fewer steps than PPO, so it carries its own much smaller per-env budget; every
+// other step-ladder algo (PPO) uses the env's default. Used to snap totalTimesteps on algo / env switch.
+function budgetFor(spec: EnvSpec | undefined, algo: Algo): number {
+  if (!spec) return 50_000
+  if (algo === 'sac' && spec.sac_total_timesteps) return spec.sac_total_timesteps
+  return spec.default_total_timesteps || 50_000
+}
+
 // Per-env defaults: when the user picks a different game, the sidebar params + step budget snap
 // to *that* env's ★ recommended values from the registry (LunarLander wants very different
 // settings than CartPole). Falls back to the previous value for any param the env doesn't define.
@@ -124,6 +145,7 @@ function envDefaults(
     qLearningParams: QLearningHyperparams
     selfPlayParams: SelfPlayHyperparams
     alphaZeroParams: AlphaZeroHyperparams
+    sacParams: SACHyperparams
     totalTimesteps: number
   },
 ): {
@@ -132,6 +154,7 @@ function envDefaults(
   qLearningParams: QLearningHyperparams
   selfPlayParams: SelfPlayHyperparams
   alphaZeroParams: AlphaZeroHyperparams
+  sacParams: SACHyperparams
   totalTimesteps: number
 } | null {
   if (!spec) return null
@@ -139,6 +162,7 @@ function envDefaults(
   const evo = spec.hyperparams?.neuroevolution ?? {}
   const ql = spec.hyperparams?.q_learning ?? {}
   const az = spec.hyperparams?.alphazero ?? {}
+  const sac = spec.hyperparams?.sac ?? {}
   const num = (key: string, block: Record<string, { recommended: number | string }>, fb: number) =>
     block[key] !== undefined ? Number(block[key].recommended) : fb
   return {
@@ -183,6 +207,16 @@ function envDefaults(
       iterations:        Math.round(num('iterations', az, prev.alphaZeroParams.iterations)),
       actor_processes:   Math.round(num('actor_processes', az, prev.alphaZeroParams.actor_processes)),
     },
+    // SAC block (S5a — continuous-Box envs). ent_coef is categorical ("auto"/numeric), so it preserves
+    // the recommended string rather than going through num(); SAC reuses the PPO totalTimesteps budget.
+    sacParams: {
+      learning_rate: num('learning_rate', sac, prev.sacParams.learning_rate),
+      gamma:         num('gamma', sac, prev.sacParams.gamma),
+      tau:           num('tau', sac, prev.sacParams.tau),
+      buffer_size:   Math.round(num('buffer_size', sac, prev.sacParams.buffer_size)),
+      train_freq:    Math.round(num('train_freq', sac, prev.sacParams.train_freq)),
+      ent_coef:      (sac.ent_coef?.recommended as string) ?? prev.sacParams.ent_coef,
+    },
     totalTimesteps: spec.default_total_timesteps || prev.totalTimesteps,
   }
 }
@@ -198,6 +232,7 @@ interface AppState {
   qLearningParams: QLearningHyperparams
   selfPlayParams:  SelfPlayHyperparams   // G7b-2: competitive self-play round schedule (simple_tag)
   alphaZeroParams: AlphaZeroHyperparams  // G6f: AlphaZero-lite board self-play knobs
+  sacParams:       SACHyperparams        // S5a: Soft Actor-Critic (off-policy continuous control)
   seed:            number
   totalTimesteps:  number
   emaAlpha:        number     // 1 = raw; 0.05 = heavy smoothing
@@ -257,6 +292,7 @@ interface AppState {
   setQLearningParams: (q: Partial<QLearningHyperparams>) => void
   setSelfPlayParams:  (s: Partial<SelfPlayHyperparams>) => void
   setAlphaZeroParams: (a: Partial<AlphaZeroHyperparams>) => void
+  setSacParams:       (s: Partial<SACHyperparams>)      => void
   setSeed:            (s: number)                       => void
   setTotalTimesteps:  (n: number)                       => void
   setEmaAlpha:        (a: number)                       => void
@@ -307,6 +343,7 @@ export const useAppStore = create<AppState>()(
       qLearningParams: DEFAULT_Q_PARAMS,
       selfPlayParams:  DEFAULT_SELF_PLAY_PARAMS,
       alphaZeroParams: DEFAULT_AZ_PARAMS,
+      sacParams:       DEFAULT_SAC_PARAMS,
       seed:            42,
       totalTimesteps:  50_000,
       emaAlpha:        0.3,
@@ -375,6 +412,11 @@ export const useAppStore = create<AppState>()(
         // linger and get rescaled under the new game. The env selector is disabled during a run, so
         // this only fires between runs; a no-op re-select (same id) keeps the current results.
         const cleared = selectedEnvId !== s.selectedEnvId ? EMPTY_RUN_RESULTS : {}
+        // Snap the step budget to the (possibly newly-snapped) algo's ★ for this env — SAC's budget is
+        // much smaller than PPO's, so picking a SAC env (or one where the algo snapped) shows SAC's ★, not
+        // PPO's. Overrides envDefaults' totalTimesteps (which is the PPO budget) when spec is known.
+        const effectiveAlgo = ((algoPatch as { algo?: Algo }).algo ?? s.algo)
+        const budgetPatch = spec ? { totalTimesteps: budgetFor(spec, effectiveAlgo) } : {}
         // Default the human's side to the board's first mover, so pressing Play without touching the
         // side picker gives you the opening move. Usually player 0, but OpenSpiel chess makes white =
         // player 1 the first mover (boardMeta.firstPlayer) — without this, picking chess + Play would
@@ -383,16 +425,25 @@ export const useAppStore = create<AppState>()(
           selectedEnvId !== s.selectedEnvId
             ? { boardSide: boardMetaFor(selectedEnvId)?.firstPlayer ?? 0 }
             : {}
-        return { selectedEnvId, ...(defaults ?? {}), ...algoPatch, ...cleared, ...sidePatch }
+        return { selectedEnvId, ...(defaults ?? {}), ...algoPatch, ...cleared, ...sidePatch, ...budgetPatch }
       }),
-      // Switching algorithm also jumps to the chart tab that algorithm feeds, so the chart
-      // never sits empty after a switch (PPO → Reward, neuroevolution → Fitness).
-      setAlgo:           (algo)           => set({ algo, activeTab: algo === 'neuroevolution' ? 'fitness' : 'reward' }),
+      // Switching algorithm also jumps to the chart tab that algorithm feeds, so the chart never sits
+      // empty after a switch (PPO → Reward, neuroevolution → Fitness), and re-snaps the step budget to the
+      // new algo's ★ (SAC's budget is far smaller than PPO's, so PPO↔SAC must not keep the other's 5M/500k).
+      setAlgo:           (algo)           => set((s) => {
+        const spec = s.envs.find((e) => e.id === s.selectedEnvId)
+        return {
+          algo,
+          activeTab: (algo === 'neuroevolution' ? 'fitness' : 'reward') as ChartTab,
+          totalTimesteps: spec ? budgetFor(spec, algo) : s.totalTimesteps,
+        }
+      }),
       setHyperparams:    (h)              => set((s) => ({ hyperparams: { ...s.hyperparams, ...h } })),
       setEvolutionParams:(e)              => set((s) => ({ evolutionParams: { ...s.evolutionParams, ...e } })),
       setQLearningParams:(q)              => set((s) => ({ qLearningParams: { ...s.qLearningParams, ...q } })),
       setSelfPlayParams: (sp)             => set((s) => ({ selfPlayParams: { ...s.selfPlayParams, ...sp } })),
       setAlphaZeroParams:(a)              => set((s) => ({ alphaZeroParams: { ...s.alphaZeroParams, ...a } })),
+      setSacParams:      (sp)             => set((s) => ({ sacParams: { ...s.sacParams, ...sp } })),
       setSeed:           (seed)           => set({ seed }),
       setTotalTimesteps: (n)              => set({ totalTimesteps: n }),
       setEmaAlpha:       (emaAlpha)       => set({ emaAlpha }),
@@ -576,6 +627,7 @@ export const useAppStore = create<AppState>()(
         qLearningParams: s.qLearningParams,
         selfPlayParams:  s.selfPlayParams,
         alphaZeroParams: s.alphaZeroParams,
+        sacParams:       s.sacParams,
         seed:            s.seed,
         totalTimesteps:  s.totalTimesteps,
         emaAlpha:        s.emaAlpha,

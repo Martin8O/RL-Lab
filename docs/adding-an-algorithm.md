@@ -1,11 +1,11 @@
 # Adding an algorithm
 
-> Living document (Phase F4). The dashboard ships **four** learning methods — PPO (gradient, via
+> Living document (Phase F4). The dashboard ships **five** learning methods — PPO (gradient, via
 > Stable-Baselines3), a custom **neuroevolution** (population/fitness/mutation), tabular **Q-learning**
-> (value-based, G2b), and **AlphaZero-lite** (CNN policy+value + neural-guided MCTS self-play, board games
-> only, G6f/ADR-055) — as **peer trainers** behind one manager (ADR-004/028). A fifth (DQN, SAC…) plugs
-> into the same seam. See also [`architecture.md`](architecture.md) and
-> [`adding-an-environment.md`](adding-an-environment.md).
+> (value-based, G2b), **AlphaZero-lite** (CNN policy+value + neural-guided MCTS self-play, board games
+> only, G6f/ADR-055), and **SAC** (off-policy continuous control, S5a) — as **peer trainers** behind one
+> manager (ADR-004/028). A sixth (DQN, TD3…) plugs into the same seam. See also
+> [`architecture.md`](architecture.md) and [`adding-an-environment.md`](adding-an-environment.md).
 
 ## The peer-trainer contract
 
@@ -112,6 +112,35 @@ The fourth trainer, `services/trainer_az.py`, is **board-only** and shows two wa
   forwards, which the CPU runs faster than the GPU (a GPU only pays off with **batched** self-play + a bigger
   net — measured 6–18× at batch 64–256). That batched-GPU engine is the **G6g (chess) foundation**, not part
   of this lite version.
+
+## Worked example — SAC (S5a, ADR-067)
+
+The fifth trainer, `services/trainer_sac.py`, is the first **off-policy** method and shows where the
+shape stretches without forking the contract:
+
+- **No rollout boundary ⇒ a step-interval cadence.** PPO emits a metrics frame per rollout; SAC collects
+  single transitions into a replay buffer and updates continuously. So the metrics callback emits on a
+  **step interval** (`_METRICS_INTERVAL_STEPS`) — snapshot + a fresh decoupled preview ride the same
+  interval — and the shared ~1 Hz `_progress_ticker` (reused verbatim from `trainer_ppo`) keeps the live
+  stats + reward curve smooth between them. No new frame: SAC emits the **standard `metrics` + `progress`**
+  and adds `sac: ['reward', 'loss']` to `ALGO_CHART_TABS` (the Loss tab shows SAC's `train/critic_loss`).
+- **Decoupled preview = a CPU save/load copy of the policy.** SAC's actor (squashed-Gaussian MLP) isn't
+  the PPO `mlp_extractor.policy_net` + `action_net`, so the numpy forward doesn't apply; instead
+  `_build_sac_predict` round-trips `model.policy` through SB3's `save`/`load` into an isolated CPU policy
+  and calls `predict(deterministic=True)` (the CnnPolicy preview's trick, ADR-019) — never the live model.
+- **Raw obs/rewards — explicitly NOT VecNormalize (the one cross-algorithm coordination).** Unlike the PPO
+  MuJoCo path (G5c), SAC does not wrap the env in `VecNormalize`: reward normalization is on-policy-shaped
+  (a running return scaling) and would drift against a replay buffer of rewards stamped with old stats, and
+  SAC's standard recipe needs neither. So `ep_rew_mean` stays raw and `_sac_predict` (AI-play) applies no
+  normalizer — a PPO-vs-SAC comparison on one robot is apples-to-apples on the same raw scale.
+- **Data + gating (step 5).** `sac` is in `supported_algos` only on the continuous-`Box` envs (MuJoCo +
+  BipedalWalker + Pendulum + MountainCarContinuous); its `hyperparams` block (lr/γ/τ/buffer/train_freq +
+  the `auto`/fixed `ent_coef` categorical) rides on every env but is exposed only there — the same "block
+  on all, exposed where listed" pattern as the `q_learning` block. SAC reuses the PPO `total_timesteps`
+  step budget (so the sidebar shows the Total-Steps ladder for `ppo` **and** `sac`); device is `"cpu"`
+  — its per-step gradient updates are tiny batch-256 MLP forwards that the CPU runs faster than a
+  latency-bound GPU shuttle (measured: HalfCheetah CPU 163 vs CUDA 120 steps/s, the same ADR-056 result
+  PPO's MlpPolicy has), so `api/device.trainsOnGpu` reads CPU for SAC too.
 
 ## What you get for free
 

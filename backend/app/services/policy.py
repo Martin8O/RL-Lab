@@ -35,6 +35,8 @@ def predict_from_checkpoint(loaded: LoadedCheckpoint) -> PredictFn:
     try:
         if loaded.config.algo == "ppo":
             return _ppo_predict(loaded.blob)
+        if loaded.config.algo == "sac":
+            return _sac_predict(loaded.blob)
         if loaded.config.algo == "q_learning":
             return _q_learning_predict(loaded.blob)
         return _evolution_predict(loaded.blob)
@@ -71,6 +73,25 @@ def _ppo_predict(blob: bytes) -> PredictFn:
         if is_box:  # continuous: the deterministic action is the Gaussian mean, clipped to bounds
             return np.clip(arr.astype(np.float32).reshape(-1), low, high)
         return int(arr.flatten()[0])
+
+    return predict
+
+
+def _sac_predict(blob: bytes) -> PredictFn:
+    """Deterministic SAC inference for AI-play (S5a). SAC is continuous-action only, so the action is
+    always the actor's deterministic mean, clipped into the env's box bounds. Unlike the PPO loader,
+    there is no VecNormalize to apply: SAC trains on raw obs/rewards, so the saved blob carries no
+    running stats and play feeds the policy raw obs exactly as training did."""
+    import numpy as np
+    from stable_baselines3 import SAC
+
+    model = SAC.load(BytesIO(blob), device="cpu")  # env not needed for inference
+    low = np.asarray(getattr(model.action_space, "low", -1.0), dtype=np.float32)
+    high = np.asarray(getattr(model.action_space, "high", 1.0), dtype=np.float32)
+
+    def predict(obs: object) -> Any:
+        action, _ = model.predict(np.asarray(obs), deterministic=True)
+        return np.clip(np.asarray(action, dtype=np.float32).reshape(-1), low, high)
 
     return predict
 

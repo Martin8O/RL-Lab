@@ -112,6 +112,12 @@ class EnvSpec(BaseModel):
     # train fine without it) and the image path (a CnnPolicy already scales pixels /255). ``ep_rew_mean``
     # stays raw regardless (the Monitor sits inside VecNormalize), so the skill meter is unchanged.
     normalize_obs: bool = False
+    # SAC's ★ recommended step budget (S5a), separate from ``default_total_timesteps`` (the PPO budget the
+    # sidebar shows for PPO). SAC is off-policy and ~5–10× more sample-efficient, so it reaches a strong
+    # policy in far fewer steps (e.g. BipedalWalker ~500k vs PPO's 5M) — running the PPO budget on SAC would
+    # be needlessly long. None ⇒ this env doesn't offer SAC (the sidebar falls back to the PPO budget).
+    # Set only on the continuous-Box SAC envs; drives the sidebar step ladder + ★ when SAC is the algo.
+    sac_total_timesteps: int | None = None
 
 
 _REGISTRY: dict[str, EnvSpec] = {}
@@ -143,6 +149,11 @@ def _standard_hyperparams(q_episodes: int = 5_000) -> dict[str, dict[str, Hyperp
     ``q_learning`` in ``supported_algos`` (Toy Text, whose discrete obs is the table's native
     input). ``q_episodes`` is that env's ★ recommended episode budget (Q-learning's "Total Steps"):
     a small deterministic maze wants a few thousand, Taxi's 500 states want far more.
+
+    The ``sac`` block (S5a — Soft Actor-Critic, off-policy continuous control) is likewise included
+    on every env but only *exposed* where the env lists ``sac`` in ``supported_algos`` (the
+    continuous-``Box`` envs: MuJoCo + BipedalWalker + Pendulum + MountainCarContinuous). Its ★ values
+    are env-independent (SB3's MuJoCo recipe), so it takes no per-env argument.
     """
     return {
         "ppo": {
@@ -236,6 +247,38 @@ def _standard_hyperparams(q_episodes: int = 5_000) -> dict[str, dict[str, Hyperp
             "episodes": HyperparamDef(  # the training budget (this algorithm's "Total Steps")
                 type="int", default=q_episodes, recommended=q_episodes,
                 min=500, max=50_000, step=500,
+            ),
+        },
+        # SAC (S5a) — off-policy continuous control. Exposed only on the continuous-Box envs (gated by
+        # supported_algos). Defaults = SB3's MuJoCo recipe. learning_rate is a gradient step (shares the
+        # PPO lr slider's log scale); tau is the target soft-update; buffer_size is the replay window;
+        # train_freq is env-steps-per-update (gradient_steps tracks it in the trainer); ent_coef is the
+        # entropy temperature ("auto" self-tunes — the recommended default — else a pinned numeric).
+        # batch_size / learning_starts / gradient_steps are fixed (advanced, not sliders).
+        "sac": {
+            "learning_rate": HyperparamDef(
+                type="float", default=3e-4, recommended=3e-4,
+                min=1e-5, max=1e-2,
+            ),
+            "gamma": HyperparamDef(
+                type="float", default=0.99, recommended=0.99,
+                min=0.9, max=0.9999, step=0.001,
+            ),
+            "tau": HyperparamDef(
+                type="float", default=0.005, recommended=0.005,
+                min=0.001, max=0.05, step=0.001,
+            ),
+            "buffer_size": HyperparamDef(
+                type="int", default=1_000_000, recommended=1_000_000,
+                min=100_000, max=1_000_000, step=100_000,
+            ),
+            "train_freq": HyperparamDef(
+                type="int", default=1, recommended=1,
+                min=1, max=64, step=1,
+            ),
+            "ent_coef": HyperparamDef(
+                type="categorical", default="auto", recommended="auto",
+                choices=["auto", "0.1", "0.2"],
             ),
         },
     }
@@ -390,7 +433,7 @@ def _bipedal_spec(
         family="box2d",
         obs_type="vector",
         action_space="box",  # continuous Box(4): four leg-joint torques — the G1b seam
-        supported_algos=["ppo"],  # PPO-only (evolution opted out as data — hard 4-DoF locomotion)
+        supported_algos=["ppo", "sac"],  # PPO + SAC (S5a); evolution opted out as data (hard 4-DoF)
         hyperparams=_standard_hyperparams(),
         make_kwargs=make_kwargs,
         solved_score=300.0,  # BipedalWalker-v3 reward_threshold (walk smoothly to the far end)
@@ -614,7 +657,7 @@ register(
         family="classic_control",
         obs_type="vector",
         action_space="box",
-        supported_algos=["ppo", "neuroevolution"],
+        supported_algos=["ppo", "neuroevolution", "sac"],  # sac: off-policy continuous control (S5a)
         hyperparams=_standard_hyperparams(),
         # Pendulum-v1 has NO official gym reward_threshold (verified: gym.spec(...).reward_threshold
         # is None). Reward is a per-step cost (angle² + 0.1·speed² + 0.001·torque²), so the return is
@@ -654,7 +697,7 @@ register(
         family="classic_control",
         obs_type="vector",
         action_space="box",
-        supported_algos=["ppo", "neuroevolution"],
+        supported_algos=["ppo", "neuroevolution", "sac"],  # sac: off-policy continuous control (S5a)
         hyperparams=_standard_hyperparams(),
         solved_score=90.0,  # MountainCarContinuous-v0 reward_threshold (reach the flag = +100 bonus)
         # 0% reference: a do-nothing agent scores 0.0 (no force cost, never solves); the reward only
@@ -1687,7 +1730,7 @@ def _mujoco_spec(
         family="mujoco",
         obs_type="vector",  # a fixed-length float state → MlpPolicy (no CnnPolicy); server-JPEG render
         action_space="box",  # continuous per-joint torques in [-1, 1] — the G1b/G3b continuous-box seam
-        supported_algos=["ppo"],  # PPO-only (evolution opted out as data — hard multi-joint locomotion)
+        supported_algos=["ppo", "sac"],  # PPO + SAC (S5a — the algo that shines on MuJoCo); evolution opted out
         hyperparams=_standard_hyperparams(),
         solved_score=solved_score,
         min_score=min_score,  # venv-measured idle (zero-torque) baseline → a do-nothing reads ~0% (ADR-026)
@@ -2081,3 +2124,29 @@ for _slow_id in ("hopper", "walker2d", "humanoid"):
     _slow_spec = get_env(_slow_id)
     if _slow_spec is not None:
         _slow_spec.human_play_slowdown = 2.5
+
+
+# SAC (S5a) is off-policy and ~5–10× more sample-efficient than PPO, so its ★ recommended budget is much
+# smaller than each env's PPO ``default_total_timesteps`` (e.g. Humanoid 2M vs PPO 5M, BipedalWalker 500k
+# vs PPO 5M). Set post-construction (like human_play_slowdown above) on every SAC-supporting env so the
+# sidebar's step ladder + ★ reflect SAC's real budget when SAC is the chosen algorithm — without the
+# misleading "5M steps" the PPO budget would otherwise suggest for an off-policy run.
+_SAC_BUDGETS = {
+    "pendulum": 50_000,
+    "mountaincarcontinuous": 50_000,
+    "reacher": 50_000,
+    "bipedalwalker": 500_000,
+    "bipedalwalkerhardcore": 2_000_000,
+    # Single-body locomotion (1–6 joints) — SAC reaches a strong gait in ~500k (half the PPO budget).
+    "hopper": 500_000,
+    "walker2d": 500_000,
+    "halfcheetah": 500_000,
+    "swimmer": 500_000,
+    # Heavier robots need more even for SAC: Ant (8 joints) ~1M, Humanoid (17 joints) ~2M.
+    "ant": 1_000_000,
+    "humanoid": 2_000_000,
+}
+for _sac_id, _sac_budget in _SAC_BUDGETS.items():
+    _sac_spec = get_env(_sac_id)
+    if _sac_spec is not None:
+        _sac_spec.sac_total_timesteps = _sac_budget

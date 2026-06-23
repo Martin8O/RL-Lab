@@ -35,6 +35,10 @@ export interface EnvSpec {
   min_score: number
   /** Recommended PPO training budget (the ★ default); the sidebar builds its step ladder from it. */
   default_total_timesteps: number
+  /** SAC's ★ recommended budget (S5a) — much smaller than the PPO budget (SAC is off-policy and far more
+   *  sample-efficient). The sidebar uses this for the step ladder + ★ when SAC is the algo; null/absent ⇒
+   *  the env doesn't offer SAC, so the PPO budget is used. */
+  sac_total_timesteps?: number | null
   /** Play episodes run this many times longer than training (so a person has time to play). 1 = same. */
   play_step_scale: number
   /** Whether the play skill-meter floor is widened by play_step_scale. True for step-penalty envs
@@ -75,7 +79,7 @@ export interface SystemInfo {
 // --- Training (B2) ---------------------------------------------------------
 // Mirrors backend/app/schemas/training.py — keep both sides in sync.
 
-export type Algo = 'ppo' | 'neuroevolution' | 'q_learning' | 'alphazero'
+export type Algo = 'ppo' | 'neuroevolution' | 'q_learning' | 'alphazero' | 'sac'
 export type TrainState =
   | 'idle'
   | 'running'
@@ -141,6 +145,23 @@ export interface AlphaZeroHyperparams {
   actor_processes: number
 }
 
+/** Soft Actor-Critic knobs (S5a — off-policy continuous control). SAC trains on raw obs/rewards (no
+ *  VecNormalize), so ep_rew_mean + the skill meter read exactly like PPO's. `ent_coef` is a string:
+ *  "auto" self-tunes the entropy temperature (the recommended default) or a numeric string pins it.
+ *  batch_size / learning_starts / gradient_steps are fixed backend defaults (not surfaced here). */
+export interface SACHyperparams {
+  learning_rate: number
+  gamma: number
+  /** Target-network soft-update coefficient (Polyak averaging). */
+  tau: number
+  /** Replay-buffer capacity (past transitions to learn from). */
+  buffer_size: number
+  /** Env steps collected between update phases (gradient_steps tracks this backend-side). */
+  train_freq: number
+  /** Entropy temperature: "auto" (self-tuned, recommended) or a numeric string e.g. "0.1". */
+  ent_coef: string
+}
+
 export interface TrainConfig {
   env_id: string
   algo: Algo
@@ -155,6 +176,8 @@ export interface TrainConfig {
   self_play?: SelfPlayHyperparams | null
   /** Present only for AlphaZero-lite board runs (algo "alphazero"); null/omitted otherwise. */
   alphazero?: AlphaZeroHyperparams | null
+  /** Present only for Soft Actor-Critic runs (algo "sac", S5a); null/omitted otherwise. */
+  sac?: SACHyperparams | null
 }
 
 /** WS frame: {type:"metrics", ...} pushed once per PPO rollout. */

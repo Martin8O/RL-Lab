@@ -258,7 +258,9 @@ class TrainingManager:
         # MaskablePPO *board* trainer (G6b) — hence the PPO guard excludes them; AZ is always a board game
         # but computes its own schedule, so it's added explicitly.
         if config.algo == "alphazero" or (
-            config.algo == "ppo" and not is_competitive_ma(spec) and not is_board_game(spec)
+            config.algo in ("ppo", "sac")
+            and not is_competitive_ma(spec)
+            and not is_board_game(spec)
         ):
             config = config.model_copy(
                 update={"total_timesteps": loaded.meta.timesteps + config.total_timesteps}
@@ -357,6 +359,22 @@ class TrainingManager:
                     control,
                     self._emit_q_learning,
                     self._emit_qtable,
+                    self._publish_predict,
+                    self._on_snapshot,
+                    resume,
+                )
+            elif config.algo == "sac":
+                # Soft Actor-Critic (S5a): the off-policy continuous-control peer trainer. Reuses the
+                # exact PPO frames (metrics + progress), preview publish and snapshot — only off-policy
+                # and gated to continuous-Box envs (MuJoCo / BipedalWalker / Pendulum / MountainCarCont).
+                from app.services.trainer_sac import train_sac  # lazy: loads torch/SB3
+
+                terminal = train_sac(
+                    config,
+                    gym_id,
+                    control,
+                    self._emit_metrics,
+                    self._emit_progress,
                     self._publish_predict,
                     self._on_snapshot,
                     resume,

@@ -8,7 +8,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-Algo = Literal["ppo", "neuroevolution", "q_learning", "alphazero"]
+Algo = Literal["ppo", "neuroevolution", "q_learning", "alphazero", "sac"]
 TrainState = Literal[
     "idle", "running", "paused", "stopping", "stopped", "finished", "error"
 ]
@@ -141,12 +141,41 @@ class QLearningHyperparams(BaseModel):
     episodes: int = 5_000
 
 
+class SACHyperparams(BaseModel):
+    """Tunable Soft Actor-Critic knobs (the 5th algorithm, S5a — off-policy continuous control).
+
+    SAC is **off-policy**: it fills a replay buffer of past transitions and learns twin soft-Q
+    critics + a squashed-Gaussian actor with entropy regularization — far more sample-efficient than
+    PPO on the high-DoF MuJoCo robots (it actually *solves* Humanoid). Gated to continuous-action
+    (``Box``) envs only (MuJoCo + BipedalWalker + Pendulum + MountainCarContinuous). Trains on raw
+    obs/rewards (NOT VecNormalize — that running reward scaling is on-policy-shaped and would drift
+    against a replay buffer; the standard SAC recipe needs neither), so ``ep_rew_mean`` stays raw and
+    the ``[min_score, solved_score]`` skill meter reads exactly like PPO's.
+
+    The defaults are SB3's MuJoCo recipe. ``ent_coef`` is a string: ``"auto"`` lets SAC tune the
+    entropy temperature itself (the recommended default, almost always best), or a numeric string
+    (e.g. ``"0.1"``) pins it. ``batch_size`` / ``learning_starts`` / ``gradient_steps`` are fixed
+    (advanced knobs, not sliders, like PPO's ``n_steps``/``n_epochs``); ``gradient_steps`` tracks
+    ``train_freq`` in the trainer so the update:collection ratio stays 1:1.
+    """
+
+    learning_rate: float = 3e-4
+    gamma: float = 0.99
+    tau: float = 0.005  # target-network soft-update coefficient (Polyak averaging)
+    buffer_size: int = 1_000_000  # replay-buffer capacity (past transitions to learn from)
+    batch_size: int = 256  # minibatch sampled from the buffer per gradient step (fixed, not a slider)
+    learning_starts: int = 10_000  # random warmup steps before the first gradient update (fixed)
+    train_freq: int = 1  # env steps collected between update phases; gradient_steps tracks this
+    ent_coef: str = "auto"  # "auto" = self-tuned entropy temperature; a numeric string pins it
+
+
 class TrainConfig(BaseModel):
     """Full, reproducible description of a training run (echoed back in status).
 
     ``hyperparams`` configures PPO; ``evolution`` configures neuroevolution; ``q_learning``
-    configures tabular Q-learning; ``alphazero`` configures the AlphaZero-lite board trainer.
-    Exactly one applies, selected by ``algo``; the others stay None so the recorded config is clean.
+    configures tabular Q-learning; ``alphazero`` configures the AlphaZero-lite board trainer;
+    ``sac`` configures Soft Actor-Critic. Exactly one applies, selected by ``algo``; the others
+    stay None so the recorded config is clean.
     """
 
     env_id: str = "cartpole"
@@ -162,6 +191,9 @@ class TrainConfig(BaseModel):
     # Present only for AlphaZero-lite board runs (algo=="alphazero", G6f); None otherwise. The budget
     # is iterations × games_per_iter self-play games, so total_timesteps is set to match by the client.
     alphazero: AlphaZeroHyperparams | None = None
+    # Present only for Soft Actor-Critic runs (algo=="sac", S5a); None otherwise. SAC reuses the PPO
+    # total_timesteps budget (it runs that many env steps) — only the param surface differs.
+    sac: SACHyperparams | None = None
 
 
 class TrainingMetrics(BaseModel):
