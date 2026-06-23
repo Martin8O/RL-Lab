@@ -218,6 +218,27 @@ const ANT_KEYMAP: PlayKeymap = {
   idleAction: 0,
 }
 
+// Humanoid — Box(17): [abdomen_y, abdomen_z, abdomen_x, right_hip_x, right_hip_z, right_hip_y,
+// right_knee, left_hip_x, left_hip_z, left_hip_y, left_knee, right_shoulder1, right_shoulder2,
+// right_elbow, left_shoulder1, left_shoulder2, left_elbow]. Seventeen joints are far too many to
+// drive by hand — that is the whole point — so this maps only the two main leg joints per leg: the
+// forward hip (right_hip_y idx 5, left_hip_y idx 9) and the knee (right idx 6, left idx 10). The
+// abdomen, side hips, shoulders and elbows stay relaxed (0). Native torques are in [-0.4, 0.4], so
+// the backend clips these ±1 keys to ±0.4 (full available torque). It will topple within seconds.
+const HUMANOID_KEYMAP: PlayKeymap = {
+  bindings: [
+    { keys: ['ArrowLeft'], action: [0, 0, 0, 0, 0, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] }, // right hip (forward)
+    { keys: ['ArrowRight'], action: [0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] },
+    { keys: ['ArrowUp'], action: [0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] }, // right knee
+    { keys: ['ArrowDown'], action: [0, 0, 0, 0, 0, 0, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] },
+    { keys: ['a', 'A'], action: [0, 0, 0, 0, 0, 0, 0, 0, 0, -1, 0, 0, 0, 0, 0, 0, 0] }, // left hip (forward)
+    { keys: ['d', 'D'], action: [0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0] },
+    { keys: ['w', 'W'], action: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0] }, // left knee
+    { keys: ['s', 'S'], action: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -1, 0, 0, 0, 0, 0, 0] },
+  ],
+  idleAction: 0,
+}
+
 export const PLAY_KEYMAPS: Record<string, PlayKeymap> = {
   // CartPole: 0 = push left, 1 = push right. No idle action — the cart always moves.
   cartpole: {
@@ -285,6 +306,7 @@ export const PLAY_KEYMAPS: Record<string, PlayKeymap> = {
   walker2d: WALKER2D_KEYMAP,
   halfcheetah: HALFCHEETAH_KEYMAP,
   ant: ANT_KEYMAP,
+  humanoid: HUMANOID_KEYMAP,
   // Toy Text grid-worlds — turn-based: one move per key press (see FROZENLAKE_KEYMAP).
   frozenlake: FROZENLAKE_KEYMAP,
   frozenlake_noslip: FROZENLAKE_KEYMAP,

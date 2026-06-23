@@ -70,9 +70,10 @@ const BIPEDAL_TIPS: Bilingual = {
     + '„Sledovat AI“.',
 }
 
-// MuJoCo (G5a) — shared "how to play" tip for the locomotion robots (Hopper / Walker2d /
-// HalfCheetah / Ant). They all face the same difficulty: many continuous joints to coordinate by
-// hand, which is the whole reason an AI is trained for them. Reacher and Swimmer have their own tips.
+// MuJoCo (G5a / G5b) — shared "how to play" tip for the locomotion robots (Hopper / Walker2d /
+// HalfCheetah / Ant / Humanoid). They all face the same difficulty: many continuous joints to
+// coordinate by hand, which is the whole reason an AI is trained for them. Reacher and Swimmer have
+// their own tips.
 const MUJOCO_WALK_TIP: Bilingual = {
   en: 'Steering several leg joints at once is genuinely hard by hand — which is exactly why an AI is '
     + 'trained for these. Try to find a rhythm: push and release the joints in a repeating pattern '
@@ -508,10 +509,11 @@ export const PLAY_GUIDES: Record<string, PlayGuide> = {
     },
   },
 
-  // ── MuJoCo (G5a) — continuous per-joint torque control ──────────────────────────────────────
-  // Shared locomotion tip for Hopper / Walker2d / HalfCheetah / Ant (the per-env goal + controls
-  // differ). The point these make pedagogically: steering many joints by hand is near-impossible,
-  // which is exactly why an AI is trained for it. Reacher and Swimmer get their own tips below.
+  // ── MuJoCo (G5a / G5b) — continuous per-joint torque control ───────────────────────────────
+  // Shared locomotion tip for Hopper / Walker2d / HalfCheetah / Ant / Humanoid (the per-env goal +
+  // controls differ). The point these make pedagogically: steering many joints by hand is
+  // near-impossible, which is exactly why an AI is trained for it. Reacher and Swimmer get their own
+  // tips below.
   hopper: {
     goal: {
       en: 'Make the one-legged robot hop forward (to the right) as far as you can without toppling '
@@ -591,6 +593,30 @@ export const PLAY_GUIDES: Record<string, PlayGuide> = {
       { keys: 'A / D', action: { en: 'Leg 3 — hip', cz: 'Noha 3 — kyčel' } },
       { keys: 'W / S', action: { en: 'Leg 4 — hip', cz: 'Noha 4 — kyčel' } },
       { keys: '(release)', action: { en: 'No torque (the ankles stay relaxed)', cz: 'Bez momentu (kotníky zůstávají uvolněné)' } },
+    ],
+    tips: MUJOCO_WALK_TIP,
+  },
+
+  humanoid: {
+    goal: {
+      en: 'Walk the 3D humanoid forward (to the right) as far as you can without falling. With '
+        + 'seventeen joints this is the hardest robot in the family — far too many to steer by hand — '
+        + 'so you drive just the forward hip and knee of each leg; the abdomen, arms and side hips stay '
+        + 'relaxed. Forward progress and staying upright earn reward, a fall ends the run. A strong run '
+        + 'scores into the thousands (around +5000 is "solved"); the episode ends on a fall or after '
+        + '1000 steps.',
+      cz: 'Doveďte 3D humanoida vpřed (doprava) co nejdál, aniž by upadl. Se sedmnácti klouby je to '
+        + 'nejtěžší robot rodiny — na ruční ovládání jich je příliš mnoho — takže řídíte jen přední '
+        + 'kyčel a koleno každé nohy; břicho, paže a boční kyčle zůstávají uvolněné. Postup vpřed a '
+        + 'udržení vzpřímené polohy dávají odměnu, pád běh ukončí. Silný běh dosáhne tisíců (kolem '
+        + '+5000 je „vyřešeno“); epizoda končí pádem nebo po 1000 krocích.',
+    },
+    controls: [
+      { keys: '← / →', action: { en: 'Right leg — hip', cz: 'Pravá noha — kyčel' } },
+      { keys: '↑ / ↓', action: { en: 'Right leg — knee', cz: 'Pravá noha — koleno' } },
+      { keys: 'A / D', action: { en: 'Left leg — hip', cz: 'Levá noha — kyčel' } },
+      { keys: 'W / S', action: { en: 'Left leg — knee', cz: 'Levá noha — koleno' } },
+      { keys: '(release)', action: { en: 'No torque (arms and abdomen stay relaxed)', cz: 'Bez momentu (paže a břicho zůstávají uvolněné)' } },
     ],
     tips: MUJOCO_WALK_TIP,
   },

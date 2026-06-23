@@ -1752,6 +1752,26 @@ _MUJOCO_GAMES: list[
      "s fyzikou MuJoCo se stavem o 8 číslech a dvěma spojitými momenty v kloubech. Odměnou je "
      "rychlost vpřed minus malá cena za námahu, takže dobrý plavecký rytmus — střídání kloubů v "
      "pravý čas — dosáhne kolem +360."),
+    # The 7th MuJoCo robot — deliberately skipped in G5a as "heavy" (G5b-Humanoid). Same data-only
+    # family seam, just the hardest member: a huge 348-number state and 17 continuous joint torques.
+    # solved_score 5000 (Humanoid-v5 has no gym reward_threshold); min_score is the venv-measured
+    # zero-torque idle return (≈198 over ~40 steps of healthy bonus before it topples → round 200,
+    # ADR-026). A 5M-step ★ budget: one of the toughest continuous-control tasks for PPO, which may
+    # only start to master it (SAC/TD3 — a future algorithm — suit it better). Native action bounds
+    # are Box(-0.4, 0.4), not the [-1, 1] of the other six (the play path clips ±1 keys to ±0.4).
+    ("humanoid", "Humanoid-v5", "Humanoid-v5", "advanced", 200.0, 5000.0, 5_000_000, 1, False,
+     "Teach a 3D humanoid robot — a torso with two arms and two legs — to walk forward as far as it "
+     "can without falling. The hardest robot in the MuJoCo family: a huge 348-number state and "
+     "seventeen continuous joint torques (abdomen, hips, knees, shoulders and elbows). Forward "
+     "progress and staying upright earn reward, a fall ends the run. This is one of the toughest "
+     "continuous-control tasks, so PPO needs millions of steps and may only start to master it — a "
+     "strong run scores into the thousands (around +5000 here counts as 'solved').",
+     "Naučte 3D humanoidního robota — trup se dvěma pažemi a dvěma nohama — chodit vpřed co nejdál, "
+     "aniž by upadl. Nejtěžší robot rodiny MuJoCo: obrovský stav o 348 číslech a sedmnáct spojitých "
+     "momentů v kloubech (břicho, kyčle, kolena, ramena a lokty). Postup vpřed a udržení vzpřímené "
+     "polohy dávají odměnu, pád běh ukončí. Je to jedna z nejnáročnějších úloh spojitého řízení, "
+     "takže PPO potřebuje miliony kroků a možná ji teprve začne zvládat — silný běh dosáhne tisíců "
+     "(kolem +5000 zde znamená „vyřešeno“)."),
 ]
 
 for _mj_row in _MUJOCO_GAMES:
@@ -2039,15 +2059,15 @@ register(
     )
 )
 
-# Hopper and Walker2d render at 125 fps and fall in ~1 s, so even with human play capped at the 30 fps
-# frame rate the topple is over almost instantly. A MODEST slow-down lets a beginner actually see the
-# robot move and fall (≈2.5× → ~10–15 fps, ~15 s) — the earlier 8× overshot into an unplayably choppy
-# ~3.5 fps slideshow. These are high-DoF robots (3 and 6 continuous joints): they are not really
+# Hopper, Walker2d and Humanoid render at 125 fps and topple in ~1 s, so even with human play capped at
+# the 30 fps frame rate the fall is over almost instantly. A MODEST slow-down lets a beginner actually see
+# the robot move and fall (≈2.5× → ~10–15 fps, ~15 s) — the earlier 8× overshot into an unplayably choppy
+# ~3.5 fps slideshow. These are high-DoF robots (3, 6 and 17 continuous joints): they are not really
 # keyboard-playable at any pacing, so Play is just a quick "feel how hard this is" and the real payoff
 # is watching the trained AI (the play guide says so). The other MuJoCo envs already run slow enough
 # (20–50 fps) and never fall this fast, so they keep the default 1.0. Set post-construction (a single
-# data tweak on two of six rows) rather than threading a mostly-1.0 column through _MUJOCO_GAMES.
-for _slow_id in ("hopper", "walker2d"):
+# data tweak on three of seven rows) rather than threading a mostly-1.0 column through _MUJOCO_GAMES.
+for _slow_id in ("hopper", "walker2d", "humanoid"):
     _slow_spec = get_env(_slow_id)
     if _slow_spec is not None:
         _slow_spec.human_play_slowdown = 2.5

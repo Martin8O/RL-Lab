@@ -326,6 +326,7 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
       ant: MUJOCO_ALGO,
       reacher: MUJOCO_ALGO,
       swimmer: MUJOCO_ALGO,
+      humanoid: MUJOCO_ALGO,
       tictactoe: {
         en: 'Both learn Tic-Tac-Toe. **PPO** learns by playing the built-in search AI (its teacher) and reaches near-perfect, always-drawing play. **AlphaZero** learns purely by **playing itself**, with look-ahead search guiding every move — on this tiny game both reach the draw ceiling, but AlphaZero is the more powerful method and a fun side-by-side comparison. (AlphaZero now trains on the GPU, playing many self-play games in parallel.)',
         cz: 'Piškvorky se naučí obě. **PPO** se učí hrou proti vestavěné prohledávací AI (svému učiteli) a dosáhne téměř dokonalé, vždy remízující hry. **AlphaZero** se učí čistě **hrou sám proti sobě**, kde každý tah řídí prohledávání dopředu — u téhle drobné hry dosáhnou obě remízového stropu, ale AlphaZero je silnější metoda a pěkné srovnání vedle sebe. (AlphaZero teď trénuje na GPU a hraje mnoho self-play partií najednou.)',
@@ -434,6 +435,7 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
       ant: MUJOCO_LR,
       reacher: MUJOCO_LR,
       swimmer: MUJOCO_LR,
+      humanoid: MUJOCO_LR,
     },
   },
 
@@ -526,6 +528,7 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
       ant: MUJOCO_GAMMA,
       reacher: MUJOCO_GAMMA,
       swimmer: MUJOCO_GAMMA,
+      humanoid: MUJOCO_GAMMA,
     },
   },
 
@@ -582,6 +585,7 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
       ant: MUJOCO_CLIP,
       reacher: MUJOCO_CLIP,
       swimmer: MUJOCO_CLIP,
+      humanoid: MUJOCO_CLIP,
     },
   },
 
@@ -674,6 +678,7 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
       ant: MUJOCO_ENT,
       reacher: MUJOCO_ENT,
       swimmer: MUJOCO_ENT,
+      humanoid: MUJOCO_ENT,
     },
   },
 
@@ -934,6 +939,16 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
       ant: MUJOCO_STEPS,
       reacher: MUJOCO_STEPS,
       swimmer: MUJOCO_STEPS,
+      humanoid: {
+        en: 'Humanoid is the hardest task here — seventeen joints to coordinate — so it carries the '
+          + 'largest ★ budget (about 5 million steps), and even that only gets PPO started; it may not '
+          + 'fully master walking at a practical budget. Expect slow, gradual progress and be patient. '
+          + '(Training runs on a GPU machine; here Run is disabled until then.)',
+        cz: 'Humanoid je tady nejtěžší úloha — sedmnáct kloubů ke koordinaci — takže nese největší '
+          + 'rozpočet ★ (asi 5 milionů kroků) a ani ten PPO jen rozjede; chůzi nemusí při praktickém '
+          + 'rozpočtu plně zvládnout. Čekejte pomalý, postupný pokrok a buďte trpěliví. (Trénink běží '
+          + 'na stroji s GPU; tady je Spustit do té doby zakázané.)',
+      },
     },
   },
 
@@ -1418,11 +1433,13 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
   // curve means rather than a tunable, so most omit recommended/range.
 
   // The gold "Goal" line on the reward chart (G6c follow-up) — what "solved" means + why a curve can
-  // sit far below it while still making real progress (board games' −1…+1 scale is the key case).
+  // sit far below it while still making real progress. Kept game-neutral: the key idea is that every
+  // game is scored on its own scale, so the *gap* matters, not the raw number, and a very high ceiling
+  // (the hardest tasks may never quite reach the line in a practical run) is normal, not a failure.
   goal: {
     general: {
-      en: "**The gold line marks \"solved\"** — the score the agent is aiming for, the same target the skill meter calls 100%. The curve climbs toward it, so the gap between the curve and this line is how much there still is to learn.\nHow high \"solved\" sits depends on the game (CartPole 500, LunarLander 200, board games +1). A curve far below the line isn't broken — some games have a very high ceiling.",
-      cz: '**Zlatá čára označuje „vyřešeno“** — skóre, ke kterému agent míří; je to stejný cíl, který měřič dovednosti označuje jako 100 %. Křivka k němu stoupá, takže mezera mezi křivkou a touto čárou ukazuje, kolik se ještě dá naučit.\nJak vysoko „vyřešeno“ leží, závisí na hře (CartPole 500, LunarLander 200, deskové hry +1). Křivka hluboko pod čárou neznamená chybu — některé hry mají velmi vysoký strop.',
+      en: "**The gold line marks \"solved\"** — the score the agent is aiming for, the same target the skill meter calls 100%. The curve climbs toward it, so the gap between the curve and the line is how much there still is to learn.\nEvery game is scored on its own scale, so the line sits at a different height for each — what matters is the *gap*, not the raw number. A curve far below the line is normal, not broken: some tasks have a very high ceiling, and the hardest ones may never quite reach it in a practical run. Steady upward progress is the real sign of learning.",
+      cz: '**Zlatá čára označuje „vyřešeno“** — skóre, ke kterému agent míří; je to stejný cíl, který měřič dovednosti označuje jako 100 %. Křivka k němu stoupá, takže mezera mezi křivkou a čárou ukazuje, kolik se ještě dá naučit.\nKaždá hra se boduje na vlastní škále, takže čára leží u každé jinak vysoko — důležitá je *mezera*, ne holé číslo. Křivka hluboko pod čárou je normální, ne chyba: některé úlohy mají velmi vysoký strop a ty nejtěžší ho v praktickém běhu nemusí nikdy úplně dosáhnout. Skutečnou známkou učení je vytrvalé stoupání.',
     },
     perEnv: {
       tictactoe: {
@@ -1546,6 +1563,10 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
         en: 'Swimmer pays the forward speed minus a small effort cost, so the curve climbs from near 0 toward +360 as it finds a swimming rhythm; there is no fall, only the stroke to get right.',
         cz: 'Swimmer platí rychlost vpřed minus malou cenu za námahu, takže křivka stoupá od skoro 0 k +360, jak najde plavecký rytmus; není žádný pád, jen je třeba trefit záběr.',
       },
+      humanoid: {
+        en: 'Humanoid earns a per-step "healthy" bonus for staying upright, so the curve starts around +200 (just standing for a moment) and must climb toward +5000 as it learns to balance and step — that high baseline is normal, not a sign it has already learned. It is the hardest MuJoCo task, so expect a slow climb.',
+        cz: 'Humanoid získává každý krok bonus za „zdraví“ za udržení vzpřímené polohy, takže křivka začíná kolem +200 (jen chvíli stojí) a musí stoupat k +5000, jak se učí balancovat a krokovat — ta vysoká základna je normální, ne známka, že už se něco naučil. Je to nejtěžší úloha MuJoCo, takže čekejte pomalé stoupání.',
+      },
     },
   },
 
@@ -1593,6 +1614,7 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
       ant: MUJOCO_LOSS,
       reacher: MUJOCO_LOSS,
       swimmer: MUJOCO_LOSS,
+      humanoid: MUJOCO_LOSS,
     },
   },
 

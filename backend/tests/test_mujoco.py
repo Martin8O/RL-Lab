@@ -24,7 +24,9 @@ from fastapi.testclient import TestClient
 
 client = TestClient(app)
 
-# The six registered MuJoCo envs and their continuous action dimensions (Humanoid is skipped — heavy).
+# The six G5a MuJoCo envs and their continuous action dimensions. These all share native [-1, 1]
+# torque bounds, so the parametrized build test below asserts that range. Humanoid (the 7th robot,
+# G5b) is NOT in this dict: its native bounds are Box(-0.4, 0.4), so it gets its own test below.
 _MUJOCO_ENVS = {
     "hopper": ("Hopper-v5", 3),
     "walker2d": ("Walker2d-v5", 6),
@@ -67,6 +69,45 @@ def test_mujoco_skill_floor_calibration() -> None:
     for env_id in ("hopper", "walker2d", "halfcheetah", "ant", "swimmer"):
         assert get_env(env_id).floor_scales_with_steps is False
         assert get_env(env_id).play_step_scale == 1
+
+
+def test_humanoid_registered_and_built() -> None:
+    """Humanoid-v5 is the 7th MuJoCo robot (G5b) — the same data-only family seam, just the hardest
+    member. It carries the family flags (vector obs, box action, PPO-only, GPU-gated, trainable now)
+    but differs from the other six in two ways: a much larger 348-number state and native action
+    bounds of Box(-0.4, 0.4) instead of [-1, 1] — which is exactly why it has its own test."""
+    spec = get_env("humanoid")
+    assert spec is not None, "humanoid not registered"
+    assert spec.gym_id == "Humanoid-v5"
+    assert spec.family == "mujoco"
+    assert spec.obs_type == "vector"  # a flat 348-float state → MlpPolicy; server-JPEG render
+    assert spec.action_space == "box"  # 17 continuous per-joint torques
+    assert spec.supported_algos == ["ppo"]
+    assert spec.hw_requirement == "gpu"  # one of the hardest tasks → millions of steps on the desktop
+    assert spec.train_implemented is True  # MlpPolicy trainer exists; only gated by step count
+    assert spec.human_playable is True and spec.competitive is False
+    assert spec.difficulty == "advanced"
+    # A 17-joint humanoid topples even faster than Hopper/Walker2d → the same modest play slow-down.
+    assert spec.human_play_slowdown == 2.5
+    # The skill floor is the venv-measured zero-torque idle return (≈198 → 200), well below "solved".
+    assert spec.min_score == 200.0 and spec.solved_score == 5000.0
+    assert spec.min_score < spec.solved_score
+    assert spec.play_step_scale == 1 and spec.floor_scales_with_steps is False
+
+    # Build the real env: a 348-vector obs and a continuous Box(17) action in the native [-0.4, 0.4].
+    env = make_env("humanoid", render_mode="rgb_array", play_scale=1)
+    try:
+        assert env.observation_space.shape == (348,)
+        assert env.action_space.shape == (17,)
+        assert getattr(env.action_space, "n", None) is None  # box, not discrete
+        assert np.allclose(env.action_space.low, -0.4) and np.allclose(env.action_space.high, 0.4)
+        env.reset(seed=0)
+        obs, _reward, _term, _trunc, _ = env.step(env.action_space.sample())
+        assert client_state(env, obs) is None  # not client-rendered → server JPEG
+        rgb = np.asarray(env.render(), dtype=np.uint8)
+        assert rgb.ndim == 3 and rgb.shape[2] == 3  # offscreen rgb_array works on Windows
+    finally:
+        env.close()
 
 
 def test_hopper_walker_human_play_slowdown() -> None:
