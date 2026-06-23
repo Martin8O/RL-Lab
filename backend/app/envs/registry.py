@@ -104,6 +104,14 @@ class EnvSpec(BaseModel):
     # trainer isn't written yet (it would build the wrong policy on its obs and crash). The
     # training-manager start() enforces this as a backstop; the UI shows a distinct "coming later" note.
     train_implemented: bool = True
+    # Whether the PPO training path wraps the vector env in SB3 VecNormalize (running obs mean/std +
+    # reward scaling) — the rl-zoo3 standard recipe and the single biggest lever for PPO to climb on
+    # MuJoCo's wildly-scaled obs (joint angles ~±1 vs contact forces in the hundreds; G5c). True ONLY
+    # for the MuJoCo family; the running stats then travel with the policy to every inference path
+    # (preview / AI-play / resume) embedded in the model.zip blob. Off for the simple vector envs (they
+    # train fine without it) and the image path (a CnnPolicy already scales pixels /255). ``ep_rew_mean``
+    # stays raw regardless (the Monitor sits inside VecNormalize), so the skill meter is unchanged.
+    normalize_obs: bool = False
 
 
 _REGISTRY: dict[str, EnvSpec] = {}
@@ -1690,6 +1698,8 @@ def _mujoco_spec(
         competitive=False,
         difficulty=difficulty,
         hw_requirement="gpu",  # millions of steps → desktop; play available now (like BipedalWalker)
+        normalize_obs=True,  # G5c: VecNormalize (obs + reward) — the rl-zoo3 MuJoCo recipe; the running
+        # stats travel with the policy to preview/AI-play/resume (embedded in model.zip). ep_rew_mean stays raw.
     )
 
 

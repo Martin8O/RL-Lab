@@ -24,6 +24,7 @@ from app.schemas.training import (
     TrainingProgress,
     TrainState,
 )
+from app.services import vecnorm
 from app.services.checkpoints import CheckpointArtifact
 from app.services.ma_env import is_multi_agent, make_vec_env
 from app.services.train_control import TrainControl
@@ -106,9 +107,17 @@ def _build_numpy_predict(model: BaseAlgorithm) -> Callable[[object], Any]:
     is_box = getattr(model.action_space, "n", None) is None
     low = np.asarray(getattr(model.action_space, "low", 0.0), dtype=np.float64)
     high = np.asarray(getattr(model.action_space, "high", 0.0), dtype=np.float64)
+    # G5c: when the env is VecNormalize-wrapped (the MuJoCo family) the policy was trained on
+    # normalized obs, so the preview — which feeds RAW obs from its own throwaway env — must apply the
+    # same running-stat normalization before the MLP forward. None for every un-normalized env, leaving
+    # the forward byte-identical to before.
+    vec_norm = model.get_vec_normalize_env()
+    normalize = vecnorm.obs_normalizer_from_env(vec_norm) if vec_norm is not None else None
 
     def predict(obs: object) -> Any:
         x = np.asarray(obs, dtype=np.float64)
+        if normalize is not None:
+            x = normalize(x)
         for w, b in layers:
             x = x @ w.T + b
             x = np.maximum(0.0, x) if relu else np.tanh(x)
@@ -182,9 +191,15 @@ def _snapshot(model: BaseAlgorithm, total_timesteps: int, iteration: int) -> Che
     rew, _ = _ep_means(model)
     buf = io.BytesIO()
     model.save(buf)
+    blob = buf.getvalue()
+    # G5c: embed the VecNormalize stats inside model.zip (MuJoCo) so they travel with the single
+    # checkpoint blob to every inference + resume path. None for un-normalized envs → blob unchanged.
+    vec_norm = model.get_vec_normalize_env()
+    if vec_norm is not None:
+        blob = vecnorm.embed_stats(blob, vec_norm)
     return CheckpointArtifact(
         algo="ppo",
-        blob=buf.getvalue(),
+        blob=blob,
         artifact_name="model.zip",
         reward=rew,
         timesteps=int(model.num_timesteps),
@@ -358,6 +373,15 @@ def _make_train_env(config: TrainConfig, gym_id: str) -> tuple[Any, int | None]:
         spec = get_env(config.env_id)
         assert spec is not None  # _is_image_env already established this
         return make_image_vec(spec, _IMAGE_N_ENVS, seed=config.seed), config.seed
+    if vecnorm.should_normalize(config.env_id):
+        # MuJoCo (G5c): wrap the vector env in VecNormalize (obs + reward) — the rl-zoo3 recipe and the
+        # single biggest lever for PPO to climb on MuJoCo's wildly-scaled obs. The Monitor sits inside
+        # the wrapper so ep_rew_mean stays raw (skill meter unchanged); the inner DummyVecEnv exposes
+        # seed(), so SB3 seeds the run normally (config.seed below).
+        env = vecnorm.wrap_train_env(
+            lambda: make_env(config.env_id, gym_id), config.hyperparams.gamma
+        )
+        return env, config.seed
     return make_env(config.env_id, gym_id), config.seed
 
 
@@ -409,6 +433,11 @@ def _load_model(config: TrainConfig, gym_id: str, resume_blob: bytes) -> _Interr
     """
     env, _ = _make_train_env(config, gym_id)
     device = "cuda" if _is_image_env(config) else "cpu"  # image (CnnPolicy) resumes on the GPU (G4b)
+    # G5c: _make_train_env returns a FRESH VecNormalize for MuJoCo (identity stats). Restore the saved
+    # running obs/reward stats so the resumed policy keeps seeing normalized obs (else it degrades while
+    # the stats re-converge from scratch). No-op for un-normalized envs / pre-G5c checkpoints.
+    if vecnorm.should_normalize(config.env_id):
+        vecnorm.restore_into(env, resume_blob)
     return _InterruptiblePPO.load(io.BytesIO(resume_blob), env=env, device=device)
 
 

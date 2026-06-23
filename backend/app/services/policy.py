@@ -48,14 +48,25 @@ def _ppo_predict(blob: bytes) -> PredictFn:
     import numpy as np
     from stable_baselines3 import PPO
 
+    from app.services import vecnorm
+
     model = PPO.load(BytesIO(blob), device="cpu")  # env not needed for inference
     # A Discrete action space has `.n`; a Box (continuous) one has `.low`/`.high` instead.
     is_box = getattr(model.action_space, "n", None) is None
     low = np.asarray(getattr(model.action_space, "low", 0.0), dtype=np.float32)
     high = np.asarray(getattr(model.action_space, "high", 0.0), dtype=np.float32)
+    # G5c: a MuJoCo checkpoint embeds its VecNormalize obs stats in the blob. AI-play feeds the policy
+    # RAW obs (the play env is un-normalized), so normalize them the same way training did before
+    # predicting — otherwise a competently-trained agent gets unscaled obs and plays like it never
+    # trained. None for un-normalized envs / pre-G5c checkpoints → obs passes through unchanged. Reward
+    # normalization is training-only and is never applied here, so play scores stay on the raw scale.
+    normalize = vecnorm.load_obs_normalizer(blob)
 
     def predict(obs: object) -> Any:
-        action, _ = model.predict(np.asarray(obs), deterministic=True)
+        x = np.asarray(obs)
+        if normalize is not None:
+            x = normalize(x)
+        action, _ = model.predict(x, deterministic=True)
         arr = np.asarray(action)
         if is_box:  # continuous: the deterministic action is the Gaussian mean, clipped to bounds
             return np.clip(arr.astype(np.float32).reshape(-1), low, high)
