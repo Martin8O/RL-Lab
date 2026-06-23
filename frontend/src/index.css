@@ -387,6 +387,13 @@ input[type="range"]::-moz-range-thumb {
 }
 .hr { height: var(--hairline); background: var(--border-default); border: 0; }
 
+/* Dimmed panel (panelDim.ts): a panel whose data doesn't apply to the current activity recedes
+   instead of looking broken. Theme-aware — dark mode needs a harder dim (lower opacity + dropped
+   brightness), since on the near-black surface a mild fade is barely perceptible. The transition
+   is applied inline on the panel so dim/un-dim both animate. */
+.panel-dim { opacity: 0.45; filter: saturate(0.55); }
+[data-theme="dark"] .panel-dim { opacity: 0.28; filter: saturate(0.45) brightness(0.78); }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;

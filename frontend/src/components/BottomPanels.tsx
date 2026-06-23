@@ -6,23 +6,26 @@ import { qActionsFor } from '../content/qTableActions'
 import { useShowEvoLeaderboard } from '../hooks/useShowEvoLeaderboard'
 import ParamInfo from './ParamInfo'
 import PlayLeaderboards from './PlayLeaderboards'
+import { PANEL_DIM_BASE, panelDimClass } from './panelDim'
 import type { EvolutionChild, MutationDist } from '../api/types'
 
 // ── Shell ────────────────────────────────────────────────────────────────────
 
-function PanelShell({ title, right, borderRight = true, center = false, children }: {
+function PanelShell({ title, right, borderRight = true, center = false, dimmed = false, children }: {
   title: string
   right?: React.ReactNode
   borderRight?: boolean
   center?: boolean
+  dimmed?: boolean   // fade the panel when its data doesn't apply to the current activity (panelDim)
   children: React.ReactNode
 }) {
   return (
-    <div style={{
+    <div className={panelDimClass(dimmed)} style={{
       flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column',
       background: 'var(--surface)',
       borderRight: borderRight ? '2px solid var(--border)' : undefined,
       overflow: 'hidden',
+      ...PANEL_DIM_BASE,
     }}>
       <div style={{
         padding: '6px 12px', borderBottom: '1px solid var(--border)',
@@ -221,6 +224,7 @@ function EvolutionStats() {
       title={t('evolution.title')}
       right={<ParamInfo paramId="evolution_stats" label={t('evolution.title')} />}
       center
+      dimmed={!isEvo}   // Evolution Stats only apply to neuroevolution — recede under PPO/AlphaZero/etc.
     >
       {body}
     </PanelShell>

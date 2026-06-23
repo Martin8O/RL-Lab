@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next'
 import type { CSSProperties } from 'react'
 import { useAppStore } from '../store/useAppStore'
+import { PANEL_DIM_BASE, panelDimClass } from './panelDim'
 import { PLAY_SCORE_TOP_N } from '../api/types'
 import type { PlayScoreEntry } from '../api/types'
 
@@ -17,11 +18,15 @@ export default function PlayLeaderboards() {
   // Board games (G6a) report win/draw/loss, not a high score, so a score ladder doesn't fit — show a
   // "deferred" note instead of empty boards (it returns once self-play training lands in G6b).
   const isBoard = envs.find((e) => e.id === selectedEnvId)?.family === 'board'
+  // No records yet (or board games, which don't keep a high-score ladder) → recede instead of
+  // sitting blank and reading as broken (panelDim). Fades back in the moment a first score lands.
+  const dimmed = isBoard || (human.length === 0 && ai.length === 0)
 
   return (
-    <div style={{
+    <div className={panelDimClass(dimmed)} style={{
       flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column',
       background: 'var(--surface)', borderRight: '2px solid var(--border)', overflow: 'hidden',
+      ...PANEL_DIM_BASE,
     }}>
       {/* Shared title — makes it clear both columns below are high-score boards */}
       <div style={{
