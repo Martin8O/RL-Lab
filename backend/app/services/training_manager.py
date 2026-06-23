@@ -120,11 +120,12 @@ class TrainingManager:
             raise InvalidConfigError(
                 f"Environment '{config.env_id}' does not support algo '{config.algo}'"
             )
-        # Image-observation envs (Atari, CarRacing) have NO training path yet: their PPO needs the
-        # CnnPolicy + frame-stack + CUDA seam that isn't built (G4b / G3c-train). Reject before the
-        # trainer would build an MlpPolicy on pixels and crash. This holds **even on a CUDA machine**,
-        # so it's the backstop that keeps the GPU desktop (and anyone building from source on a GPU)
-        # from un-gating these by the gpu check below. Human play needs no net and stays available.
+        # Backstop for an env whose trainer isn't built yet: reject before the manager would build the
+        # wrong policy on its obs and crash. This holds **even on a CUDA machine**, so a GPU desktop
+        # (or someone building from source on a GPU) can't un-gate it via the gpu check below. Every
+        # shipped env now trains — the image-obs CnnPolicy path landed for Atari (G4b) and CarRacing
+        # (G3c-train) — so this guard is currently inert, kept for any future not-yet-built family.
+        # Human play needs no net and stays available regardless.
         if not spec.train_implemented:
             raise InvalidConfigError(
                 f"Training '{config.env_id}' isn't available yet — pixel-based games need the GPU "
@@ -168,6 +169,19 @@ class TrainingManager:
             initial_status = self._status_locked()
 
         self._broadcast_status()
+        # Image-obs runs (Atari/CarRacing) spin up two SB3-importing threads at once — the trainer
+        # (`from stable_baselines3 import PPO`) and the image-obs preview (env_util via image_vec) —
+        # whose *divergent* first-time entries into the stable_baselines3 package, run concurrently on
+        # the process's first such run, can deadlock Python's per-module import locks (observed with
+        # CarRacing: a `_DeadlockError` on `_ModuleLock('…env_util')`; Atari only dodged it because its
+        # `import ale_py` happened to serialize the two threads). Preload the package HERE — on this
+        # single thread, before either thread spawns — so both then hit a fully-initialised cache.
+        # Idempotent + cheap after the first run; scoped to image envs so non-image algos (evolution /
+        # Q-learning, which never import SB3) don't pull it in. Outside the lock: the first import is
+        # ~1 s and must not block status() readers.
+        launch_spec = get_env(config.env_id)
+        if launch_spec is not None and launch_spec.obs_type == "image":
+            import stable_baselines3  # noqa: F401 — single-threaded preload to avoid the import deadlock
         # Algo-independent HW telemetry for the lifetime of THIS run. The stop event is created per
         # run and handed to both the ticker and _run, so a back-to-back start can't have the finishing
         # run's teardown stop the next run's ticker (a shared field would race; see _run's finally).

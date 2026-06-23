@@ -208,7 +208,7 @@ class PreviewStreamer:
         if is_multi_agent(spec):
             self._run_ma(env_id)
             return
-        # Image-obs envs (Atari, G4b) need the shared AtariWrapper + frame-stack vec env so the obs
+        # Image-obs envs (Atari, G4b; CarRacing, G3c-train) need the shared image vec env so the obs
         # shape matches the CnnPolicy snapshot — a different env API + a raw-colour render path.
         if spec is not None and spec.obs_type == "image":
             self._run_image(env_id, spec)
@@ -421,19 +421,20 @@ class PreviewStreamer:
         )
 
     def _run_image(self, env_id: str, spec: Any) -> None:
-        """Preview loop for an image-obs env (Atari, G4b).
+        """Preview loop for an image-obs env (Atari, G4b; CarRacing, G3c-train).
 
-        Drives the **shared** Atari vec env at ``n_envs=1`` — the exact AtariWrapper + frame-stack the
-        CnnPolicy trained on — so the decoupled snapshot's obs shape always matches. The snapshot is a
-        read-only CPU torch forward the trainer publishes (ADR-019), never the live CUDA model; until
-        it arrives the loop uses random actions. The JPEG shows the **raw colour** frame (``WarpFrame``
-        only rewrites the observation), not the 84×84 grayscale the policy consumes. A SB3 vec env
-        auto-resets on ``done``, so the loop just counts episodes instead of calling ``reset`` itself.
+        Drives the **shared** image vec env at ``n_envs=1`` (via ``make_image_vec`` — the exact
+        AtariWrapper+frame-stack or CarRacing raw-RGB+frame-stack the CnnPolicy trained on) so the
+        decoupled snapshot's obs shape always matches. The snapshot is a read-only CPU torch forward
+        the trainer publishes (ADR-019), never the live CUDA model; until it arrives the loop uses
+        random actions. The JPEG shows the **raw colour** frame (the obs preprocessing only rewrites
+        the observation). A SB3 vec env auto-resets on ``done``, so the loop just counts episodes
+        instead of calling ``reset`` itself.
         """
-        from app.envs.atari import make_atari
+        from app.envs.image_vec import make_image_vec
 
         try:
-            venv = make_atari(spec.gym_id, 1, make_kwargs=spec.make_kwargs)
+            venv = make_image_vec(spec, 1)
         except Exception:  # noqa: BLE001 — a bad render env must not crash anything
             logger.exception("Preview image env creation failed for %s", env_id)
             return
@@ -469,17 +470,23 @@ class PreviewStreamer:
         finally:
             venv.close()
 
-    def _choose_image_action(self, venv: Any, obs: Any) -> int:
-        """The CNN snapshot's action over the single stacked obs (random until it's published)."""
+    def _choose_image_action(self, venv: Any, obs: Any) -> Any:
+        """The CNN snapshot's action over the single stacked obs (random until it's published).
+
+        Returns whatever the snapshot yields — an int (Atari ``Discrete(18)``) or a clipped float
+        vector (CarRacing's ``Box(3)``); the caller wraps it in a length-1 batch for ``venv.step``,
+        which accepts both. The random fallback uses the env's own action space, so it's the right
+        type either way.
+        """
         with self._lock:
             predict = self._predict
         if predict is None:
-            return int(venv.action_space.sample())
+            return venv.action_space.sample()
         try:
-            return int(predict(obs[0]))
+            return predict(obs[0])
         except Exception:  # noqa: BLE001 — never let inference contention disturb the run
             logger.debug("Preview image predict failed; using random action", exc_info=True)
-            return int(venv.action_space.sample())
+            return venv.action_space.sample()
 
     def _emit_image_frame(self, venv: Any, episode: int, step: int, reward: float) -> None:
         try:

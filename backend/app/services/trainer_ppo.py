@@ -30,7 +30,7 @@ from app.services.train_control import TrainControl
 
 _ACTIVATIONS: dict[str, type[nn.Module]] = {"tanh": nn.Tanh, "relu": nn.ReLU}
 _PROGRESS_INTERVAL = 1.0  # seconds between live progress frames
-_ATARI_N_ENVS = 8  # parallel image envs for the CnnPolicy rollout (the standard Atari setup)
+_IMAGE_N_ENVS = 8  # parallel image envs for the CnnPolicy rollout (Atari + CarRacing alike)
 
 
 class _InterruptiblePPO(PPO):
@@ -121,7 +121,7 @@ def _build_numpy_predict(model: BaseAlgorithm) -> Callable[[object], Any]:
 
 
 def _build_cnn_predict(model: BaseAlgorithm) -> Callable[[object], Any]:
-    """A read-only **CPU torch** forward over a snapshot of an image-obs CnnPolicy (G4b).
+    """A read-only **CPU torch** forward over a snapshot of an image-obs CnnPolicy (G4b/G3c-train).
 
     The numpy forward above only covers an MLP (``mlp_extractor.policy_net`` + ``action_net``); a
     CnnPolicy's NatureCNN feature extractor has no such path, so the preview needs a real torch
@@ -130,8 +130,10 @@ def _build_cnn_predict(model: BaseAlgorithm) -> Callable[[object], Any]:
     ``save``/``load`` into an **independent CPU policy**. That copy shares no tensor storage with the
     trainer, so forwarding it cannot perturb training (the same isolation the numpy snapshot gives).
 
-    Built at a rollout boundary (a quiescent point on the trainer thread). Returns ``predict(obs) ->
-    int`` over the stacked 84×84×4 observation the preview's matching vec env yields.
+    Built at a rollout boundary (a quiescent point on the trainer thread). Returns a ``predict(obs)``
+    over the stacked observation the preview's matching vec env yields: an **int** for a discrete env
+    (Atari ``Discrete(18)``), or a **clipped float vector** for a continuous env (CarRacing's
+    ``Box(3)`` steer/gas/brake) — the same int|box duality the numpy/PPO predict fns already use.
     """
     import io
 
@@ -145,11 +147,17 @@ def _build_cnn_predict(model: BaseAlgorithm) -> Callable[[object], Any]:
     buf.seek(0)
     policy = model.policy.__class__.load(buf, device="cpu")  # type: ignore[arg-type]  # maps tensors → CPU
     policy.set_training_mode(False)
+    is_box = getattr(model.action_space, "n", None) is None  # Box has low/high, Discrete has n
+    low = np.asarray(getattr(model.action_space, "low", 0.0), dtype=np.float32)
+    high = np.asarray(getattr(model.action_space, "high", 0.0), dtype=np.float32)
 
     def predict(obs: object) -> Any:
         with torch.no_grad():
             action, _ = policy.predict(np.asarray(obs), deterministic=True)
-        return int(np.asarray(action).flatten()[0])
+        arr = np.asarray(action)
+        if is_box:  # continuous: the deterministic mean action, clipped into [low, high]
+            return np.clip(arr.astype(np.float32).reshape(-1), low, high)
+        return int(arr.flatten()[0])
 
     return predict
 
@@ -321,7 +329,7 @@ def _progress_ticker(
 
 
 def _is_image_env(config: TrainConfig) -> bool:
-    """True for an image-observation env (Atari) — the CnnPolicy + CUDA + frame-stack path (G4b)."""
+    """True for an image-obs env (Atari + CarRacing) — the CnnPolicy/CUDA/frame-stack path (G4b/G3c-train)."""
     spec = get_env(config.env_id)
     return spec is not None and spec.obs_type == "image"
 
@@ -331,9 +339,10 @@ def _make_train_env(config: TrainConfig, gym_id: str) -> tuple[Any, int | None]:
 
     Vector single-agent envs go through the shared factory (variant kwargs + the discrete-obs
     one-hot wrapper) and let SB3 seed python/numpy/torch + the env from ``config.seed``.
-    **Image** envs (Atari) go through the shared ``make_atari`` vec builder (AtariWrapper +
-    frame-stack, ``n_envs=8``) so the CnnPolicy sees the obs shape the preview will match; its
-    DummyVecEnv exposes ``seed()`` so SB3 seeds it normally. **Multi-agent** (PettingZoo) envs go
+    **Image** envs (Atari + CarRacing) go through the shared ``make_image_vec`` dispatcher (the
+    AtariWrapper+frame-stack or the CarRacing raw-RGB+frame-stack builder, ``n_envs=8``) so the
+    CnnPolicy sees the obs shape the preview will match; its DummyVecEnv exposes ``seed()`` so SB3
+    seeds it normally. **Multi-agent** (PettingZoo) envs go
     through the SuperSuit parameter-sharing bridge (``ma_env.make_vec_env``): its ``ConcatVecEnv``
     exposes no ``seed()``, so we seed the policy globally here and pass ``seed=None`` to PPO
     (otherwise SB3 calls ``env.seed()`` and crashes). MA reproducibility is therefore policy-level.
@@ -344,13 +353,11 @@ def _make_train_env(config: TrainConfig, gym_id: str) -> tuple[Any, int | None]:
         set_random_seed(config.seed)  # seed numpy/torch/python (the SuperSuit vec env can't be seeded)
         return make_vec_env(config.env_id), None
     if _is_image_env(config):
-        from app.envs.atari import make_atari
+        from app.envs.image_vec import make_image_vec
 
         spec = get_env(config.env_id)
         assert spec is not None  # _is_image_env already established this
-        return make_atari(
-            gym_id, _ATARI_N_ENVS, make_kwargs=spec.make_kwargs, seed=config.seed
-        ), config.seed
+        return make_image_vec(spec, _IMAGE_N_ENVS, seed=config.seed), config.seed
     return make_env(config.env_id, gym_id), config.seed
 
 
@@ -358,10 +365,10 @@ def _build_model(config: TrainConfig, gym_id: str) -> _InterruptiblePPO:
     hp = config.hyperparams
     env, seed = _make_train_env(config, gym_id)
     if _is_image_env(config):
-        # Image obs (Atari, G4b): a CnnPolicy on CUDA over the 84×84×4 frame stack. The net_arch /
-        # activation sliders describe an MLP and don't apply to the fixed NatureCNN feature
-        # extractor, so leave policy_kwargs at SB3's default; the lr/γ/clip/ent/n_steps/batch knobs
-        # still tune the run. device="cuda" is gated upstream (training_manager rejects on no GPU).
+        # Image obs (Atari 84×84×4 / CarRacing 96×96×6, G4b/G3c-train): a CnnPolicy on CUDA over the
+        # frame stack. The net_arch / activation sliders describe an MLP and don't apply to the fixed
+        # NatureCNN feature extractor, so leave policy_kwargs at SB3's default; the lr/γ/clip/ent/
+        # n_steps/batch knobs still tune the run. device="cuda" is gated upstream (manager rejects no GPU).
         policy, device, policy_kwargs = "CnnPolicy", "cuda", None
     else:
         # One MlpPolicy on CPU serves the rest: a single-agent factory env, or the multi-agent

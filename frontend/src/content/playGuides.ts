@@ -493,8 +493,8 @@ export const PLAY_GUIDES: Record<string, PlayGuide> = {
         + 'The bars along the bottom are the car\'s dashboard: the tall white bar is your speed, the '
         + 'four blue bars are the wheels (they jump when a wheel skids or locks under braking), the '
         + 'green bar is the steering angle and the red bar is how fast the car is spinning — watch them '
-        + 'to catch a skid before you feel it. Switch to "Watch AI" once a model has been trained for '
-        + 'this on a GPU.',
+        + 'to catch a skid before you feel it. Train a model on a GPU, then switch to "Watch AI" to see '
+        + 'it drive the track itself.',
       cz: 'Tohle je první hra hraná přímo z obrazu a rukama je vážně cuklavá — snižte rychlost hraní (až '
         + 'na 0,1×), ať máte čas reagovat. Klávesnice je „všechno, nebo nic“ (plné natočení / plný '
         + 'plyn), takže auto snadno přetáčí: dávkujte krátkými ťuky místo držení klávesy, před zatáčkami '
@@ -503,8 +503,8 @@ export const PLAY_GUIDES: Record<string, PlayGuide> = {
         + 'krátké zásahy a včasné brzdění ho udrží pod kontrolou. Pruhy dole jsou palubní deska auta: '
         + 'vysoký bílý pruh je rychlost, čtyři modré pruhy jsou kola (vyskočí, když kolo prokluzuje nebo '
         + 'se při brzdění zablokuje), zelený pruh je natočení volantu a červený pruh ukazuje, jak rychle '
-        + 'se auto otáčí — sledujte je a smyk poznáte dřív, než ho ucítíte. Až bude na to natrénovaný '
-        + 'model na GPU, přepněte na „Sledovat AI“.',
+        + 'se auto otáčí — sledujte je a smyk poznáte dřív, než ho ucítíte. Natrénujte model na GPU a '
+        + 'pak přepněte na „Sledovat AI“, ať ho vidíte projíždět trať.',
     },
   },
 

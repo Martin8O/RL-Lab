@@ -34,11 +34,11 @@ def test_pong_registered_and_trainable() -> None:
     assert spec.make_kwargs == {"full_action_space": True}  # 18 actions → shared keymap + policy parity
 
 
-def test_carracing_stays_gated() -> None:
-    """G4b is Atari-only: CarRacing is image-obs too but a different (non-Atari) pipeline owned by
-    G3c-train, so its trainer flag must stay off."""
+def test_carracing_now_trainable() -> None:
+    """G4b was Atari-only (CarRacing stayed gated then); G3c-train later built CarRacing's own
+    (non-Atari) CnnPolicy + box pipeline and flipped its flag on. See test_carracing_train.py."""
     spec = get_env("carracing")
-    assert spec is not None and spec.train_implemented is False
+    assert spec is not None and spec.train_implemented is True
 
 
 # -- the shared Atari vec builder (CPU-safe: building envs needs no GPU) -----

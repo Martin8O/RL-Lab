@@ -265,8 +265,8 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
         cz: 'Jen PPO, stejně jako u standardní dráhy — a hardcore terén (žebříky, pařezy, jámy) z ní dělá jeden z nejtěžších benchmarků spojitého řízení, který potřebuje největší rozpočet. Trénink je jen na GPU (Spustit je zde zakázané); rukama si to zahrajete už teď.',
       },
       carracing: {
-        en: 'Only PPO is offered here, and on a GPU it would train a convolutional network (CnnPolicy) straight from the 96×96 picture — a different policy from the small games\' MLP. Neuroevolution is turned off as data (a flat-vector genome cannot take pixels). Training is reserved for a GPU machine, so Run is disabled here; play it by hand now and watch a trained AI once one exists.',
-        cz: 'Tady je k dispozici jen PPO a na GPU by trénovalo konvoluční síť (CnnPolicy) přímo z obrazu 96×96 — jiná strategie než MLP u malých her. Neuroevoluce je vypnutá jako data (genom z plochého vektoru neumí pixely). Trénink je vyhrazen pro stroj s GPU, takže Spustit je zde zakázané; rukama si to zahrajete už teď a natrénovanou AI uvidíte, jakmile bude existovat.',
+        en: 'Only PPO is offered here: on a GPU it trains a convolutional network (CnnPolicy) straight from the 96×96 picture — a different policy from the small games\' MLP. Neuroevolution is turned off as data (a flat-vector genome cannot take pixels). Training needs a CUDA GPU, so Run is enabled on a GPU machine (and stays disabled on a CPU-only box); you can also play it by hand and watch your trained AI drive.',
+        cz: 'Tady je k dispozici jen PPO: na GPU trénuje konvoluční síť (CnnPolicy) přímo z obrazu 96×96 — jiná strategie než MLP u malých her. Neuroevoluce je vypnutá jako data (genom z plochého vektoru neumí pixely). Trénink potřebuje GPU (CUDA), takže Spustit je povolené na stroji s GPU (a na čistém CPU zůstává zakázané); můžete si to i zahrát rukama a sledovat, jak vaše natrénovaná AI řídí.',
       },
       frozenlake: {
         en: 'Both can solve it. The state is a single grid cell (one-hot–encoded for the network), and the reward is sparse — only reaching the goal pays — so a little exploration matters. Because the ice slips, success is a *rate*: even a good policy scores below 1.0. A nice task to compare PPO and Neuroevolution.',
@@ -389,8 +389,8 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
         cz: 'Stejný výchozí bod 3e-4; těžší terén je ještě náchylnější k nestabilitě, takže držte rychlost umírněnou a spoléhejte raději na víc kroků.',
       },
       carracing: {
-        en: 'The default 3e-4 is a fine starting point for CarRacing\'s CnnPolicy too — keep it moderate, as learning from pixels is sensitive and too large a step can destabilise it. (Training is GPU-only, so this applies once you train on the desktop.)',
-        cz: 'Výchozí 3e-4 je dobrý výchozí bod i pro CnnPolicy u CarRacing — držte ji umírněnou, protože učení z pixelů je citlivé a příliš velký krok ho může rozhodit. (Trénink je jen na GPU, takže se to týká až tréninku na desktopu.)',
+        en: 'The default 3e-4 is a fine starting point for CarRacing\'s CnnPolicy too — keep it moderate, as learning from pixels is sensitive and too large a step can destabilise it. (Training runs on a GPU.)',
+        cz: 'Výchozí 3e-4 je dobrý výchozí bod i pro CnnPolicy u CarRacing — držte ji umírněnou, protože učení z pixelů je citlivé a příliš velký krok ho může rozhodit. (Trénink běží na GPU.)',
       },
       frozenlake: {
         en: 'Default 3e-4 is fine. The bottleneck here is exploration (slippery ice, sparse reward), not step size — if it stalls, raise Entropy or add steps before touching this.',
@@ -873,8 +873,8 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
         cz: 'Překážková dráha je pověstně těžká, takže potřebuje ještě větší rozpočet (★ 10M) — a i tak nemusí plně vyřešit. Trénink je jen na GPU.',
       },
       carracing: {
-        en: 'CarRacing learns from pixels, so it needs a lot of practice — a solid driving policy typically takes around a million steps, hence the large ★ budget. (Training runs on a GPU machine; here Run is disabled until then.)',
-        cz: 'CarRacing se učí z pixelů, takže potřebuje hodně cviku — slušná strategie řízení obvykle zabere kolem milionu kroků, odtud velký ★ rozpočet. (Trénink běží na stroji s GPU; tady je Spustit do té doby zakázané.)',
+        en: 'CarRacing learns from pixels, so it needs a lot of practice — a solid driving policy typically takes around a million steps, hence the large ★ budget. Training runs on a GPU (Run needs a CUDA machine).',
+        cz: 'CarRacing se učí z pixelů, takže potřebuje hodně cviku — slušná strategie řízení obvykle zabere kolem milionu kroků, odtud velký ★ rozpočet. Trénink běží na GPU (Spustit vyžaduje stroj s CUDA).',
       },
       frozenlake: {
         en: 'Slippery and sparse, so give it a generous budget (the ★ 200k). A success rate stuck near 0 means it has not found a route yet — raise the Entropy bonus rather than just adding steps.',

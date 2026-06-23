@@ -95,14 +95,14 @@ class EnvSpec(BaseModel):
     difficulty: Literal["beginner", "intermediate", "advanced"]
     hw_requirement: Literal["cpu", "gpu"]
     # Whether this env's TRAINING code path actually exists yet. True for every env whose obs reaches
-    # the implemented MlpPolicy trainer (all vector/discrete envs — incl. the GPU-gated *vector* heavies
-    # BipedalWalker + MuJoCo, which train correctly with MlpPolicy and are gated only because they need
-    # millions of steps). False for the **image-observation** envs (Atari, CarRacing): their training
-    # needs the CnnPolicy + frame-stack + CUDA seam that is NOT built yet (G4b / G3c-train), so a "Train"
-    # there would build an MlpPolicy on pixels and crash. Decouples "needs a GPU" from "trainer not
-    # implemented": a GPU machine un-gates the vector heavies (hw_requirement="gpu" + gpu present) but
-    # MUST keep image envs gated until the CnnPolicy seam lands. The training-manager start() enforces
-    # this as a backstop and the UI shows a distinct "coming later" note. Flip to True per-env in G4b.
+    # an implemented trainer: the MlpPolicy path (all vector/discrete envs — incl. the GPU-gated *vector*
+    # heavies BipedalWalker + MuJoCo, which train with MlpPolicy and are gated only because a gait needs
+    # millions of steps) AND the image-obs CnnPolicy path (Atari via G4b, CarRacing via G3c-train — a
+    # CnnPolicy + frame-stack + CUDA trainer). Decouples "needs a GPU" from "trainer not implemented":
+    # the flag is now True for every registered env, but CarRacing/Box2D-image kept it as the gate while
+    # the CnnPolicy seam was being built. The remaining hold-out would be any future image/family whose
+    # trainer isn't written yet (it would build the wrong policy on its obs and crash). The
+    # training-manager start() enforces this as a backstop; the UI shows a distinct "coming later" note.
     train_implemented: bool = True
 
 
@@ -231,6 +231,39 @@ def _standard_hyperparams(q_episodes: int = 5_000) -> dict[str, dict[str, Hyperp
             ),
         },
     }
+
+
+def _cnn_hyperparams() -> dict[str, dict[str, HyperparamDef]]:
+    """Image-obs CnnPolicy PPO defaults: a small rollout + a fuller minibatch (Atari + CarRacing).
+
+    The shared ``_standard_hyperparams()`` carries the CartPole-shaped ``n_steps=2048`` /
+    ``batch_size=64``. For an image-obs CnnPolicy on the GPU that shape is pathological: an
+    ``8×2048 = 16384``-transition rollout split into batch-64 minibatches over 10 epochs is
+    ~2560 *tiny* gradient steps per update — each underfills the card and the per-step
+    kernel-launch overhead dominates, so the **update** phase (not collection) becomes the
+    wall-clock bottleneck while the GPU sits at ~28 % (measured — ``Local/_probe_gpu_util.py``,
+    parked C2 diagnostic). A smaller rollout (``n_steps=256`` → 2048-step buffer) with a fuller
+    minibatch (``batch_size=256`` → 8 minibatches/epoch) is the SB3-zoo Atari recipe family and
+    measured **+60 % throughput** (716 → 1146 env-steps/s on Pong/RTX 5070), turning the run into
+    the healthy *collection-bound* regime. Only the two rollout-shape knobs change; the slider
+    ranges and lr/γ/clip/ent are untouched, so the param surface is identical. CarRacing (G3c-train)
+    reuses the same shape — the CnnPolicy-throughput reasoning is the same, not the game.
+    """
+    hp = _standard_hyperparams()
+    hp["ppo"]["n_steps"] = HyperparamDef(
+        type="int", default=256, recommended=256, min=128, max=4096, step=128,
+    )
+    hp["ppo"]["batch_size"] = HyperparamDef(
+        type="int", default=256, recommended=256, min=32, max=512, step=32,
+    )
+    # Drop 10 -> 4 passes per rollout (the SB3-zoo Atari value): shrinks the update phase further for
+    # ~+89% total throughput vs the old default (716 -> 1350 env-steps/s, measured). Fewer epochs is a
+    # genuine sample-efficiency<->throughput trade, but 4 is the proven Atari recipe, so it is a safe
+    # default here (it would be a footgun on the small vector envs, which keep 10).
+    hp["ppo"]["n_epochs"] = HyperparamDef(
+        type="int", default=4, recommended=4, min=1, max=20, step=1,
+    )
+    return hp
 
 
 # ---------------------------------------------------------------------------
@@ -404,24 +437,24 @@ register(
 
 
 # ---------------------------------------------------------------------------
-# CarRacing-v3  (Box2D family — G3c-play: "install + human-play on CPU now,
-# training GPU-gated"). This is the env the seam roadmap flagged as the LAST
+# CarRacing-v3  (Box2D family). The env the seam roadmap flagged as the LAST
 # int→box case: **image obs (96×96×3) AND a continuous Box(3) action** (steer
-# ∈ [-1,1], gas ∈ [0,1], brake ∈ [0,1]). For *human play* both halves are
-# already solved seams — the image obs rides the existing server-JPEG render
+# ∈ [-1,1], gas ∈ [0,1], brake ∈ [0,1]). For *human play* (G3c-play) both halves
+# are already solved seams — the image obs rides the existing server-JPEG render
 # path (like Atari/MiniGrid; client_state returns None → env.render() → JPEG),
 # and the box action rides the G1b/G3b continuous-box play path (play_session
 # reshapes the held analog command into the action vector + clips it). Human
 # play sends a *per-joint vector* via the G3b multi-key keymap (←/→ steer, ↑
-# gas, ↓ brake, summed client-side), so this needs NO new engine code — pure
-# data + content, exactly like BipedalWalker.
+# gas, ↓ brake, summed client-side).
 #
-# Training is **gated** (hw_requirement="gpu") — but unlike BipedalWalker (a
-# vector env gated only by step count), CarRacing genuinely needs the CnnPolicy
-# seam for its image obs (the laptop's MlpPolicy/CPU trainer can't consume
-# pixels). That seam lands on the desktop (G3c-train); the GPU gate both blocks
-# the impractical CPU run AND stands in for the missing CnnPolicy until then.
-# Human play needs no training and is available now.
+# Training is the **CNN + continuous-box** seam (G3c-train): image obs → a
+# CnnPolicy on CUDA over a 2-frame stack (envs/image_vec.make_carracing — NO
+# AtariWrapper, raw 96×96×3 RGB), and a box action the CNN preview snapshot +
+# image action-choosers handle as a clipped vector (the first time the image path
+# meets a box action). Still **gated** to a GPU (hw_requirement="gpu") because a
+# CnnPolicy needs CUDA — unlike BipedalWalker (a vector env gated only by step
+# count) — but the trainer is now built, so a CUDA box un-gates Run (a CPU box
+# still rejects it). Human play needs no training and is available everywhere.
 #
 # supported_algos=["ppo"] — PPO-only, evolution opted out as data (the numpy
 # genome is an MLP over a flat vector; it can't take pixels either). Skill:
@@ -457,7 +490,7 @@ register(
         obs_type="image",  # 96×96×3 pixels → server-JPEG render for play; CnnPolicy training is G3c-train
         action_space="box",  # continuous Box(3): steer [-1,1], gas [0,1], brake [0,1] — the G1b/G3b seam
         supported_algos=["ppo"],  # PPO-only (evolution opted out as data — a flat-vector genome can't take pixels)
-        hyperparams=_standard_hyperparams(),
+        hyperparams=_cnn_hyperparams(),  # image-obs CnnPolicy shape (small rollout + fuller batch), like Atari
         make_kwargs={"continuous": True},  # the continuous steer/gas/brake variant (vs Discrete(5))
         solved_score=900.0,  # the community "solved" mark (visit ~all tiles at +1000/N, less frame cost)
         min_score=-100.0,  # do-nothing/off-track floor (ADR-026): idle ≈ −100, leaving the field penalises −100
@@ -467,8 +500,8 @@ register(
         human_playable=True,
         competitive=False,
         difficulty="advanced",
-        hw_requirement="gpu",  # image obs needs the CnnPolicy seam (G3c-train, desktop); play available now
-        train_implemented=False,  # image obs → CnnPolicy seam not built yet (G3c-train); stays gated even on a GPU
+        hw_requirement="gpu",  # CnnPolicy training needs CUDA; the UI gates Run on a CPU box, human play stays
+        train_implemented=True,  # G3c-train: CnnPolicy + frame-stack + CUDA box trainer built — trains on a GPU
     )
 )
 
@@ -846,38 +879,6 @@ register(
 # ---------------------------------------------------------------------------
 
 
-def _atari_hyperparams() -> dict[str, dict[str, HyperparamDef]]:
-    """Atari-specific PPO defaults: a small rollout + a fuller minibatch for the CnnPolicy.
-
-    The shared ``_standard_hyperparams()`` carries the CartPole-shaped ``n_steps=2048`` /
-    ``batch_size=64``. For an image-obs CnnPolicy on the GPU that shape is pathological: an
-    ``8×2048 = 16384``-transition rollout split into batch-64 minibatches over 10 epochs is
-    ~2560 *tiny* gradient steps per update — each underfills the card and the per-step
-    kernel-launch overhead dominates, so the **update** phase (not collection) becomes the
-    wall-clock bottleneck while the GPU sits at ~28 % (measured — ``Local/_probe_gpu_util.py``,
-    parked C2 diagnostic). A smaller rollout (``n_steps=256`` → 2048-step buffer) with a fuller
-    minibatch (``batch_size=256`` → 8 minibatches/epoch) is the SB3-zoo Atari recipe family and
-    measured **+60 % throughput** (716 → 1146 env-steps/s on Pong/RTX 5070), turning the run into
-    the healthy *collection-bound* regime. Only the two rollout-shape knobs change; the slider
-    ranges and lr/γ/clip/ent are untouched, so the param surface is identical.
-    """
-    hp = _standard_hyperparams()
-    hp["ppo"]["n_steps"] = HyperparamDef(
-        type="int", default=256, recommended=256, min=128, max=4096, step=128,
-    )
-    hp["ppo"]["batch_size"] = HyperparamDef(
-        type="int", default=256, recommended=256, min=32, max=512, step=32,
-    )
-    # Drop 10 -> 4 passes per rollout (the SB3-zoo Atari value): shrinks the update phase further for
-    # ~+89% total throughput vs the old default (716 -> 1350 env-steps/s, measured). Fewer epochs is a
-    # genuine sample-efficiency<->throughput trade, but 4 is the proven Atari recipe, so it is a safe
-    # default here (it would be a footgun on the small vector envs, which keep 10).
-    hp["ppo"]["n_epochs"] = HyperparamDef(
-        type="int", default=4, recommended=4, min=1, max=20, step=1,
-    )
-    return hp
-
-
 def _atari_spec(
     env_id: str,
     display: str,
@@ -898,7 +899,7 @@ def _atari_spec(
         obs_type="image",
         action_space="discrete",
         supported_algos=["ppo"],  # image obs → CnnPolicy/GPU only; evo+Q-learning can't consume pixels
-        hyperparams=_atari_hyperparams(),  # small rollout + fuller batch for the CnnPolicy (+60% throughput)
+        hyperparams=_cnn_hyperparams(),  # small rollout + fuller batch for the CnnPolicy (+60% throughput)
         # All 18 ALE actions at fixed indices → one shared keyboard map across the whole family.
         make_kwargs={"full_action_space": True},
         solved_score=solved_score,

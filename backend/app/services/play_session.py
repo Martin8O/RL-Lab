@@ -292,12 +292,12 @@ class PlaySession:
     # -- worker thread ----------------------------------------------------------
 
     def _run(self, gym_id: str, seed: int | None) -> None:
-        # Image-obs envs (Atari) can't be played by an AI on the raw render env: a CnnPolicy consumes
-        # the 84×84×4 frame stack, not the raw 210×160×3 RGB the env emits, so model.predict on the
-        # raw obs would shape-error. AI mode runs a dedicated loop on the shared AtariWrapper +
-        # frame-stack vec env (G4b's make_atari) so the obs shape matches the checkpoint (G4c). Human
-        # image play needs no policy (the person supplies the action), so it stays on the raw make_env
-        # + JPEG path below — untouched.
+        # Image-obs envs (Atari, CarRacing) can't be played by an AI on the raw render env: a CnnPolicy
+        # consumes the stacked frame (Atari 84×84×4 / CarRacing 96×96×6), not the raw RGB the env emits,
+        # so model.predict on the raw obs would shape-error. AI mode runs a dedicated loop on the shared
+        # frame-stack vec env (make_image_vec) so the obs shape matches the checkpoint (G4c/G3c-train).
+        # Human image play needs no policy (the person supplies the action), so it stays on the raw
+        # make_env + JPEG path below — untouched.
         spec = get_env(self._env_id) if self._env_id else None
         # Board games (G6a) are a turn-based OpenSpiel subsystem, not a gym.Env — route both human
         # (human vs MCTS) and ai (MCTS-vs-MCTS watch) to the dedicated board loop. Never make_env'd.
@@ -388,26 +388,25 @@ class PlaySession:
         self._finalize(score, step, completed=completed, error=error)
 
     def _run_image_ai(self, spec: Any, seed: int | None) -> None:
-        """AI-play loop for an image-obs env (Atari, G4c).
+        """AI-play loop for an image-obs env (Atari, G4c; CarRacing, G3c-train).
 
-        A CnnPolicy consumes the 84×84×4 frame stack, not the raw 210×160×3 RGB, so AI play builds
-        the **shared** Atari vec env (``make_atari`` at ``n_envs=1`` — the exact AtariWrapper +
-        frame-stack the policy trained on, G4b) and feeds ``obs[0]`` to the checkpoint's predict fn.
-        The JPEG still shows the **raw colour** frame (``WarpFrame`` only rewrites the observation),
-        exactly like human play. One episode, then rate — the same shape as the vector AI path.
+        A CnnPolicy consumes the stacked frame, not the raw RGB the env emits, so AI play builds the
+        **shared** image vec env (``make_image_vec`` at ``n_envs=1`` — the exact AtariWrapper or
+        CarRacing frame-stack the policy trained on) and feeds ``obs[0]`` to the checkpoint's predict
+        fn. The JPEG still shows the **raw colour** frame (the obs preprocessing only rewrites the
+        observation), exactly like human play. One episode, then rate — the vector AI path's shape.
 
-        Score = the summed step reward. ``AtariWrapper`` clips reward to its sign, but every
-        symmetric duel game scores ±1 per point (Pong −21…21, Boxing/Tennis/…), so the clipped sum
-        IS the true game score there — and those are the games where a skill reading is meaningful;
-        it matches human play (raw env) and the [min_score, solved_score] meter exactly. (For the
-        high-scoring arcade games the clip means the reading reflects the training-shaped reward; a
-        raw-score eval env for those is out of scope here — true human-vs-net is G7c anyway.)
+        Score = the summed step reward. CarRacing isn't reward-clipped, so the sum IS the true return
+        on its ``[min_score=-100, solved_score=900]`` meter. (Atari's ``AtariWrapper`` clips reward to
+        its sign, but every symmetric duel game scores ±1 per point — Pong −21…21, Boxing/Tennis/… —
+        so the clipped sum is still the true game score there, the games where a skill reading is
+        meaningful; the high-scoring arcade clip reflects training-shaped reward, out of scope here.)
         """
-        from app.envs.atari import make_atari
+        from app.envs.image_vec import make_image_vec
 
         try:
-            # AI play keeps the configured seed (a reproducible demo); make_atari seeds the vec env.
-            venv = make_atari(spec.gym_id, 1, make_kwargs=spec.make_kwargs, seed=seed)
+            # AI play keeps the configured seed (a reproducible demo); the builder seeds the vec env.
+            venv = make_image_vec(spec, 1, seed=seed)
         except Exception:  # noqa: BLE001 — a bad env must surface as state, not crash the thread
             logger.exception("Play image env creation failed for %s", spec.gym_id)
             self._finalize(0.0, 0, completed=False, error="Could not create play environment")
@@ -454,17 +453,22 @@ class PlaySession:
             venv.close()
         self._finalize(score, step, completed=completed, error=error)
 
-    def _choose_image_action(self, venv: Any, obs: Any) -> int:
-        """The checkpoint's CNN action over the single stacked obs (random fallback if it faults)."""
+    def _choose_image_action(self, venv: Any, obs: Any) -> Any:
+        """The checkpoint's CNN action over the single stacked obs (random fallback if it faults).
+
+        Returns the predict fn's output as-is — an int (Atari ``Discrete(18)``) or a clipped float
+        vector (CarRacing's ``Box(3)``); the caller wraps it in a length-1 batch for ``venv.step``,
+        which accepts both. The random fallback uses the env's own action space (right type either way).
+        """
         with self._lock:
             predict = self._predict
         if predict is None:  # AI mode always loads a policy in start(); stay safe regardless
-            return int(venv.action_space.sample())
+            return venv.action_space.sample()
         try:
-            return int(predict(obs[0]))  # obs[0] = the 84×84×4 stack; SB3 predict transposes it
+            return predict(obs[0])  # obs[0] = the stacked frame; SB3 predict transposes/handles it
         except Exception:  # noqa: BLE001 — a flaky predict falls back to a random action
             logger.debug("AI image predict failed; using random action", exc_info=True)
-            return int(venv.action_space.sample())
+            return venv.action_space.sample()
 
     def _emit_image_frame(self, venv: Any, step: int, score: float) -> None:
         """Broadcast the raw-colour vec-env frame as a play_frame JPEG (the human-play image path)."""

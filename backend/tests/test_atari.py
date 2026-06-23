@@ -119,33 +119,34 @@ def test_atari_skill_bands_span_symmetric_range() -> None:
 # -- training implemented vs GPU-gated (the capability-aware gate, pre-migration hardening) -----
 
 
-def test_train_implemented_split_after_g4b() -> None:
-    """After G4b the image-obs family splits: **Atari trains** (the CnnPolicy + AtariWrapper/frame-stack
-    + CUDA seam is built), while **CarRacing stays gated** (its non-Atari image trainer is G3c-train).
-    Every vector/discrete env — including the GPU-gated *vector* heavies (BipedalWalker/MuJoCo, MlpPolicy)
-    and the competitive multi-agent ``simple_tag`` envs (per-species self-play, G7b-2) — trains too.
-    ``train_implemented`` is False for exactly the not-yet-built trainer: the image CarRacing
-    (G3c-train). The board games now train too (MaskablePPO vs the MCTS teacher, G6b/ADR-051); a GPU
-    box still keeps CarRacing gated via the backstop."""
-    not_yet = {"carracing"}  # only G3c-train (image CnnPolicy) remains; board self-play landed in G6b
+def test_every_env_trains_after_g3c_train() -> None:
+    """G3c-train flipped the **last** gated env: CarRacing's non-Atari CnnPolicy + box trainer is now
+    built, so ``train_implemented`` is True for **every** registered env. The image-obs path is built
+    for both families (Atari = AtariWrapper/frame-stack/CUDA, G4b; CarRacing = raw-RGB/frame-stack/CUDA
+    + box, G3c-train); the vector/discrete envs (incl. the GPU-gated *vector* heavies BipedalWalker/
+    MuJoCo and the competitive ``simple_tag`` self-play, G7b-2) and the board games (G6b) all train too.
+    The GPU heavies stay *gated* (hw_requirement) but that's the gpu check, not train_implemented."""
     for spec in list_envs():
-        expected = spec.id not in not_yet
-        assert spec.train_implemented is expected, (
+        assert spec.train_implemented is True, (
             f"{spec.id}: train_implemented={spec.train_implemented} (obs_type={spec.obs_type})"
         )
-    # Spot-check both sides of the split.
-    assert get_env("pong").train_implemented is True  # type: ignore[union-attr]  # image, Atari trainer built (G4b)
-    assert get_env("carracing").train_implemented is False  # type: ignore[union-attr]  # image, G3c-train pending
+    # Spot-check the image families (both built) + representative vector/board envs.
+    assert get_env("pong").train_implemented is True  # type: ignore[union-attr]  # image, Atari trainer (G4b)
+    assert get_env("carracing").train_implemented is True  # type: ignore[union-attr]  # image+box trainer (G3c-train)
     assert get_env("bipedalwalker").train_implemented is True  # type: ignore[union-attr]
     assert get_env("mpe_tag").train_implemented is True  # type: ignore[union-attr]  # per-species self-play (G7b-2)
     assert get_env("tictactoe").train_implemented is True  # type: ignore[union-attr]  # board trainer (G6b)
 
 
-def test_image_env_training_gated_even_with_a_gpu(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The key backstop: an image-obs env's training is rejected **even on a CUDA machine**, because
-    its CnnPolicy trainer isn't built. Without this, a GPU desktop (or someone building from source on
-    a GPU) would un-gate Atari/CarRacing via the gpu check and crash inside the MlpPolicy trainer."""
+def test_backstop_rejects_unbuilt_trainer_even_with_a_gpu(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The backstop guard: a not-yet-built trainer is rejected **even on a CUDA machine**, so a GPU
+    desktop (or someone building from source on a GPU) can't un-gate it via the gpu check and crash
+    inside the wrong policy. Every shipped env now trains (CarRacing was the last, G3c-train), so this
+    synthesizes a ``train_implemented=False`` spec to keep the guard covered for a future family.
+    Rejecting before ``_launch`` also means no run actually starts (no manager-state leak)."""
     monkeypatch.setattr("app.services.training_manager.gpu_available", lambda: True)
+    unbuilt = get_env("carracing").model_copy(update={"train_implemented": False})  # type: ignore[union-attr]
+    monkeypatch.setattr("app.services.training_manager.get_env", lambda _env_id: unbuilt)
     resp = client.post(
         "/api/train/start",
         json={
