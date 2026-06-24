@@ -12,6 +12,15 @@ import { buildTrainConfig } from '../api/trainingControls'
 import type { Algo, CheckpointMeta } from '../api/types'
 import { categoryLabel } from '../content/envCategories'
 import { formatCount } from '../format'
+import {
+  DEFAULT_CKPT_FILTERS,
+  checkpointFacets,
+  organizeCheckpoints,
+  solvedPct,
+  type CkptFilters,
+  type CkptGroup,
+  type CkptSort,
+} from './checkpointBrowser'
 
 // Compact Save / Load / Manage controls for the sidebar (under Run). The checkpoint *slots*
 // are no longer shown inline in the dashboard — Load opens a quick picker, Manage opens a full
@@ -48,13 +57,6 @@ function algoLabel(t: (k: string) => string, algo: Algo): string {
   if (algo === 'td3') return t('sidebar.algo_td3')
   if (algo === 'dqn') return t('sidebar.algo_dqn')
   return t('sidebar.algo_ppo')  // ppo (and any unrecognised algo) reads as PPO
-}
-
-// % of the env's [min_score, solved_score] range the saved model reached (like the chart's skill %),
-// so a shaped env that starts negative still reads a meaningful fraction. null when unknown.
-function solvedPct(reward: number | null, min: number, solved: number): number | null {
-  if (reward == null || solved <= min) return null
-  return Math.max(0, Math.min(100, ((reward - min) / (solved - min)) * 100))
 }
 
 // Compact local save timestamp ("2026-06-17 14:32") from the slot's ISO created_at.
@@ -226,6 +228,132 @@ function Modal({ title, hint, onClose, children }: {
   )
 }
 
+const browserCtrl: CSSProperties = {
+  height: 'var(--control-sm)', padding: '0 8px', borderRadius: 'var(--radius-md)',
+  fontSize: 'var(--fs-label)', fontFamily: 'var(--font-sans)',
+  background: 'var(--surface-2)', color: 'var(--text-strong)',
+  border: '1px solid var(--border-default)', cursor: 'pointer', transition: 'var(--t-colors)',
+}
+
+// save/load v2 — the filter / sort / group toolbar + grouped slot list rendered inside the Load and
+// Manage modals. Local, unpersisted state (the modal mounts fresh each open, so it resets to the
+// newest-first default = the pre-v2 behaviour). All the data work lives in ./checkpointBrowser.
+function CheckpointBrowser({ slots, manage, onLoad, onDelete }: {
+  slots: CheckpointMeta[]
+  manage: boolean
+  onLoad: (s: CheckpointMeta) => void
+  onDelete: (s: CheckpointMeta) => void
+}) {
+  const { t } = useTranslation()
+  const locale = useAppStore((s) => s.locale)
+  const envs = useAppStore((s) => s.envs)
+  const [filters, setFilters] = useState<CkptFilters>(DEFAULT_CKPT_FILTERS)
+  const set = <K extends keyof CkptFilters>(k: K, v: CkptFilters[K]) =>
+    setFilters((f) => ({ ...f, [k]: v }))
+
+  // Facets come from ALL slots (not the filtered set) so the dropdown options stay stable while you
+  // narrow — an option never vanishes out from under the cursor.
+  const facets = checkpointFacets(slots, envs)
+  const groups = organizeCheckpoints(slots, envs, locale, filters)
+  const total = groups.reduce((n, g) => n + g.items.length, 0)
+
+  const groupHeader = (key: string): string => {
+    if (filters.group === 'category') return categoryLabel(key)[locale]
+    if (filters.group === 'game') return envs.find((e) => e.id === key)?.display_name[locale] ?? key
+    if (filters.group === 'algo') return algoLabel(t, key as Algo)
+    return ''
+  }
+
+  return (
+    <>
+      {/* Toolbar — search + category + algo filters, then sort + group. Wraps on a narrow modal. */}
+      <div style={{
+        display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center',
+        paddingBottom: 8, marginBottom: 2, borderBottom: '1px solid var(--border-default)',
+      }}>
+        <input
+          type="search"
+          value={filters.search}
+          onChange={(e) => set('search', e.target.value)}
+          placeholder={t('saveload.filter_search')}
+          aria-label={t('saveload.filter_search')}
+          style={{ ...browserCtrl, flex: '1 1 130px', minWidth: 110, cursor: 'text' }}
+        />
+        <select
+          value={filters.category}
+          onChange={(e) => set('category', e.target.value)}
+          aria-label={t('saveload.filter_category')}
+          style={browserCtrl}
+        >
+          <option value="">{t('saveload.filter_all_categories')}</option>
+          {facets.categories.map((id) => (
+            <option key={id} value={id}>{categoryLabel(id)[locale]}</option>
+          ))}
+        </select>
+        <select
+          value={filters.algo}
+          onChange={(e) => set('algo', e.target.value)}
+          aria-label={t('saveload.filter_algo')}
+          style={browserCtrl}
+        >
+          <option value="">{t('saveload.filter_all_algos')}</option>
+          {facets.algos.map((a) => (
+            <option key={a} value={a}>{algoLabel(t, a)}</option>
+          ))}
+        </select>
+        <select
+          value={filters.sort}
+          onChange={(e) => set('sort', e.target.value as CkptSort)}
+          aria-label={t('saveload.sort_label')}
+          style={browserCtrl}
+        >
+          <option value="newest">{t('saveload.sort_newest')}</option>
+          <option value="oldest">{t('saveload.sort_oldest')}</option>
+          <option value="best">{t('saveload.sort_best')}</option>
+          <option value="game">{t('saveload.sort_game')}</option>
+        </select>
+        <select
+          value={filters.group}
+          onChange={(e) => set('group', e.target.value as CkptGroup)}
+          aria-label={t('saveload.group_label')}
+          style={browserCtrl}
+        >
+          <option value="none">{t('saveload.group_none')}</option>
+          <option value="category">{t('saveload.group_category')}</option>
+          <option value="game">{t('saveload.group_game')}</option>
+          <option value="algo">{t('saveload.group_algo')}</option>
+        </select>
+      </div>
+
+      {total === 0 ? (
+        <div style={{ padding: '16px 4px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 'var(--fs-label)' }}>
+          {slots.length === 0 ? t('saveload.empty') : t('saveload.no_match')}
+        </div>
+      ) : (
+        groups.map((g) => (
+          <div key={g.key || '_all'}>
+            {filters.group !== 'none' && (
+              <div style={{
+                display: 'flex', alignItems: 'baseline', gap: 6, marginTop: 12, marginBottom: 2,
+              }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-strong)', textTransform: 'uppercase', letterSpacing: 0.3 }}>
+                  {groupHeader(g.key)}
+                </span>
+                <span style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>
+                  {g.items.length}
+                </span>
+              </div>
+            )}
+            {g.items.map((s) => (
+              <SlotCard key={s.id} slot={s} manage={manage} onLoad={onLoad} onDelete={onDelete} />
+            ))}
+          </div>
+        ))
+      )}
+    </>
+  )
+}
+
 export default function SaveLoadControls() {
   const { t } = useTranslation()
   const trainState = useAppStore((s) => s.trainState)
@@ -352,15 +480,12 @@ export default function SaveLoadControls() {
           hint={modal === 'load' ? t('saveload.pick_hint') : undefined}
           onClose={() => setModal(null)}
         >
-          {slots.length === 0 ? (
-            <div style={{ padding: '16px 4px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 'var(--fs-label)' }}>
-              {t('saveload.empty')}
-            </div>
-          ) : (
-            slots.map((s) => (
-              <SlotCard key={s.id} slot={s} manage={modal === 'manage'} onLoad={handleLoad} onDelete={handleDelete} />
-            ))
-          )}
+          <CheckpointBrowser
+            slots={slots}
+            manage={modal === 'manage'}
+            onLoad={handleLoad}
+            onDelete={handleDelete}
+          />
         </Modal>
       )}
     </div>
