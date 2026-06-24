@@ -28,6 +28,11 @@ export interface EnvSpec {
   obs_type: ObsType
   action_space: ActionSpace
   supported_algos: string[]
+  /** The single ★ recommended algorithm for this env — always one of `supported_algos` (the backend
+   *  fills it with `supported_algos[0]` when not curated). Often NOT PPO: SAC for the MuJoCo robots +
+   *  Pendulum, neuroevolution for MountainCarContinuous, Q-learning for the Toy-Text grids, AlphaZero
+   *  for the board games. The picker only MARKS it (★ + a hint) — it does not auto-select it. */
+  recommended_algo: string
   /** algo_id → param_id → definition */
   hyperparams: Record<string, Record<string, HyperparamDef>>
   solved_score: number

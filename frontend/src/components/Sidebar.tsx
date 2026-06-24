@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAppStore } from '../store/useAppStore'
@@ -24,6 +25,14 @@ const selectStyle: CSSProperties = {
   border: '1px solid var(--border-default)', borderRadius: 'var(--radius-md)',
   fontFamily: 'var(--font-sans)', fontSize: 'var(--fs-sm)', cursor: 'pointer',
   transition: 'var(--t-colors)',
+}
+// Quiet mono count pill beside the algorithm label — mirrors EnvSelector's games "Total: N" pill
+// exactly (same format, for the algorithm catalogue count).
+const countStyle: CSSProperties = {
+  fontFamily: 'var(--font-mono)', fontFeatureSettings: 'var(--ff-tabular)',
+  fontSize: 'var(--fs-meta)', fontWeight: 'var(--fw-semibold)', color: 'var(--text-faint)',
+  background: 'var(--surface-inset)', border: '1px solid var(--border-default)',
+  borderRadius: 'var(--radius-pill)', padding: '0 7px', lineHeight: '16px',
 }
 
 const PlayGlyph  = <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden><path d="M7 5v14l12-7z" /></svg>
@@ -244,18 +253,36 @@ function ALGO_LABEL(t: (k: string) => string, id: string): string {
   }
 }
 
-function AlgoSwitch({ value, options, disabled, onChange }: {
+function AlgoSwitch({ value, options, recommended, algoCount, disabled, onChange }: {
   value: Algo
   options: string[]
+  recommended?: string | null
+  algoCount: number
   disabled?: boolean
   onChange: (a: Algo) => void
 }) {
   const { t } = useTranslation()
+  // The ★ recommended algo is the best fit for THIS game (often not PPO). We only MARK it — a ★ on its
+  // dropdown option (the same convention as the activation/ent-coef pickers) plus an always-visible hint
+  // line below, since with mark-only the closed picker often shows a different (e.g. PPO) algo. Picking
+  // it stays a deliberate click; switching env never auto-selects it.
+  const onRecommended = !!recommended && value === recommended
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-      <label style={fieldLabel}>
-        {t('sidebar.algorithm')}
-        <ParamInfo paramId="algorithm" label={t('sidebar.algorithm')} />
+      <label style={{ ...fieldLabel, justifyContent: 'space-between', width: '100%' }}>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+          {t('sidebar.algorithm')}
+          <ParamInfo paramId="algorithm" label={t('sidebar.algorithm')} />
+        </span>
+        {algoCount > 0 && (
+          <span
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}
+            title={t('sidebar.algo_count')}
+          >
+            <span>{t('sidebar.total')}:</span>
+            <span style={countStyle} aria-label={t('sidebar.algo_count')}>{algoCount}</span>
+          </span>
+        )}
       </label>
       <select
         aria-label={t('sidebar.algorithm')}
@@ -265,11 +292,41 @@ function AlgoSwitch({ value, options, disabled, onChange }: {
         style={{ ...selectStyle, cursor: disabled || options.length === 0 ? 'default' : 'pointer' }}
       >
         {options.map((id) => (
-          <option key={id} value={id}>{ALGO_LABEL(t, id)}</option>
+          <option key={id} value={id}>{id === recommended ? `★ ${ALGO_LABEL(t, id)}` : ALGO_LABEL(t, id)}</option>
         ))}
       </select>
+      {recommended && (
+        onRecommended ? (
+          <span style={recHint('var(--success)')}>
+            <span aria-hidden style={recStar}>★</span>
+            {t('sidebar.algo_recommended_here')}
+          </span>
+        ) : (
+          <button
+            type="button"
+            disabled={disabled}
+            onClick={() => onChange(recommended as Algo)}
+            title={t('sidebar.algo_use_recommended')}
+            style={{ ...recHint('var(--text-muted)'), background: 'none', border: 'none', padding: 0,
+              cursor: disabled ? 'default' : 'pointer', textAlign: 'left' }}
+          >
+            <span aria-hidden style={recStar}>★</span>
+            <span>{t('sidebar.algo_recommended')}: <strong style={{ color: 'var(--text-strong)' }}>{ALGO_LABEL(t, recommended)}</strong></span>
+          </button>
+        )
+      )}
     </div>
   )
+}
+
+// Gold ★ + a quiet caption — the always-visible recommendation marker under the algorithm picker.
+const recStar: CSSProperties = { color: 'var(--goal)', fontSize: 'var(--fs-meta)' }
+function recHint(color: string): CSSProperties {
+  return {
+    display: 'inline-flex', alignItems: 'center', gap: 5,
+    fontFamily: 'var(--font-sans)', fontSize: 'var(--fs-meta)', color,
+    transition: 'var(--t-colors)',
+  }
 }
 
 // ── Run controls ─────────────────────────────────────────────────────────────
@@ -342,6 +399,10 @@ export default function Sidebar() {
     useRunControls()
 
   const selectedEnv = envs.find((e) => e.id === selectedEnvId)
+  // Total distinct learning algorithms across the whole catalogue (a "Total: N" pill beside the picker,
+  // mirroring the games count) — data-driven from the union of every env's supported_algos, so it tracks
+  // automatically as algorithms are added.
+  const algoCount = useMemo(() => new Set(envs.flatMap((e) => e.supported_algos)).size, [envs])
   const ppoDefs = selectedEnv?.hyperparams?.['ppo'] ?? {}
   const evoDefs = selectedEnv?.hyperparams?.['neuroevolution'] ?? {}
   const qlDefs  = selectedEnv?.hyperparams?.['q_learning'] ?? {}
@@ -391,6 +452,8 @@ export default function Sidebar() {
         <AlgoSwitch
           value={algo}
           options={selectedEnv?.supported_algos ?? ['ppo', 'neuroevolution']}
+          recommended={selectedEnv?.recommended_algo}
+          algoCount={algoCount}
           disabled={isActive}
           onChange={setAlgo}
         />

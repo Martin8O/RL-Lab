@@ -17,6 +17,7 @@ export const cartpoleEnv: EnvSpec = {
   obs_type: 'vector',
   action_space: 'discrete',
   supported_algos: ['ppo', 'neuroevolution'],
+  recommended_algo: 'ppo',
   hyperparams: {
     ppo: {
       learning_rate: num({ type: 'float', default: 3e-4, recommended: 3e-4, min: 1e-5, max: 1e-2, step: 0.01 }),

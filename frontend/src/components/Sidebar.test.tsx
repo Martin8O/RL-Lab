@@ -13,8 +13,30 @@ describe('<Sidebar />', () => {
     render(<Sidebar />)
     expect(screen.getByText('Parameters')).toBeInTheDocument()
     expect(screen.getByRole('combobox', { name: 'Algorithm' })).toBeInTheDocument()
-    expect(screen.getByRole('option', { name: 'PPO' })).toBeInTheDocument()
+    // cartpole's ★ recommended algo is ppo, so its option carries the marker.
+    expect(screen.getByRole('option', { name: '★ PPO' })).toBeInTheDocument()
     expect(screen.getByRole('option', { name: 'Neuroevolution' })).toBeInTheDocument()
+  })
+
+  it('marks the recommended algorithm and confirms when it is the selected one', () => {
+    render(<Sidebar />)
+    // ppo is both recommended and selected → the confirmation caption shows (no switch button).
+    expect(screen.getByText('Recommended for this game')).toBeInTheDocument()
+  })
+
+  it('offers a one-click switch to the recommended algo when another is selected', () => {
+    render(<Sidebar />)
+    fireEvent.change(screen.getByRole('combobox', { name: 'Algorithm' }), { target: { value: 'neuroevolution' } })
+    expect(useAppStore.getState().algo).toBe('neuroevolution')
+    const recBtn = screen.getByRole('button', { name: 'Recommended: PPO' })
+    fireEvent.click(recBtn)
+    expect(useAppStore.getState().algo).toBe('ppo')
+  })
+
+  it('shows the total distinct-algorithm count beside the picker', () => {
+    render(<Sidebar />)
+    // the fixture has one env supporting ppo + neuroevolution → 2 distinct algorithms.
+    expect(screen.getByLabelText('Total learning algorithms available in the app').textContent).toBe('2')
   })
 
   it('shows PPO hyperparameters by default and switches to evolution settings', () => {

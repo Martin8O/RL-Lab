@@ -124,3 +124,49 @@ def test_classic_control_g1b_continuous_envs(
         k: v for k, v in client.get("/api/envs/cartpole").json()["hyperparams"].items() if k != "dqn"
     }
     assert surface == cartpole_surface
+
+
+# -- per-env ★ recommended algorithm (the picker marker) ---------------------
+
+
+def test_recommended_algo_is_always_a_supported_algo() -> None:
+    """Every env exposes a single ★ recommended algorithm, and it is always one the env supports
+    (a curated value that wasn't in supported_algos would mark a non-existent picker option)."""
+    for env in client.get("/api/envs").json():
+        rec = env["recommended_algo"]
+        assert rec is not None, env["id"]
+        assert rec in env["supported_algos"], (env["id"], rec, env["supported_algos"])
+
+
+def test_recommended_algo_defaults_to_first_supported() -> None:
+    """When an env doesn't curate one, the recommendation is supported_algos[0] (the PPO baseline)."""
+    by_id = {e["id"]: e for e in client.get("/api/envs").json()}
+    # Not curated → falls back to the first supported algo.
+    assert by_id["cartpole"]["recommended_algo"] == "ppo"
+    assert by_id["lunarlander"]["recommended_algo"] == "ppo"
+    # chess is AlphaZero-only, so its sole supported algo is also the recommendation.
+    assert by_id["chess"]["recommended_algo"] == "alphazero"
+
+
+@pytest.mark.parametrize(
+    "env_id,expected",
+    [
+        # off-policy continuous control wins on the swing-up + the MuJoCo robots
+        ("pendulum", "sac"),
+        ("halfcheetah", "sac"),
+        ("humanoid", "sac"),
+        # the sparse exploration trap — population search reaches the flag where PPO stalls
+        ("mountaincarcontinuous", "neuroevolution"),
+        # tabular Q-learning is the natural fit for the Toy-Text grid-worlds
+        ("frozenlake", "q_learning"),
+        ("taxi", "q_learning"),
+        ("cliffwalking", "q_learning"),
+        # AlphaZero is the board-game algorithm
+        ("tictactoe", "alphazero"),
+        ("connect_four", "alphazero"),
+    ],
+)
+def test_recommended_algo_curated_overrides(env_id: str, expected: str) -> None:
+    """Where a non-PPO algo measurably wins (recorded findings), the env curates its ★ recommendation."""
+    env = client.get(f"/api/envs/{env_id}").json()
+    assert env["recommended_algo"] == expected

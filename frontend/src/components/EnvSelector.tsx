@@ -146,7 +146,8 @@ const labelStyle: CSSProperties = {
   fontSize: 'var(--fs-label)', fontWeight: 'var(--fw-medium)', color: 'var(--text-muted)',
   display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6,
 }
-// Total number of registered games/envs, shown beside the label as a quiet mono count pill.
+// Total number of registered games/envs, shown beside the label as a quiet mono count pill. The
+// algorithm picker mirrors this exact style for its own "Total: N" pill (Sidebar.countStyle).
 const countStyle: CSSProperties = {
   fontFamily: 'var(--font-mono)', fontFeatureSettings: 'var(--ff-tabular)',
   fontSize: 'var(--fs-meta)', fontWeight: 'var(--fw-semibold)', color: 'var(--text-faint)',

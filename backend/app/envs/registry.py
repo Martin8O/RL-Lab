@@ -1,6 +1,6 @@
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class Bilingual(BaseModel):
@@ -120,6 +120,23 @@ class EnvSpec(BaseModel):
     # env offers no off-policy algo (the sidebar falls back to the PPO budget). Set on the continuous-Box envs
     # (SAC/TD3) AND the discrete DQN envs; drives the sidebar step ladder + ★ when SAC/TD3/DQN is the algo.
     offpolicy_total_timesteps: int | None = None
+    # The single ★ recommended algorithm for THIS env — the one we'd point a newcomer to as the best
+    # fit, now that ≥3 algos overlap many envs. It is often NOT PPO: SAC solves the MuJoCo robots +
+    # Pendulum, neuroevolution wins the MountainCarContinuous exploration trap, tabular Q-learning is
+    # the textbook fit for the Toy-Text grid-worlds, AlphaZero is the board-game algorithm. The picker
+    # only MARKS it (★ on the option + a hint line under the picker) — it does NOT auto-select it, so an
+    # env switch still snaps to supported_algos[0] (the PPO-baseline habit is unchanged). None ⇒ defaults
+    # to supported_algos[0] (filled by the validator below); a curated value MUST be one of supported_algos
+    # (a typo would otherwise mark a non-existent option) — the validator falls back if it isn't.
+    recommended_algo: str | None = None
+
+    @model_validator(mode="after")
+    def _fill_recommended_algo(self) -> "EnvSpec":
+        if not self.supported_algos:
+            self.recommended_algo = None
+        elif self.recommended_algo is None or self.recommended_algo not in self.supported_algos:
+            self.recommended_algo = self.supported_algos[0]
+        return self
 
 
 _REGISTRY: dict[str, EnvSpec] = {}
@@ -757,6 +774,7 @@ register(
         obs_type="vector",
         action_space="box",
         supported_algos=["ppo", "neuroevolution", "sac", "td3"],  # sac/td3: off-policy continuous control (S5a/S5b)
+        recommended_algo="sac",  # SAC/TD3 solve continuous swing-up far better than PPO (S5a: −1117→−178, superhuman)
         hyperparams=_standard_hyperparams(),
         # Pendulum-v1 has NO official gym reward_threshold (verified: gym.spec(...).reward_threshold
         # is None). Reward is a per-step cost (angle² + 0.1·speed² + 0.001·torque²), so the return is
@@ -797,6 +815,7 @@ register(
         obs_type="vector",
         action_space="box",
         supported_algos=["ppo", "neuroevolution", "sac", "td3"],  # sac/td3: off-policy continuous control (S5a/S5b)
+        recommended_algo="neuroevolution",  # the sparse exploration trap — population search finds the flag (S5a notes)
         hyperparams=_standard_hyperparams(),
         solved_score=90.0,  # MountainCarContinuous-v0 reward_threshold (reach the flag = +100 bonus)
         # 0% reference: a do-nothing agent scores 0.0 (no force cost, never solves); the reward only
@@ -844,6 +863,7 @@ register(
         obs_type="discrete",
         action_space="discrete",
         supported_algos=["ppo", "neuroevolution", "q_learning"],
+        recommended_algo="q_learning",  # tabular Q-learning is the textbook fit for the Toy-Text grid-worlds
         hyperparams=_standard_hyperparams(q_episodes=8_000),  # slippery 16-state lake
         sparse_reward=True,  # 0/1 reward → play meter "measures" until the goal is reached
         solved_score=0.7,  # gym reward_threshold: a 70% success rate (reward is 1 on reaching goal)
@@ -878,6 +898,7 @@ register(
         obs_type="discrete",
         action_space="discrete",
         supported_algos=["ppo", "neuroevolution", "q_learning"],
+        recommended_algo="q_learning",  # tabular Q-learning is the textbook fit for the Toy-Text grid-worlds
         hyperparams=_standard_hyperparams(q_episodes=3_000),  # deterministic 16-state maze — fast
         sparse_reward=True,  # 0/1 reward → play meter "measures" until the goal is reached
         make_kwargs={"is_slippery": False},
@@ -911,6 +932,7 @@ register(
         obs_type="discrete",
         action_space="discrete",
         supported_algos=["ppo", "neuroevolution", "q_learning"],
+        recommended_algo="q_learning",  # tabular Q-learning is the textbook fit for the Toy-Text grid-worlds
         hyperparams=_standard_hyperparams(q_episodes=20_000),  # 64 states + slip — needs the most
         sparse_reward=True,  # 0/1 reward → play meter "measures" until the goal is reached
         make_kwargs={"map_name": "8x8"},
@@ -944,6 +966,7 @@ register(
         obs_type="discrete",
         action_space="discrete",
         supported_algos=["ppo", "neuroevolution", "q_learning"],
+        recommended_algo="q_learning",  # tabular Q-learning is the textbook fit for the Toy-Text grid-worlds
         hyperparams=_standard_hyperparams(q_episodes=20_000),  # 500 states — Q-learning's showcase
         solved_score=8.0,  # gym reward_threshold
         # 0% reference = "ran out the 200-step episode without ever delivering" ≈ −200 (−1/step, no
@@ -980,6 +1003,7 @@ register(
         obs_type="discrete",
         action_space="discrete",
         supported_algos=["ppo", "neuroevolution", "q_learning"],
+        recommended_algo="q_learning",  # tabular Q-learning is the textbook fit for the Toy-Text grid-worlds
         hyperparams=_standard_hyperparams(q_episodes=5_000),  # 48 states, dense reward — solves cleanly
         solved_score=-13.0,  # optimal return (no gym reward_threshold); the risky cliff-edge path
         # 0% reference = "ran out the 200-step cap without reaching the goal" = −200 (−1/step, no
@@ -1830,6 +1854,7 @@ def _mujoco_spec(
         obs_type="vector",  # a fixed-length float state → MlpPolicy (no CnnPolicy); server-JPEG render
         action_space="box",  # continuous per-joint torques in [-1, 1] — the G1b/G3b continuous-box seam
         supported_algos=["ppo", "sac", "td3"],  # PPO + SAC + TD3 (S5a/S5b — off-policy shines on MuJoCo); evolution opted out
+        recommended_algo="sac",  # off-policy shines on MuJoCo; SAC is the algo that actually solves Humanoid (S5a)
         hyperparams=_standard_hyperparams(),
         solved_score=solved_score,
         min_score=min_score,  # venv-measured idle (zero-torque) baseline → a do-nothing reads ~0% (ADR-026)
@@ -1969,6 +1994,7 @@ register(
         # Two board trainers (routed by algo via is_board_game): "ppo" = MaskablePPO vs the MCTS teacher
         # (G6b); "alphazero" = AlphaZero-lite self-play, CNN+neural-MCTS (G6f). Compare them on one game.
         supported_algos=["ppo", "alphazero"],
+        recommended_algo="alphazero",  # AlphaZero is the board-game algorithm (AZ beat the PPO baseline on Connect Four, G6g)
         # PPO knobs + the AlphaZero block (G6f); TTT is tiny, so more AZ iterations to reach the draw
         # ceiling vs the medium reference, with a lighter search (the game is trivial to read).
         hyperparams=_board_hyperparams(az_iterations=40),
@@ -2020,6 +2046,7 @@ register(
         # Both board trainers (routed by algo, is_board_game): "ppo" = MaskablePPO vs the MCTS teacher
         # (G6b); "alphazero" = AlphaZero-lite self-play (G6f). Connect Four is the AZ validation game.
         supported_algos=["ppo", "alphazero"],
+        recommended_algo="alphazero",  # AlphaZero is the board-game algorithm (AZ beat the PPO baseline on Connect Four, G6g)
         hyperparams=_board_hyperparams(),  # standard PPO knobs (ent_coef ★ 0.01); rounds is internal
         # Same eval-vs-reference-MCTS ∈ [−1, 1] chart scale as TTT (solved = +1, min = −1); the trainer
         # scores Connect Four against the EASY MCTS (BOARD_PROFILES) so the curve is honest on CPU.
