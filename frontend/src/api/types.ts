@@ -35,10 +35,11 @@ export interface EnvSpec {
   min_score: number
   /** Recommended PPO training budget (the ★ default); the sidebar builds its step ladder from it. */
   default_total_timesteps: number
-  /** The off-policy ★ recommended budget (S5a SAC, **shared by S5b TD3**) — much smaller than the PPO
-   *  budget (off-policy methods are far more sample-efficient). The sidebar uses this for the step ladder
-   *  + ★ when SAC or TD3 is the algo; null/absent ⇒ the env offers neither, so the PPO budget is used. */
-  sac_total_timesteps?: number | null
+  /** The off-policy ★ recommended budget (S5a SAC + S5b TD3 + S5c DQN) — differs from the PPO budget
+   *  (off-policy methods have their own sample-efficiency profile). The sidebar uses this for the step
+   *  ladder + ★ when SAC/TD3/DQN is the algo; null/absent ⇒ the env offers no off-policy algo (or DQN
+   *  reuses the PPO image budget, as Atari does), so the PPO `default_total_timesteps` is used. */
+  offpolicy_total_timesteps?: number | null
   /** Play episodes run this many times longer than training (so a person has time to play). 1 = same. */
   play_step_scale: number
   /** Whether the play skill-meter floor is widened by play_step_scale. True for step-penalty envs
@@ -79,7 +80,7 @@ export interface SystemInfo {
 // --- Training (B2) ---------------------------------------------------------
 // Mirrors backend/app/schemas/training.py — keep both sides in sync.
 
-export type Algo = 'ppo' | 'neuroevolution' | 'q_learning' | 'alphazero' | 'sac' | 'td3'
+export type Algo = 'ppo' | 'neuroevolution' | 'q_learning' | 'alphazero' | 'sac' | 'td3' | 'dqn'
 export type TrainState =
   | 'idle'
   | 'running'
@@ -180,6 +181,28 @@ export interface TD3Hyperparams {
   train_noise: number
 }
 
+/** Deep Q-Network knobs (S5c — off-policy value-based, discrete actions; the PPO counterpart and the
+ *  discrete-action mirror of SAC/TD3). Same off-policy machinery + raw obs/rewards, so ep_rew_mean + the
+ *  skill meter read like PPO's. It explores by ε-greedy (a random action with probability ε, annealing
+ *  from 1.0 to `exploration_final_eps` over the first `exploration_fraction` of the budget, then held) —
+ *  its distinctive knob, in place of SAC's ent_coef / TD3's train_noise. `target_update_interval` is how
+ *  often (steps) the slow target net is hard-synced. batch_size / learning_starts / gradient_steps are
+ *  fixed/derived backend defaults (not surfaced here). */
+export interface DQNHyperparams {
+  learning_rate: number
+  gamma: number
+  /** Replay-buffer capacity (smaller than SAC/TD3's 1M — Atari frames are RAM-heavy). */
+  buffer_size: number
+  /** Env steps collected between update phases (the trainer sets gradient_steps from this). */
+  train_freq: number
+  /** Steps between hard copies of the live Q-net into the slow target net (DQN's τ analogue). */
+  target_update_interval: number
+  /** Fraction of the budget to anneal ε over (1.0 → exploration_final_eps), then hold. */
+  exploration_fraction: number
+  /** The ε value held after annealing (residual random exploration). */
+  exploration_final_eps: number
+}
+
 export interface TrainConfig {
   env_id: string
   algo: Algo
@@ -198,6 +221,8 @@ export interface TrainConfig {
   sac?: SACHyperparams | null
   /** Present only for Twin Delayed DDPG runs (algo "td3", S5b); null/omitted otherwise. */
   td3?: TD3Hyperparams | null
+  /** Present only for Deep Q-Network runs (algo "dqn", S5c); null/omitted otherwise. */
+  dqn?: DQNHyperparams | null
 }
 
 /** WS frame: {type:"metrics", ...} pushed once per PPO rollout. */

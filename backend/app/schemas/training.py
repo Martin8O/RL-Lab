@@ -8,7 +8,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-Algo = Literal["ppo", "neuroevolution", "q_learning", "alphazero", "sac", "td3"]
+Algo = Literal["ppo", "neuroevolution", "q_learning", "alphazero", "sac", "td3", "dqn"]
 TrainState = Literal[
     "idle", "running", "paused", "stopping", "stopped", "finished", "error"
 ]
@@ -201,13 +201,50 @@ class TD3Hyperparams(BaseModel):
     target_noise_clip: float = 0.5  # the target-smoothing noise is clipped to ±this (fixed)
 
 
+class DQNHyperparams(BaseModel):
+    """Tunable DQN knobs (the 7th algorithm, S5c — Deep Q-Network, off-policy value-based control).
+
+    DQN is the **value-based** counterpart to policy-gradient PPO and the discrete-action mirror of
+    SAC/TD3: same off-policy machinery (a replay buffer + a slow target network), but it learns an
+    **action-value function** (Q) with a neural net and acts by taking the highest-Q action, instead
+    of learning a policy directly. Gated to **discrete-action** envs only (the exact complement of
+    SAC/TD3's continuous-``Box`` gate: CartPole + the classic-control discretes + LunarLander + Atari).
+    Trains on raw obs/rewards (like SAC/TD3, no VecNormalize), so ``ep_rew_mean`` and the
+    ``[min_score, solved_score]`` skill meter read exactly like PPO's.
+
+    The one conceptual difference from SAC/TD3 is *how it explores*: not entropy (SAC's ``ent_coef``)
+    or injected action noise (TD3's ``train_noise``), but **ε-greedy** — it plays a random action with
+    probability ε, which anneals from 1.0 down to ``exploration_final_eps`` over the first
+    ``exploration_fraction`` of the budget, then holds. ``target_update_interval`` is how often (in
+    steps) the slow target network is hard-copied from the live Q-net (DQN's analogue of SAC/TD3's
+    soft τ update). The ★ recommended values are per-env from rl-zoo3's tuned recipes (CartPole likes a
+    high ``train_freq`` + a fast target sync; Atari uses the Nature-DQN recipe — set on the registry).
+
+    ``batch_size`` / ``learning_starts`` are fixed (advanced, not sliders, like SAC's); the trainer
+    budget-scales ``learning_starts`` so a short run doesn't burn a fifth of itself on random warmup,
+    and sets ``gradient_steps`` itself (Atari does the Nature 1-update-per-collect; the vector envs do
+    one update per collected step).
+    """
+
+    learning_rate: float = 1e-3  # gradient step for the Q-net (rl-zoo3 classic-control range)
+    gamma: float = 0.99
+    buffer_size: int = 100_000  # replay-buffer capacity (smaller than SAC/TD3's 1M — Atari is RAM-heavy)
+    batch_size: int = 128  # minibatch sampled from the buffer per gradient step (fixed, not a slider)
+    learning_starts: int = 1_000  # random warmup steps before the first gradient update (budget-scaled)
+    train_freq: int = 4  # env steps collected between update phases (gradient_steps set by the trainer)
+    target_update_interval: int = 250  # steps between hard copies of the live Q-net into the target net
+    exploration_fraction: float = 0.2  # fraction of the budget to anneal ε over (then hold at the final)
+    exploration_final_eps: float = 0.05  # the ε value held after annealing (residual random exploration)
+
+
 class TrainConfig(BaseModel):
     """Full, reproducible description of a training run (echoed back in status).
 
     ``hyperparams`` configures PPO; ``evolution`` configures neuroevolution; ``q_learning``
     configures tabular Q-learning; ``alphazero`` configures the AlphaZero-lite board trainer;
-    ``sac`` configures Soft Actor-Critic; ``td3`` configures Twin Delayed DDPG. Exactly one applies,
-    selected by ``algo``; the others stay None so the recorded config is clean.
+    ``sac`` configures Soft Actor-Critic; ``td3`` configures Twin Delayed DDPG; ``dqn`` configures
+    Deep Q-Network. Exactly one applies, selected by ``algo``; the others stay None so the recorded
+    config is clean.
     """
 
     env_id: str = "cartpole"
@@ -227,8 +264,11 @@ class TrainConfig(BaseModel):
     # total_timesteps budget (it runs that many env steps) — only the param surface differs.
     sac: SACHyperparams | None = None
     # Present only for Twin Delayed DDPG runs (algo=="td3", S5b); None otherwise. Like SAC, TD3 reuses
-    # the env-step total_timesteps budget (and the off-policy sac_total_timesteps ★ on the registry).
+    # the env-step total_timesteps budget (and the off-policy offpolicy_total_timesteps ★ on the registry).
     td3: TD3Hyperparams | None = None
+    # Present only for Deep Q-Network runs (algo=="dqn", S5c); None otherwise. Like SAC/TD3, DQN reuses
+    # the env-step total_timesteps budget (and the off-policy offpolicy_total_timesteps ★ on the registry).
+    dqn: DQNHyperparams | None = None
 
 
 class TrainingMetrics(BaseModel):

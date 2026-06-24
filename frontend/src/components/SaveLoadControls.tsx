@@ -46,7 +46,8 @@ function algoLabel(t: (k: string) => string, algo: Algo): string {
   if (algo === 'alphazero') return t('sidebar.algo_az')
   if (algo === 'sac') return t('sidebar.algo_sac')
   if (algo === 'td3') return t('sidebar.algo_td3')
-  return t('sidebar.algo_ppo')
+  if (algo === 'dqn') return t('sidebar.algo_dqn')
+  return t('sidebar.algo_ppo')  // ppo (and any unrecognised algo) reads as PPO
 }
 
 // % of the env's [min_score, solved_score] range the saved model reached (like the chart's skill %),

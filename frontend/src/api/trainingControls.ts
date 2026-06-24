@@ -29,6 +29,7 @@ export function buildTrainConfig(): TrainConfig | null {
     alphazero: isAz ? s.alphaZeroParams : null,
     sac: s.algo === 'sac' ? s.sacParams : null,
     td3: s.algo === 'td3' ? s.td3Params : null,
+    dqn: s.algo === 'dqn' ? s.dqnParams : null,
   }
 }
 

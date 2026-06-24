@@ -138,13 +138,21 @@ class _MetricsCallback(BaseCallback):
         self._total = total_timesteps
         self._started_at = started_at
         self.iteration_count = 0  # read by the progress ticker (a separate thread)
-        self._next_emit = _METRICS_INTERVAL_STEPS
+        # Seeded on the FIRST step relative to the (possibly resumed) counter, not to a fixed 2000: a
+        # RESUMED run starts num_timesteps at the restored total, which already exceeds a fixed 2000, so
+        # _emit() (a full model.save() snapshot + preview rebuild) would fire EVERY step until the
+        # threshold caught up — crippling resume to a crawl for a long stretch (the DQN-reported bug; SAC
+        # shares this callback). Seeding to num_timesteps + interval emits once per interval from the
+        # resume point. Fresh runs start at 0, unchanged.
+        self._next_emit: int | None = None
 
     def _on_step(self) -> bool:
         # Called every env step in collect_rollouts. Park here while paused; abort if a stop was asked.
         self._control.wait_if_paused()
         if self._control.stop_requested:
             return False
+        if self._next_emit is None:
+            self._next_emit = self.num_timesteps + _METRICS_INTERVAL_STEPS
         if self.num_timesteps >= self._next_emit:
             self._next_emit += _METRICS_INTERVAL_STEPS
             self._emit()

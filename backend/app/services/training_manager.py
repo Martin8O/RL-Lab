@@ -258,7 +258,7 @@ class TrainingManager:
         # MaskablePPO *board* trainer (G6b) — hence the PPO guard excludes them; AZ is always a board game
         # but computes its own schedule, so it's added explicitly.
         if config.algo == "alphazero" or (
-            config.algo in ("ppo", "sac", "td3")
+            config.algo in ("ppo", "sac", "td3", "dqn")
             and not is_competitive_ma(spec)
             and not is_board_game(spec)
         ):
@@ -386,6 +386,23 @@ class TrainingManager:
                 from app.services.trainer_td3 import train_td3  # lazy: loads torch/SB3
 
                 terminal = train_td3(
+                    config,
+                    gym_id,
+                    control,
+                    self._emit_metrics,
+                    self._emit_progress,
+                    self._publish_predict,
+                    self._on_snapshot,
+                    resume,
+                )
+            elif config.algo == "dqn":
+                # Deep Q-Network (S5c): the off-policy *value-based* peer trainer — the discrete-action
+                # mirror of SAC/TD3 and PPO's canonical counterpart. Same off-policy lane (metrics +
+                # progress frames, preview publish, snapshot); gated to discrete-action envs (classic
+                # control + LunarLander + Atari). MlpPolicy/CPU for vector, CnnPolicy/CUDA for Atari.
+                from app.services.trainer_dqn import train_dqn  # lazy: loads torch/SB3
+
+                terminal = train_dqn(
                     config,
                     gym_id,
                     control,

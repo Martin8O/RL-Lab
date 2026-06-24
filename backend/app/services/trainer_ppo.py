@@ -314,7 +314,12 @@ def _progress_ticker(
     mutates model state — so it cannot affect training reproducibility.
     """
     last_t = started_at
-    last_steps = 0
+    # Seed the step baseline at the model's CURRENT counter, not 0. On a *resumed* run num_timesteps is
+    # already the restored total (e.g. 1.4M) before the first tick, so a 0 baseline would make the first
+    # delta the entire resumed total → an absurd steps/s spike (≈1.4M/s) that the EMA then takes ~15 ticks
+    # to bleed off (the reported "crazy numbers then it settles" on load). Fresh runs start at 0, so this
+    # is unchanged for them. (Reads the counter only — never mutates model state, so repro is unaffected.)
+    last_steps = int(model.num_timesteps)
     sps_ema: float | None = None
     last_rew: float | None = None
     last_len: float | None = None

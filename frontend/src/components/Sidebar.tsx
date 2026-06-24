@@ -94,6 +94,9 @@ function formatValue(id: string, v: number | string): string {
     case 'td3_tau':        return v.toFixed(3)  // same small soft-update coefficient as SAC
     case 'td3_buffer_size': return formatCount(v)  // 1000000 → "1M"
     case 'td3_train_noise': return v.toFixed(2)  // exploration-noise std (≈0.10)
+    case 'dqn_buffer_size': return formatCount(v)  // 100000 → "100k" (the shared count formatter)
+    case 'dqn_exploration_fraction':
+    case 'dqn_exploration_final_eps': return v.toFixed(2)  // ε-greedy fractions (≈0.16 / 0.04)
     case 'q_learning_rate':
     case 'epsilon_start':
     case 'epsilon_end':
@@ -236,6 +239,7 @@ function ALGO_LABEL(t: (k: string) => string, id: string): string {
     case 'alphazero':      return t('sidebar.algo_az')
     case 'sac':            return t('sidebar.algo_sac')
     case 'td3':            return t('sidebar.algo_td3')
+    case 'dqn':            return t('sidebar.algo_dqn')
     default:               return id
   }
 }
@@ -327,6 +331,8 @@ export default function Sidebar() {
   const setSacParams    = useAppStore((s) => s.setSacParams)
   const td3Params       = useAppStore((s) => s.td3Params)
   const setTd3Params    = useAppStore((s) => s.setTd3Params)
+  const dqnParams       = useAppStore((s) => s.dqnParams)
+  const setDqnParams    = useAppStore((s) => s.setDqnParams)
   const seed            = useAppStore((s) => s.seed)
   const setSeed         = useAppStore((s) => s.setSeed)
   const totalTimesteps  = useAppStore((s) => s.totalTimesteps)
@@ -343,18 +349,20 @@ export default function Sidebar() {
   const sacDefs = selectedEnv?.hyperparams?.['sac'] ?? {}
   const sacEntChoices = sacDefs.ent_coef?.choices ?? null  // SAC entropy: ["auto", "0.1", "0.2"]
   const td3Defs = selectedEnv?.hyperparams?.['td3'] ?? {}
+  const dqnDefs = selectedEnv?.hyperparams?.['dqn'] ?? {}
   const isEvo = algo === 'neuroevolution'
   const isQ   = algo === 'q_learning'
   const isAz  = algo === 'alphazero'
   const isSac = algo === 'sac'
   const isTd3 = algo === 'td3'
+  const isDqn = algo === 'dqn'
 
   // Per-env step ladder + the ★ recommended budget; always include the current value so the
   // <select> can render it even after a reload with a value off the ladder. The off-policy algos (SAC +
-  // TD3) are far more sample-efficient, so they use their own much smaller ★ budget (sac_total_timesteps)
-  // — the ladder + ★ then reflect that real budget (~500k for BipedalWalker), not the PPO 5M.
+  // TD3 + DQN) carry their own ★ budget (offpolicy_total_timesteps) — the ladder + ★ then reflect that
+  // real budget (~500k for BipedalWalker-SAC, 100k for CartPole-DQN), not the PPO default.
   const defaultSteps =
-    ((isSac || isTd3) && selectedEnv?.sac_total_timesteps) || selectedEnv?.default_total_timesteps || 50_000
+    ((isSac || isTd3 || isDqn) && selectedEnv?.offpolicy_total_timesteps) || selectedEnv?.default_total_timesteps || 50_000
   const stepsOptions = Array.from(new Set([...stepsLadder(defaultSteps), totalTimesteps])).sort((a, b) => a - b)
 
   return (
@@ -391,7 +399,7 @@ export default function Sidebar() {
       {/* Scrollable params */}
       <div style={{ flex: 1, overflowY: 'auto', padding: 'var(--space-5)' }}>
         <div style={{ ...sectionEyebrow, marginBottom: 'var(--space-4)' }}>
-          {isEvo ? t('sidebar.evo_params_title') : isQ ? t('sidebar.q_params_title') : isAz ? t('sidebar.az_params_title') : isSac ? t('sidebar.sac_params_title') : isTd3 ? t('sidebar.td3_params_title') : t('sidebar.params_title')}
+          {isEvo ? t('sidebar.evo_params_title') : isQ ? t('sidebar.q_params_title') : isAz ? t('sidebar.az_params_title') : isSac ? t('sidebar.sac_params_title') : isTd3 ? t('sidebar.td3_params_title') : isDqn ? t('sidebar.dqn_params_title') : t('sidebar.params_title')}
         </div>
 
         {algo === 'ppo' && (
@@ -810,6 +818,85 @@ export default function Sidebar() {
           </>
         )}
 
+        {/* DQN (S5c — off-policy value-based, discrete actions; PPO's counterpart): the learning rate +
+            discount, the replay-buffer size, how often it updates (train_freq), how often the slow target
+            net is synced (target_update_interval), and the two ε-greedy exploration knobs — the fraction
+            of the run to anneal ε over and the final ε held after. batch_size / learning_starts /
+            gradient_steps are fixed/derived backend defaults. DQN reuses the PPO "Total Steps" budget. */}
+        {isDqn && (
+          <>
+            {dqnDefs.learning_rate && (
+              <ParamSlider
+                id="learning_rate" label={t('sidebar.learning_rate')}
+                value={dqnParams.learning_rate}
+                min={dqnDefs.learning_rate.min!} max={dqnDefs.learning_rate.max!} step={0.01}
+                recommended={dqnDefs.learning_rate.recommended as number}
+                onChange={(v) => setDqnParams({ learning_rate: v })}
+              />
+            )}
+
+            {dqnDefs.gamma && (
+              <ParamSlider
+                id="gamma" label={t('sidebar.gamma')}
+                value={dqnParams.gamma}
+                min={dqnDefs.gamma.min!} max={dqnDefs.gamma.max!} step={dqnDefs.gamma.step!}
+                recommended={dqnDefs.gamma.recommended as number}
+                onChange={(v) => setDqnParams({ gamma: v })}
+              />
+            )}
+
+            {dqnDefs.buffer_size && (
+              <ParamSlider
+                id="dqn_buffer_size" label={t('sidebar.dqn_buffer_size')}
+                value={dqnParams.buffer_size}
+                min={dqnDefs.buffer_size.min!} max={dqnDefs.buffer_size.max!} step={dqnDefs.buffer_size.step!}
+                recommended={dqnDefs.buffer_size.recommended as number}
+                onChange={(v) => setDqnParams({ buffer_size: Math.round(v) })}
+              />
+            )}
+
+            {dqnDefs.train_freq && (
+              <ParamSlider
+                id="dqn_train_freq" label={t('sidebar.dqn_train_freq')}
+                value={dqnParams.train_freq}
+                min={dqnDefs.train_freq.min!} max={dqnDefs.train_freq.max!} step={dqnDefs.train_freq.step!}
+                recommended={dqnDefs.train_freq.recommended as number}
+                onChange={(v) => setDqnParams({ train_freq: Math.round(v) })}
+              />
+            )}
+
+            {dqnDefs.target_update_interval && (
+              <ParamSlider
+                id="dqn_target_update" label={t('sidebar.dqn_target_update')}
+                value={dqnParams.target_update_interval}
+                min={dqnDefs.target_update_interval.min!} max={dqnDefs.target_update_interval.max!} step={dqnDefs.target_update_interval.step!}
+                recommended={dqnDefs.target_update_interval.recommended as number}
+                onChange={(v) => setDqnParams({ target_update_interval: Math.round(v) })}
+              />
+            )}
+
+            {dqnDefs.exploration_fraction && (
+              <ParamSlider
+                id="dqn_exploration_fraction" label={t('sidebar.dqn_exploration_fraction')}
+                value={dqnParams.exploration_fraction}
+                min={dqnDefs.exploration_fraction.min!} max={dqnDefs.exploration_fraction.max!} step={dqnDefs.exploration_fraction.step!}
+                recommended={dqnDefs.exploration_fraction.recommended as number}
+                onChange={(v) => setDqnParams({ exploration_fraction: v })}
+              />
+            )}
+
+            {dqnDefs.exploration_final_eps && (
+              <ParamSlider
+                id="dqn_exploration_final_eps" label={t('sidebar.dqn_exploration_final_eps')}
+                value={dqnParams.exploration_final_eps}
+                min={dqnDefs.exploration_final_eps.min!} max={dqnDefs.exploration_final_eps.max!} step={dqnDefs.exploration_final_eps.step!}
+                recommended={dqnDefs.exploration_final_eps.recommended as number}
+                onChange={(v) => setDqnParams({ exploration_final_eps: v })}
+              />
+            )}
+          </>
+        )}
+
         {/* Divider */}
         <div style={{ height: 1, background: 'var(--border-default)', margin: 'var(--space-3) 0 var(--space-4)' }} />
 
@@ -842,9 +929,9 @@ export default function Sidebar() {
           </div>
         </div>
 
-        {/* Total Steps — PPO + SAC + TD3 (all run an env-step budget; evolution uses Generations,
+        {/* Total Steps — PPO + SAC + TD3 + DQN (all run an env-step budget; evolution uses Generations,
             Q-learning Episodes, AlphaZero Iterations). */}
-        {(algo === 'ppo' || algo === 'sac' || algo === 'td3') && (
+        {(algo === 'ppo' || algo === 'sac' || algo === 'td3' || algo === 'dqn') && (
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <label style={fieldLabel}>
               {t('sidebar.total_steps')}

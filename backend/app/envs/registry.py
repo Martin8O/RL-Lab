@@ -112,13 +112,14 @@ class EnvSpec(BaseModel):
     # train fine without it) and the image path (a CnnPolicy already scales pixels /255). ``ep_rew_mean``
     # stays raw regardless (the Monitor sits inside VecNormalize), so the skill meter is unchanged.
     normalize_obs: bool = False
-    # The off-policy ★ recommended step budget (S5a SAC, **shared by S5b TD3** — both off-policy with the
-    # same sample-efficiency), separate from ``default_total_timesteps`` (the PPO budget the sidebar shows
+    # The off-policy ★ recommended step budget (S5a SAC + S5b TD3 + S5c DQN — all off-policy, all far more
+    # sample-efficient than PPO), separate from ``default_total_timesteps`` (the PPO budget the sidebar shows
     # for PPO). Off-policy methods are ~5–10× more sample-efficient, so they reach a strong policy in far
-    # fewer steps (e.g. BipedalWalker ~500k vs PPO's 5M) — running the PPO budget on them would be needlessly
-    # long. None ⇒ this env offers neither SAC nor TD3 (the sidebar falls back to the PPO budget). Set only on
-    # the continuous-Box envs; drives the sidebar step ladder + ★ when SAC or TD3 is the algo.
-    sac_total_timesteps: int | None = None
+    # fewer steps (e.g. BipedalWalker ~500k vs PPO's 5M; CartPole-DQN ~100k vs… well, PPO's 50k — DQN is less
+    # efficient than PPO on the trivial classics but a fairer, longer budget makes the demo land). None ⇒ this
+    # env offers no off-policy algo (the sidebar falls back to the PPO budget). Set on the continuous-Box envs
+    # (SAC/TD3) AND the discrete DQN envs; drives the sidebar step ladder + ★ when SAC/TD3/DQN is the algo.
+    offpolicy_total_timesteps: int | None = None
 
 
 _REGISTRY: dict[str, EnvSpec] = {}
@@ -315,6 +316,42 @@ def _standard_hyperparams(q_episodes: int = 5_000) -> dict[str, dict[str, Hyperp
                 min=0.0, max=0.5, step=0.01,
             ),
         },
+        # DQN (S5c) — off-policy value-based, discrete actions. Exposed only on discrete-action envs (gated
+        # by supported_algos: classic-control discretes + LunarLander + Atari). The ★ values here are a
+        # generic classic-control fallback; the real per-env ★ are applied post-construction from _DQN_TUNED
+        # (rl-zoo3 recipes), and Atari overrides the whole block via _cnn_hyperparams (Nature-DQN). Sliders:
+        # lr / γ / buffer_size / train_freq / target_update_interval + the two ε-greedy exploration knobs.
+        # batch_size / learning_starts / gradient_steps are fixed/derived in the trainer (not sliders).
+        "dqn": {
+            "learning_rate": HyperparamDef(
+                type="float", default=1e-3, recommended=1e-3,
+                min=1e-5, max=1e-2,
+            ),
+            "gamma": HyperparamDef(
+                type="float", default=0.99, recommended=0.99,
+                min=0.9, max=0.9999, step=0.001,
+            ),
+            "buffer_size": HyperparamDef(  # replay window — smaller than SAC/TD3's 1M (Atari is RAM-heavy)
+                type="int", default=100_000, recommended=100_000,
+                min=10_000, max=1_000_000, step=10_000,
+            ),
+            "train_freq": HyperparamDef(  # env steps collected between updates (CartPole's recipe wants 256)
+                type="int", default=4, recommended=4,
+                min=1, max=256, step=1,
+            ),
+            "target_update_interval": HyperparamDef(  # steps between hard target-net syncs (DQN's τ analogue)
+                type="int", default=250, recommended=250,
+                min=1, max=2_000, step=1,
+            ),
+            "exploration_fraction": HyperparamDef(  # fraction of the budget to anneal ε over, then hold
+                type="float", default=0.2, recommended=0.2,
+                min=0.01, max=0.5, step=0.01,
+            ),
+            "exploration_final_eps": HyperparamDef(  # the ε held after annealing (residual exploration)
+                type="float", default=0.05, recommended=0.05,
+                min=0.0, max=0.2, step=0.01,
+            ),
+        },
     }
 
 
@@ -348,6 +385,34 @@ def _cnn_hyperparams() -> dict[str, dict[str, HyperparamDef]]:
     hp["ppo"]["n_epochs"] = HyperparamDef(
         type="int", default=4, recommended=4, min=1, max=20, step=1,
     )
+    # DQN on Atari (S5c) = the Nature-DQN recipe (Mnih et al. 2015), which differs sharply from the
+    # classic-control defaults: a small lr (1e-4), a long target-sync (10k steps), and gentle ε (anneal to
+    # 0.01 over 10% of the budget). buffer_size stays at the classic 100k ★ — the Nature 1M would be ~28 GB
+    # of stacked 84×84×4 frames; 100k (~2.7 GB) is the deliberate "start small" for the GPU smoke (the spec
+    # warns Atari's image replay buffer is RAM-heavy). train_freq 4 = the Nature collect ratio (the trainer
+    # then pins gradient_steps=1 for the image path). Only the ★/ranges change; the param surface matches.
+    hp["dqn"]["learning_rate"] = HyperparamDef(
+        type="float", default=1e-4, recommended=1e-4, min=1e-5, max=1e-2,
+    )
+    # Smaller replay buffer than the classic 100k: Atari stores STACKED 84×84×4 frames, so even with
+    # optimize_memory_usage (which drops the duplicate next-obs array, halving it) a 100k buffer is ~2.8 GB
+    # and ~5.6 GB without — risky to re-allocate on resume (the reported MemoryError/10-steps-per-s bug).
+    # 50k ≈ 1.4 GB is a safe default that still gives DQN useful replay; raise it only with RAM to spare.
+    hp["dqn"]["buffer_size"] = HyperparamDef(
+        type="int", default=50_000, recommended=50_000, min=10_000, max=1_000_000, step=10_000,
+    )
+    hp["dqn"]["train_freq"] = HyperparamDef(
+        type="int", default=4, recommended=4, min=1, max=256, step=1,
+    )
+    hp["dqn"]["target_update_interval"] = HyperparamDef(
+        type="int", default=10_000, recommended=10_000, min=1_000, max=20_000, step=1_000,
+    )
+    hp["dqn"]["exploration_fraction"] = HyperparamDef(
+        type="float", default=0.1, recommended=0.1, min=0.01, max=0.5, step=0.01,
+    )
+    hp["dqn"]["exploration_final_eps"] = HyperparamDef(
+        type="float", default=0.01, recommended=0.01, min=0.0, max=0.2, step=0.01,
+    )
     return hp
 
 
@@ -367,7 +432,7 @@ register(
         family="classic_control",
         obs_type="vector",
         action_space="discrete",
-        supported_algos=["ppo", "neuroevolution"],
+        supported_algos=["ppo", "neuroevolution", "dqn"],  # dqn: off-policy value-based (S5c — the PPO-vs-DQN demo)
         hyperparams=_standard_hyperparams(),
         solved_score=500.0,  # CartPole-v1 caps at 500; ≥10% (50) is kept in run history
         default_total_timesteps=50_000,  # solves CartPole on CPU in well under a minute
@@ -400,7 +465,7 @@ register(
         family="box2d",
         obs_type="vector",
         action_space="discrete",
-        supported_algos=["ppo", "neuroevolution"],
+        supported_algos=["ppo", "neuroevolution", "dqn"],  # dqn: discrete-action value-based (S5c)
         # Same hyperparameter surface as CartPole — the standard SB3 PPO + neuroevolution
         # defaults (LunarLander just needs more steps; see the per-env Total Steps note in
         # content/parameters.ts).
@@ -617,7 +682,7 @@ register(
         family="classic_control",
         obs_type="vector",
         action_space="discrete",
-        supported_algos=["ppo", "neuroevolution"],
+        supported_algos=["ppo", "neuroevolution", "dqn"],  # dqn: discrete-action value-based (S5c)
         hyperparams=_standard_hyperparams(),
         solved_score=-110.0,  # MountainCar-v0 reward_threshold; reward is -1/step (max 200 steps)
         min_score=-200.0,  # 0% reference: never reaching the flag = -1 × 200 steps (worst case)
@@ -647,7 +712,7 @@ register(
         family="classic_control",
         obs_type="vector",
         action_space="discrete",
-        supported_algos=["ppo", "neuroevolution"],
+        supported_algos=["ppo", "neuroevolution", "dqn"],  # dqn: discrete-action value-based (S5c)
         hyperparams=_standard_hyperparams(),
         solved_score=-100.0,  # Acrobot-v1 reward_threshold; reward is -1/step (max 500 steps)
         min_score=-500.0,  # 0% reference: never swinging up = -1 × 500 steps (worst case)
@@ -983,7 +1048,7 @@ def _atari_spec(
         family="atari",
         obs_type="image",
         action_space="discrete",
-        supported_algos=["ppo"],  # image obs → CnnPolicy/GPU only; evo+Q-learning can't consume pixels
+        supported_algos=["ppo", "dqn"],  # image obs → CnnPolicy/GPU; dqn = DQN's birthplace (S5c); evo+Q can't consume pixels
         hyperparams=_cnn_hyperparams(),  # small rollout + fuller batch for the CnnPolicy (+60% throughput)
         # All 18 ALE actions at fixed indices → one shared keyboard map across the whole family.
         make_kwargs={"full_action_space": True},
@@ -2160,13 +2225,14 @@ for _slow_id in ("hopper", "walker2d", "humanoid"):
         _slow_spec.human_play_slowdown = 2.5
 
 
-# SAC (S5a) and TD3 (S5b) are off-policy and ~5–10× more sample-efficient than PPO, so their ★ recommended
-# budget is much smaller than each env's PPO ``default_total_timesteps`` (e.g. Humanoid 2M vs PPO 5M,
-# BipedalWalker 500k vs PPO 5M). The budget is identical for both (same off-policy sample efficiency), so
-# one shared map drives ``sac_total_timesteps``. Set post-construction (like human_play_slowdown above) on
-# every off-policy-supporting env so the sidebar's step ladder + ★ reflect the real budget when SAC or TD3 is
-# the chosen algorithm — without the misleading "5M steps" the PPO budget would otherwise suggest.
+# The off-policy algorithms (SAC S5a, TD3 S5b — continuous; DQN S5c — discrete) are ~5–10× more
+# sample-efficient than PPO, so their ★ recommended budget differs from each env's PPO
+# ``default_total_timesteps``. One shared map drives ``offpolicy_total_timesteps`` (the budget is the same
+# for whichever off-policy algo an env supports). Set post-construction (like human_play_slowdown above) so
+# the sidebar's step ladder + ★ reflect the real budget when SAC/TD3/DQN is the chosen algorithm — without
+# the misleading PPO budget. The continuous rows feed SAC/TD3; the discrete rows feed DQN (S5c).
 _OFFPOLICY_BUDGETS = {
+    # Continuous-Box envs → SAC/TD3 (much smaller than the PPO budget, e.g. Humanoid 2M vs PPO 5M).
     "pendulum": 50_000,
     "mountaincarcontinuous": 50_000,
     "reacher": 50_000,
@@ -2180,8 +2246,50 @@ _OFFPOLICY_BUDGETS = {
     # Heavier robots need more even off-policy: Ant (8 joints) ~1M, Humanoid (17 joints) ~2M.
     "ant": 1_000_000,
     "humanoid": 2_000_000,
+    # Discrete envs → DQN (S5c). DQN is *less* sample-efficient than PPO on the trivial classics, so these
+    # are a touch larger than the PPO default (CartPole 100k vs PPO 50k) — a fair budget so the PPO-vs-DQN
+    # demo lands rather than reading as "DQN doesn't learn". Atari is intentionally absent → DQN reuses the
+    # PPO image budget (default_total_timesteps, 10M) for the GPU smoke.
+    "cartpole": 100_000,
+    "acrobot": 200_000,
+    "lunarlander": 200_000,
+    "mountaincar": 120_000,
 }
 for _offp_id, _offp_budget in _OFFPOLICY_BUDGETS.items():
     _offp_spec = get_env(_offp_id)
     if _offp_spec is not None:
-        _offp_spec.sac_total_timesteps = _offp_budget
+        _offp_spec.offpolicy_total_timesteps = _offp_budget
+
+
+# DQN (S5c) per-env ★ recommended hyperparameters — rl-zoo3's tuned recipes (the values that actually make
+# each discrete env learn; the defaults in DQNHyperparams are a generic fallback). Only the slider params
+# vary; batch_size / learning_starts / gradient_steps are derived in the trainer. Set post-construction on
+# the env's ``dqn`` HyperparamDef block (both default + recommended) — the same data-tweak pattern as the
+# budgets above. CartPole wants a fast target sync (10) + a high train_freq (256); the others use their
+# zoo recipes. Atari's recipe is the Nature-DQN override baked into ``_cnn_hyperparams`` instead.
+_DQN_TUNED: dict[str, dict[str, float]] = {
+    "cartpole": {
+        "learning_rate": 2.3e-3, "gamma": 0.99, "buffer_size": 100_000, "train_freq": 256,
+        "target_update_interval": 10, "exploration_fraction": 0.16, "exploration_final_eps": 0.04,
+    },
+    "mountaincar": {
+        "learning_rate": 4e-3, "gamma": 0.98, "buffer_size": 100_000, "train_freq": 16,
+        "target_update_interval": 600, "exploration_fraction": 0.2, "exploration_final_eps": 0.07,
+    },
+    "acrobot": {
+        "learning_rate": 6.3e-4, "gamma": 0.99, "buffer_size": 50_000, "train_freq": 4,
+        "target_update_interval": 250, "exploration_fraction": 0.12, "exploration_final_eps": 0.1,
+    },
+    "lunarlander": {
+        "learning_rate": 6.3e-4, "gamma": 0.99, "buffer_size": 50_000, "train_freq": 4,
+        "target_update_interval": 250, "exploration_fraction": 0.12, "exploration_final_eps": 0.1,
+    },
+}
+for _dqn_id, _dqn_params in _DQN_TUNED.items():
+    _dqn_spec = get_env(_dqn_id)
+    if _dqn_spec is not None and "dqn" in _dqn_spec.hyperparams:
+        _block = _dqn_spec.hyperparams["dqn"]
+        for _param, _value in _dqn_params.items():
+            if _param in _block:
+                _block[_param].default = _value
+                _block[_param].recommended = _value

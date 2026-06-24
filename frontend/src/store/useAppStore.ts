@@ -22,6 +22,7 @@ import type {
   HwStats,
   SACHyperparams,
   TD3Hyperparams,
+  DQNHyperparams,
   SelfPlayHyperparams,
   TrainingMetrics,
   TrainingProgress,
@@ -120,6 +121,20 @@ const DEFAULT_TD3_PARAMS: TD3Hyperparams = {
   train_noise:   0.1,
 }
 
+// Matches the registry's ★ DQN block (S5c — off-policy value-based, discrete actions). These are the
+// generic classic-control defaults; the real per-env ★ snap from the registry on env switch (CartPole's
+// recipe wants a fast target sync + high train_freq, Atari uses the Nature recipe). It explores by
+// ε-greedy (exploration_fraction / exploration_final_eps), DQN's distinctive knob vs SAC's ent_coef.
+const DEFAULT_DQN_PARAMS: DQNHyperparams = {
+  learning_rate:          1e-3,
+  gamma:                  0.99,
+  buffer_size:            100_000,
+  train_freq:             4,
+  target_update_interval: 250,
+  exploration_fraction:   0.2,
+  exploration_final_eps:  0.05,
+}
+
 // The run-result state that must NOT outlive its run: chart history, the latest stats frame, the
 // session-best, and every algorithm's curve. Cleared both between runs (clearMetrics) and when the
 // user switches game — otherwise a finished run's chart/stats/skill linger and get silently rescaled
@@ -139,13 +154,15 @@ const EMPTY_RUN_RESULTS = {
   lastMa:           null as MultiAgentMetrics | null,
 }
 
-// The ★ step budget for the active algorithm: the off-policy methods (SAC + TD3, ~5–10× more
-// sample-efficient) reach a strong policy in far fewer steps than PPO, so they share a much smaller per-env
-// budget (sac_total_timesteps); every other step-ladder algo (PPO) uses the env's default. Used to snap
+// The ★ step budget for the active algorithm: the off-policy methods (SAC + TD3 + DQN) carry their own
+// per-env budget (offpolicy_total_timesteps) distinct from PPO's — far smaller for the continuous robots,
+// a touch larger for DQN on the trivial classics; every other step-ladder algo (PPO) uses the env's
+// default. Atari-DQN has no offpolicy budget set, so it falls back to the PPO image budget. Used to snap
 // totalTimesteps on algo / env switch.
 function budgetFor(spec: EnvSpec | undefined, algo: Algo): number {
   if (!spec) return 50_000
-  if ((algo === 'sac' || algo === 'td3') && spec.sac_total_timesteps) return spec.sac_total_timesteps
+  if ((algo === 'sac' || algo === 'td3' || algo === 'dqn') && spec.offpolicy_total_timesteps)
+    return spec.offpolicy_total_timesteps
   return spec.default_total_timesteps || 50_000
 }
 
@@ -162,6 +179,7 @@ function envDefaults(
     alphaZeroParams: AlphaZeroHyperparams
     sacParams: SACHyperparams
     td3Params: TD3Hyperparams
+    dqnParams: DQNHyperparams
     totalTimesteps: number
   },
 ): {
@@ -172,6 +190,7 @@ function envDefaults(
   alphaZeroParams: AlphaZeroHyperparams
   sacParams: SACHyperparams
   td3Params: TD3Hyperparams
+  dqnParams: DQNHyperparams
   totalTimesteps: number
 } | null {
   if (!spec) return null
@@ -181,6 +200,7 @@ function envDefaults(
   const az = spec.hyperparams?.alphazero ?? {}
   const sac = spec.hyperparams?.sac ?? {}
   const td3 = spec.hyperparams?.td3 ?? {}
+  const dqn = spec.hyperparams?.dqn ?? {}
   const num = (key: string, block: Record<string, { recommended: number | string }>, fb: number) =>
     block[key] !== undefined ? Number(block[key].recommended) : fb
   return {
@@ -245,6 +265,17 @@ function envDefaults(
       train_freq:    Math.round(num('train_freq', td3, prev.td3Params.train_freq)),
       train_noise:   num('train_noise', td3, prev.td3Params.train_noise),
     },
+    // DQN block (S5c — discrete-action value-based). All-numeric; the per-env recipe (CartPole's fast
+    // target sync, Atari's Nature values) snaps from the registry here. Reuses the off-policy budget.
+    dqnParams: {
+      learning_rate:          num('learning_rate', dqn, prev.dqnParams.learning_rate),
+      gamma:                  num('gamma', dqn, prev.dqnParams.gamma),
+      buffer_size:            Math.round(num('buffer_size', dqn, prev.dqnParams.buffer_size)),
+      train_freq:             Math.round(num('train_freq', dqn, prev.dqnParams.train_freq)),
+      target_update_interval: Math.round(num('target_update_interval', dqn, prev.dqnParams.target_update_interval)),
+      exploration_fraction:   num('exploration_fraction', dqn, prev.dqnParams.exploration_fraction),
+      exploration_final_eps:  num('exploration_final_eps', dqn, prev.dqnParams.exploration_final_eps),
+    },
     totalTimesteps: spec.default_total_timesteps || prev.totalTimesteps,
   }
 }
@@ -262,6 +293,7 @@ interface AppState {
   alphaZeroParams: AlphaZeroHyperparams  // G6f: AlphaZero-lite board self-play knobs
   sacParams:       SACHyperparams        // S5a: Soft Actor-Critic (off-policy continuous control)
   td3Params:       TD3Hyperparams        // S5b: Twin Delayed DDPG (off-policy continuous control)
+  dqnParams:       DQNHyperparams        // S5c: Deep Q-Network (off-policy value-based, discrete actions)
   seed:            number
   totalTimesteps:  number
   emaAlpha:        number     // 1 = raw; 0.05 = heavy smoothing
@@ -323,6 +355,7 @@ interface AppState {
   setAlphaZeroParams: (a: Partial<AlphaZeroHyperparams>) => void
   setSacParams:       (s: Partial<SACHyperparams>)      => void
   setTd3Params:       (s: Partial<TD3Hyperparams>)      => void
+  setDqnParams:       (s: Partial<DQNHyperparams>)      => void
   setSeed:            (s: number)                       => void
   setTotalTimesteps:  (n: number)                       => void
   setEmaAlpha:        (a: number)                       => void
@@ -375,6 +408,7 @@ export const useAppStore = create<AppState>()(
       alphaZeroParams: DEFAULT_AZ_PARAMS,
       sacParams:       DEFAULT_SAC_PARAMS,
       td3Params:       DEFAULT_TD3_PARAMS,
+      dqnParams:       DEFAULT_DQN_PARAMS,
       seed:            42,
       totalTimesteps:  50_000,
       emaAlpha:        0.3,
@@ -463,10 +497,18 @@ export const useAppStore = create<AppState>()(
       // new algo's ★ (SAC's budget is far smaller than PPO's, so PPO↔SAC must not keep the other's 5M/500k).
       setAlgo:           (algo)           => set((s) => {
         const spec = s.envs.find((e) => e.id === s.selectedEnvId)
+        // DQN's ★ recommended hyperparameters are **per-env** (rl-zoo3 recipes — CartPole's fast target
+        // sync + high train_freq differ sharply from the others), unlike PPO/SAC/TD3 whose ★ are
+        // env-independent. So when DQN becomes the active algo, snap its sliders to THIS env's ★ — else
+        // picking DQN on an already-selected game would show the generic defaults sitting off the green ★
+        // tick. The other algos keep their values across a switch (their defaults already equal their ★).
+        const dqnPatch =
+          algo === 'dqn' ? (() => { const d = envDefaults(spec, s); return d ? { dqnParams: d.dqnParams } : {} })() : {}
         return {
           algo,
           activeTab: (algo === 'neuroevolution' ? 'fitness' : 'reward') as ChartTab,
           totalTimesteps: spec ? budgetFor(spec, algo) : s.totalTimesteps,
+          ...dqnPatch,
         }
       }),
       setHyperparams:    (h)              => set((s) => ({ hyperparams: { ...s.hyperparams, ...h } })),
@@ -476,6 +518,7 @@ export const useAppStore = create<AppState>()(
       setAlphaZeroParams:(a)              => set((s) => ({ alphaZeroParams: { ...s.alphaZeroParams, ...a } })),
       setSacParams:      (sp)             => set((s) => ({ sacParams: { ...s.sacParams, ...sp } })),
       setTd3Params:      (sp)             => set((s) => ({ td3Params: { ...s.td3Params, ...sp } })),
+      setDqnParams:      (sp)             => set((s) => ({ dqnParams: { ...s.dqnParams, ...sp } })),
       setSeed:           (seed)           => set({ seed }),
       setTotalTimesteps: (n)              => set({ totalTimesteps: n }),
       setEmaAlpha:       (emaAlpha)       => set({ emaAlpha }),
@@ -661,6 +704,7 @@ export const useAppStore = create<AppState>()(
         alphaZeroParams: s.alphaZeroParams,
         sacParams:       s.sacParams,
         td3Params:       s.td3Params,
+        dqnParams:       s.dqnParams,
         seed:            s.seed,
         totalTimesteps:  s.totalTimesteps,
         emaAlpha:        s.emaAlpha,

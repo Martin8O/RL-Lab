@@ -63,7 +63,7 @@ def test_classic_control_g1a_envs(
     assert env["obs_type"] == "vector"
     assert env["action_space"] == "discrete"
     assert env["hw_requirement"] == "cpu"
-    assert env["supported_algos"] == ["ppo", "neuroevolution"]
+    assert env["supported_algos"] == ["ppo", "neuroevolution", "dqn"]  # + DQN on the discrete envs (S5c)
     assert env["solved_score"] == solved
     # negative-reward envs: the skill floor sits below the solved score (meter fills the red)
     assert env["min_score"] == floor < env["solved_score"]
@@ -79,9 +79,16 @@ def test_play_step_scale_extends_short_envs_only() -> None:
 
 
 def test_standard_hyperparams_shared_across_vector_envs() -> None:
-    """Every vector/discrete env exposes the identical PPO + neuroevolution param surface."""
+    """Every vector/discrete env exposes the identical PPO + neuroevolution param surface.
+
+    The DQN block (S5c) is intentionally **per-env tuned** (rl-zoo3 recipes — CartPole's fast target
+    sync vs the others), so it is excluded from this shared-surface check.
+    """
     ids = ["cartpole", "lunarlander", "mountaincar", "acrobot"]
-    surfaces = [client.get(f"/api/envs/{i}").json()["hyperparams"] for i in ids]
+    surfaces = [
+        {k: v for k, v in client.get(f"/api/envs/{i}").json()["hyperparams"].items() if k != "dqn"}
+        for i in ids
+    ]
     assert all(s == surfaces[0] for s in surfaces[1:])
 
 
@@ -110,5 +117,10 @@ def test_classic_control_g1b_continuous_envs(
     assert env["solved_score"] == solved
     assert env["min_score"] == floor
     assert env["difficulty"] == difficulty
-    # Same shared PPO + neuroevolution param surface as the discrete envs (only the env differs).
-    assert env["hyperparams"] == client.get("/api/envs/cartpole").json()["hyperparams"]
+    # Same shared PPO + neuroevolution param surface as the discrete envs (only the env differs). The
+    # DQN block is excluded: these box envs don't offer DQN, and CartPole's DQN block is per-env tuned.
+    surface = {k: v for k, v in env["hyperparams"].items() if k != "dqn"}
+    cartpole_surface = {
+        k: v for k, v in client.get("/api/envs/cartpole").json()["hyperparams"].items() if k != "dqn"
+    }
+    assert surface == cartpole_surface

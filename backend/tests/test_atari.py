@@ -33,7 +33,7 @@ def test_atari_family_registered() -> None:
         assert spec.gym_id.startswith("ALE/") and spec.gym_id.endswith("-v5")
         assert spec.obs_type == "image"
         assert spec.action_space == "discrete"
-        assert spec.supported_algos == ["ppo"]  # image obs → CnnPolicy/GPU; evo + Q-learning opt out
+        assert spec.supported_algos == ["ppo", "dqn"]  # image obs → CnnPolicy/GPU; dqn = DQN's birthplace (S5c); evo + Q-learning opt out
         assert spec.hw_requirement == "gpu"  # training gated to a CUDA machine
         assert spec.human_playable is True  # but playable by hand now
         assert spec.make_kwargs == {"full_action_space": True}  # uniform 18-action keyboard map

@@ -156,14 +156,45 @@ cadence, `_ep_means`/`_progress_ticker`). Two things differ:
   `NormalActionNoise` added to collected actions, sized to the env's action dimension in `_td3_kwargs`. It is
   the conceptual analogue of SAC's entropy temperature and sits in the same sidebar slot.
 - **It shares SAC's data, not just its shape.** TD3 lists the *same* `supported_algos` envs and re-uses the
-  existing `EnvSpec.sac_total_timesteps` off-policy budget (no new field) — `budgetFor` and the sidebar treat
+  shared `EnvSpec.offpolicy_total_timesteps` budget (no new field) — `budgetFor` and the sidebar treat
   `sac` and `td3` identically. `device` is `"cpu"` for the same ADR-056 reason as SAC.
 
-**Off-policy live-curve gate (applies to both SAC and TD3).** Their ~1 Hz ticker fires within a few hundred
+**Off-policy live-curve gate (applies to SAC, TD3 and DQN).** Their ~1 Hz ticker fires within a few hundred
 steps, when the episode buffer holds only one or two high-variance episodes (often a lucky random-warmup one),
 which plotted as a misleading "starts high then dips". `_ep_means` gained a `min_episodes` param (default 1 for
 PPO + snapshots) and the off-policy trainers pass **5** for their live chart frames, so the curve starts at the
 settled baseline and climbs. Snapshots/checkpoints still record any available reward.
+
+## Worked example — DQN (S5c, ADR-069)
+
+The seventh trainer, `services/trainer_dqn.py`, is the **value-based** counterpart to PPO and the
+**discrete-action mirror of SAC/TD3** — so it is a near-copy of `trainer_td3.py` reusing the same off-policy
+machinery (the PPO `metrics`/`progress` frames, the CPU save/load preview, raw obs / no-VecNormalize, the
+step-interval cadence, `_ep_means(≥5)`/`_progress_ticker`). What differs:
+
+- **Discrete, value-based ⇒ explore by ε-greedy.** DQN learns a Q-function and acts by `argmax`, so its
+  predict (`_dqn_predict`) returns a plain `int` (the ADR-021 discrete arm). It has neither SAC's entropy nor
+  TD3's action noise; its one distinctive knob is the **ε schedule** (`exploration_fraction` /
+  `exploration_final_eps`), with `target_update_interval` as the hard target-sync (DQN's blunt analogue of τ).
+- **Two policies, two devices, gated to the *discrete* envs** (the exact complement of the SAC/TD3 continuous
+  gate): an `MlpPolicy` on **CPU** for the classic-control discretes + LunarLander, and a `CnnPolicy` on
+  **CUDA** for Atari (DQN's birthplace) over the shared `image_vec.make_image_vec` (n_envs=1).
+- **Per-env ★ recipes.** Unlike SAC/TD3 (env-independent defaults), DQN's tuned values differ per env, so they
+  are applied post-construction from a `_DQN_TUNED` map (rl-zoo3 recipes); Atari overrides the whole `dqn` block
+  to the Nature recipe in `_cnn_hyperparams`. The off-policy budget field was generalized
+  `sac_total_timesteps`→`offpolicy_total_timesteps` and set on the discrete rows too.
+- **Atari replay-buffer memory.** The stacked-frame buffer is large, so the image path uses
+  `optimize_memory_usage=True` + a 50k cap (~1.4 GB), AI-play loads with `buffer_size=1` (inference never
+  samples), and resume forces the same on `DQN.load`.
+
+**Gotcha worth internalizing — reseed *every* baseline a resume restores.** A per-run counter the trainer
+restores on resume (`num_timesteps`) must reseed **every** threshold/baseline derived from it. The off-policy
+metrics callback seeded its emit threshold to a *fixed* `_METRICS_INTERVAL_STEPS` (2000); on resume
+`num_timesteps` already starts at the restored total (e.g. 1.4M), so the emit condition was true on **every
+step** → a full `model.save()` snapshot per step for ~700 steps (~a minute of ~12 steps/s) until it caught up,
+then "jumped". Fresh runs (start at 0) were immune. Fix = seed `_next_emit = num_timesteps + interval` on the
+first step (DQN **+ SAC + TD3**, which share the callback); the ~1 Hz progress ticker had the same class of bug
+(`last_steps=0` → first steps/s delta = the whole resumed total → a spike; now seeded to `num_timesteps`).
 
 ## What you get for free
 

@@ -510,6 +510,7 @@ const ALGO_CHART_TABS: Record<string, ChartTab[]> = {
   alphazero: ['reward', 'loss'],  // eval-vs-MCTS curve (Reward) + the net's training loss (Loss)
   sac: ['reward', 'loss'],  // S5a: episode return (Reward) + the soft-Q critic loss (Loss)
   td3: ['reward', 'loss'],  // S5b: episode return (Reward) + the twin-critic loss (Loss)
+  dqn: ['reward', 'loss'],  // S5c: episode return (Reward) + the Q-net TD/Bellman loss (Loss)
 }
 
 function algoLabel(t: (k: string) => string, algo: string): string {
@@ -520,6 +521,7 @@ function algoLabel(t: (k: string) => string, algo: string): string {
     case 'alphazero': return t('sidebar.algo_az')
     case 'sac': return t('sidebar.algo_sac')
     case 'td3': return t('sidebar.algo_td3')
+    case 'dqn': return t('sidebar.algo_dqn')
     default: return algo
   }
 }

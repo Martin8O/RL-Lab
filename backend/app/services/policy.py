@@ -39,6 +39,8 @@ def predict_from_checkpoint(loaded: LoadedCheckpoint) -> PredictFn:
             return _sac_predict(loaded.blob)
         if loaded.config.algo == "td3":
             return _td3_predict(loaded.blob)
+        if loaded.config.algo == "dqn":
+            return _dqn_predict(loaded.blob)
         if loaded.config.algo == "q_learning":
             return _q_learning_predict(loaded.blob)
         return _evolution_predict(loaded.blob)
@@ -113,6 +115,29 @@ def _td3_predict(blob: bytes) -> PredictFn:
     def predict(obs: object) -> Any:
         action, _ = model.predict(np.asarray(obs), deterministic=True)
         return np.clip(np.asarray(action, dtype=np.float32).reshape(-1), low, high)
+
+    return predict
+
+
+def _dqn_predict(blob: bytes) -> PredictFn:
+    """Deterministic DQN inference for AI-play (S5c). DQN is discrete-action and value-based: it acts by
+    taking the highest-Q action, so ``predict(deterministic=True)`` drops the ε-exploration and returns
+    the greedy ``argmax`` action as a plain ``int`` (the ADR-021 discrete contract). One loader serves
+    both the vector MlpPolicy and the Atari CnnPolicy — ``model.predict`` handles the stacked image obs
+    the image-AI loop feeds it. Like SAC/TD3 there is no VecNormalize: DQN trains on raw obs."""
+    import numpy as np
+    from stable_baselines3 import DQN
+
+    # buffer_size=1 overrides the saved replay-buffer size: inference never touches the buffer, but
+    # DQN.load would otherwise allocate the full trained size — for an Atari CnnPolicy that is GBs of
+    # stacked frames (the S5c memory bug). Forcing it to 1 keeps AI-play memory-trivial for every DQN
+    # save, including older Atari checkpoints saved before the buffer was trimmed. (Vector DQN buffers
+    # are tiny anyway, so this is harmless there.)
+    model = DQN.load(BytesIO(blob), device="cpu", buffer_size=1)  # env not needed for inference
+
+    def predict(obs: object) -> Any:
+        action, _ = model.predict(np.asarray(obs), deterministic=True)
+        return int(np.asarray(action).flatten()[0])
 
     return predict
 
