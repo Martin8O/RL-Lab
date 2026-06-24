@@ -208,12 +208,23 @@ def _snapshot(model: BaseAlgorithm, total_timesteps: int, iteration: int) -> Che
     )
 
 
-def _ep_means(model: BaseAlgorithm) -> tuple[float | None, float | None]:
+def _ep_means(
+    model: BaseAlgorithm, min_episodes: int = 1
+) -> tuple[float | None, float | None]:
     """Mean reward/length over SB3's recent-episode buffer, or ``(None, None)``.
 
     Read from the progress-ticker thread while ``learn()`` runs on another thread. The
     buffer is a deque that ``learn`` appends to, so we snapshot defensively and treat a
     rare concurrent mutation as "no update this tick".
+
+    ``min_episodes`` requires at least that many completed episodes before a mean is
+    returned (else ``(None, None)``). The default 1 is the historical behaviour (PPO emits
+    at rollout end, where the buffer is already full, and snapshots want any available
+    reward). The **off-policy** trainers (SAC/TD3) pass a higher value for their live chart
+    frames: their 1 Hz ticker fires within a few hundred steps, when the buffer holds only
+    one or two high-variance episodes (often a lucky *random-warmup* one), which plotted as
+    a misleading "starts high then dips" before the rolling mean settled. Gating to a few
+    episodes makes the live curve start at the settled baseline and climb cleanly.
     """
     buf = getattr(model, "ep_info_buffer", None)
     if not buf:
@@ -222,7 +233,7 @@ def _ep_means(model: BaseAlgorithm) -> tuple[float | None, float | None]:
         episodes = list(buf)  # snapshot; may raise if mutated mid-iteration
     except RuntimeError:
         return None, None
-    if not episodes:
+    if len(episodes) < min_episodes:
         return None, None
     n = len(episodes)
     return sum(e["r"] for e in episodes) / n, sum(e["l"] for e in episodes) / n
@@ -293,6 +304,7 @@ def _progress_ticker(
     total_timesteps: int,
     started_at: float,
     stop_event: threading.Event,
+    min_report_episodes: int = 1,
 ) -> None:
     """Emit a progress frame every ``_PROGRESS_INTERVAL`` seconds until stopped.
 
@@ -325,7 +337,7 @@ def _progress_ticker(
             instant = gained / dt
             sps_ema = instant if sps_ema is None else 0.3 * instant + 0.7 * sps_ema
 
-        rew, length = _ep_means(model)
+        rew, length = _ep_means(model, min_report_episodes)
         if rew is not None:
             last_rew, last_len = rew, length
 

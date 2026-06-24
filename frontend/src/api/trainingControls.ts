@@ -28,6 +28,7 @@ export function buildTrainConfig(): TrainConfig | null {
     self_play: isSelfPlay ? s.selfPlayParams : null,
     alphazero: isAz ? s.alphaZeroParams : null,
     sac: s.algo === 'sac' ? s.sacParams : null,
+    td3: s.algo === 'td3' ? s.td3Params : null,
   }
 }
 

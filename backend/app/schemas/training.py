@@ -8,7 +8,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-Algo = Literal["ppo", "neuroevolution", "q_learning", "alphazero", "sac"]
+Algo = Literal["ppo", "neuroevolution", "q_learning", "alphazero", "sac", "td3"]
 TrainState = Literal[
     "idle", "running", "paused", "stopping", "stopped", "finished", "error"
 ]
@@ -169,13 +169,45 @@ class SACHyperparams(BaseModel):
     ent_coef: str = "auto"  # "auto" = self-tuned entropy temperature; a numeric string pins it
 
 
+class TD3Hyperparams(BaseModel):
+    """Tunable TD3 knobs (the 6th algorithm, S5b — Twin Delayed DDPG, off-policy continuous control).
+
+    TD3 is SAC's sibling: same off-policy machinery (a replay buffer + twin critics + slow target
+    nets), gated to the same continuous-action (``Box``) envs, on the same raw obs/rewards (NOT
+    VecNormalize), so ``ep_rew_mean`` and the ``[min_score, solved_score]`` skill meter read exactly
+    like PPO's. The difference is the *policy*: TD3's actor is **deterministic** (one action per
+    state, no entropy), so it has no ``ent_coef``. Its three signature tricks — twin clipped critics,
+    **delayed** policy updates (``policy_delay``), and **target-policy smoothing**
+    (``target_policy_noise`` clipped to ``target_noise_clip``) — are SB3 defaults and kept fixed.
+
+    Because the policy is deterministic it must explore by *injecting* noise into the actions it
+    collects: ``train_noise`` is the std of that Gaussian exploration noise (SAC explores via entropy
+    instead — the conceptual analogue). The defaults are SB3's / the TD3 paper's MuJoCo recipe
+    (``learning_rate`` 1e-3, net [400, 300]). ``batch_size`` / ``learning_starts`` / ``gradient_steps``
+    / ``policy_delay`` / ``target_policy_noise`` / ``target_noise_clip`` are fixed (advanced, not
+    sliders); ``gradient_steps`` tracks ``train_freq`` so the update:collection ratio stays 1:1.
+    """
+
+    learning_rate: float = 1e-3  # TD3's canonical value (SB3 default; paper uses [400,300] + 1e-3)
+    gamma: float = 0.99
+    tau: float = 0.005  # target-network soft-update coefficient (Polyak averaging)
+    buffer_size: int = 1_000_000  # replay-buffer capacity (past transitions to learn from)
+    batch_size: int = 256  # minibatch sampled from the buffer per gradient step (fixed, not a slider)
+    learning_starts: int = 10_000  # random warmup steps before the first gradient update (fixed)
+    train_freq: int = 1  # env steps collected between update phases; gradient_steps tracks this
+    train_noise: float = 0.1  # std of Gaussian exploration noise added to actions (TD3 has no entropy)
+    policy_delay: int = 2  # update the actor (+ targets) once per this many critic updates (fixed)
+    target_policy_noise: float = 0.2  # std of smoothing noise added to the target action (fixed)
+    target_noise_clip: float = 0.5  # the target-smoothing noise is clipped to ±this (fixed)
+
+
 class TrainConfig(BaseModel):
     """Full, reproducible description of a training run (echoed back in status).
 
     ``hyperparams`` configures PPO; ``evolution`` configures neuroevolution; ``q_learning``
     configures tabular Q-learning; ``alphazero`` configures the AlphaZero-lite board trainer;
-    ``sac`` configures Soft Actor-Critic. Exactly one applies, selected by ``algo``; the others
-    stay None so the recorded config is clean.
+    ``sac`` configures Soft Actor-Critic; ``td3`` configures Twin Delayed DDPG. Exactly one applies,
+    selected by ``algo``; the others stay None so the recorded config is clean.
     """
 
     env_id: str = "cartpole"
@@ -194,6 +226,9 @@ class TrainConfig(BaseModel):
     # Present only for Soft Actor-Critic runs (algo=="sac", S5a); None otherwise. SAC reuses the PPO
     # total_timesteps budget (it runs that many env steps) — only the param surface differs.
     sac: SACHyperparams | None = None
+    # Present only for Twin Delayed DDPG runs (algo=="td3", S5b); None otherwise. Like SAC, TD3 reuses
+    # the env-step total_timesteps budget (and the off-policy sac_total_timesteps ★ on the registry).
+    td3: TD3Hyperparams | None = None
 
 
 class TrainingMetrics(BaseModel):

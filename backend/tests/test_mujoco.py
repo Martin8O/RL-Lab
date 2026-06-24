@@ -48,7 +48,7 @@ def test_mujoco_registered(env_id: str) -> None:
     assert spec.family == "mujoco"
     assert spec.obs_type == "vector"  # a float state → MlpPolicy (no CnnPolicy); server-JPEG render
     assert spec.action_space == "box"  # continuous per-joint torques — the G1b/G3b seam
-    assert spec.supported_algos == ["ppo", "sac"]  # PPO + SAC (S5a); evolution opted out as data
+    assert spec.supported_algos == ["ppo", "sac", "td3"]  # PPO + SAC + TD3 (S5a/S5b); evolution opted out as data
     assert spec.hw_requirement == "gpu"  # millions of steps → desktop; play available now
     assert spec.human_playable is True
     assert spec.competitive is False
@@ -82,7 +82,7 @@ def test_humanoid_registered_and_built() -> None:
     assert spec.family == "mujoco"
     assert spec.obs_type == "vector"  # a flat 348-float state → MlpPolicy; server-JPEG render
     assert spec.action_space == "box"  # 17 continuous per-joint torques
-    assert spec.supported_algos == ["ppo", "sac"]  # PPO + SAC (S5a)
+    assert spec.supported_algos == ["ppo", "sac", "td3"]  # PPO + SAC + TD3 (S5a/S5b)
     assert spec.hw_requirement == "gpu"  # one of the hardest tasks → millions of steps on the desktop
     assert spec.train_implemented is True  # MlpPolicy trainer exists; only gated by step count
     assert spec.human_playable is True and spec.competitive is False

@@ -37,6 +37,8 @@ def predict_from_checkpoint(loaded: LoadedCheckpoint) -> PredictFn:
             return _ppo_predict(loaded.blob)
         if loaded.config.algo == "sac":
             return _sac_predict(loaded.blob)
+        if loaded.config.algo == "td3":
+            return _td3_predict(loaded.blob)
         if loaded.config.algo == "q_learning":
             return _q_learning_predict(loaded.blob)
         return _evolution_predict(loaded.blob)
@@ -86,6 +88,25 @@ def _sac_predict(blob: bytes) -> PredictFn:
     from stable_baselines3 import SAC
 
     model = SAC.load(BytesIO(blob), device="cpu")  # env not needed for inference
+    low = np.asarray(getattr(model.action_space, "low", -1.0), dtype=np.float32)
+    high = np.asarray(getattr(model.action_space, "high", 1.0), dtype=np.float32)
+
+    def predict(obs: object) -> Any:
+        action, _ = model.predict(np.asarray(obs), deterministic=True)
+        return np.clip(np.asarray(action, dtype=np.float32).reshape(-1), low, high)
+
+    return predict
+
+
+def _td3_predict(blob: bytes) -> PredictFn:
+    """Deterministic TD3 inference for AI-play (S5b). TD3 is continuous-action only, and its actor is
+    already deterministic, so ``predict(deterministic=True)`` drops the exploration noise and returns the
+    learned action, clipped into the env's box bounds. Like SAC there is no VecNormalize to apply: TD3
+    trains on raw obs/rewards, so play feeds the policy raw obs exactly as training did."""
+    import numpy as np
+    from stable_baselines3 import TD3
+
+    model = TD3.load(BytesIO(blob), device="cpu")  # env not needed for inference
     low = np.asarray(getattr(model.action_space, "low", -1.0), dtype=np.float32)
     high = np.asarray(getattr(model.action_space, "high", 1.0), dtype=np.float32)
 

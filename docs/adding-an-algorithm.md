@@ -1,10 +1,11 @@
 # Adding an algorithm
 
-> Living document (Phase F4). The dashboard ships **five** learning methods — PPO (gradient, via
+> Living document (Phase F4). The dashboard ships **six** learning methods — PPO (gradient, via
 > Stable-Baselines3), a custom **neuroevolution** (population/fitness/mutation), tabular **Q-learning**
 > (value-based, G2b), **AlphaZero-lite** (CNN policy+value + neural-guided MCTS self-play, board games
-> only, G6f/ADR-055), and **SAC** (off-policy continuous control, S5a) — as **peer trainers** behind one
-> manager (ADR-004/028). A sixth (DQN, TD3…) plugs into the same seam. See also
+> only, G6f/ADR-055), **SAC** (off-policy continuous control, S5a), and **TD3** (off-policy continuous
+> control, S5b/ADR-068) — as **peer trainers** behind one manager (ADR-004/028). A seventh (DQN, A2C…)
+> plugs into the same seam. See also
 > [`architecture.md`](architecture.md) and [`adding-an-environment.md`](adding-an-environment.md).
 
 ## The peer-trainer contract
@@ -141,6 +142,28 @@ shape stretches without forking the contract:
   — its per-step gradient updates are tiny batch-256 MLP forwards that the CPU runs faster than a
   latency-bound GPU shuttle (measured: HalfCheetah CPU 163 vs CUDA 120 steps/s, the same ADR-056 result
   PPO's MlpPolicy has), so `api/device.trainsOnGpu` reads CPU for SAC too.
+
+## Worked example — TD3 (S5b, ADR-068)
+
+The sixth trainer, `services/trainer_td3.py`, shows how cheap a *sibling* algorithm is once the seam fits:
+TD3 is SAC's off-policy twin, so it is a near-copy of `trainer_sac.py` and reuses everything that file does
+(the PPO `metrics`/`progress` frames, the CPU save/load preview, raw obs / no-VecNormalize, the step-interval
+cadence, `_ep_means`/`_progress_ticker`). Two things differ:
+
+- **A deterministic policy ⇒ explore by injected noise, not entropy.** TD3 has no `ent_coef`; its actor is
+  deterministic and its signature tricks (twin clipped critics, delayed policy updates, target-policy
+  smoothing) are fixed SB3 defaults. So the one new tunable is **`train_noise`** — the std of the Gaussian
+  `NormalActionNoise` added to collected actions, sized to the env's action dimension in `_td3_kwargs`. It is
+  the conceptual analogue of SAC's entropy temperature and sits in the same sidebar slot.
+- **It shares SAC's data, not just its shape.** TD3 lists the *same* `supported_algos` envs and re-uses the
+  existing `EnvSpec.sac_total_timesteps` off-policy budget (no new field) — `budgetFor` and the sidebar treat
+  `sac` and `td3` identically. `device` is `"cpu"` for the same ADR-056 reason as SAC.
+
+**Off-policy live-curve gate (applies to both SAC and TD3).** Their ~1 Hz ticker fires within a few hundred
+steps, when the episode buffer holds only one or two high-variance episodes (often a lucky random-warmup one),
+which plotted as a misleading "starts high then dips". `_ep_means` gained a `min_episodes` param (default 1 for
+PPO + snapshots) and the off-policy trainers pass **5** for their live chart frames, so the curve starts at the
+settled baseline and climbs. Snapshots/checkpoints still record any available reward.
 
 ## What you get for free
 

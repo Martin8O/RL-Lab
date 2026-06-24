@@ -35,9 +35,9 @@ export interface EnvSpec {
   min_score: number
   /** Recommended PPO training budget (the ★ default); the sidebar builds its step ladder from it. */
   default_total_timesteps: number
-  /** SAC's ★ recommended budget (S5a) — much smaller than the PPO budget (SAC is off-policy and far more
-   *  sample-efficient). The sidebar uses this for the step ladder + ★ when SAC is the algo; null/absent ⇒
-   *  the env doesn't offer SAC, so the PPO budget is used. */
+  /** The off-policy ★ recommended budget (S5a SAC, **shared by S5b TD3**) — much smaller than the PPO
+   *  budget (off-policy methods are far more sample-efficient). The sidebar uses this for the step ladder
+   *  + ★ when SAC or TD3 is the algo; null/absent ⇒ the env offers neither, so the PPO budget is used. */
   sac_total_timesteps?: number | null
   /** Play episodes run this many times longer than training (so a person has time to play). 1 = same. */
   play_step_scale: number
@@ -79,7 +79,7 @@ export interface SystemInfo {
 // --- Training (B2) ---------------------------------------------------------
 // Mirrors backend/app/schemas/training.py — keep both sides in sync.
 
-export type Algo = 'ppo' | 'neuroevolution' | 'q_learning' | 'alphazero' | 'sac'
+export type Algo = 'ppo' | 'neuroevolution' | 'q_learning' | 'alphazero' | 'sac' | 'td3'
 export type TrainState =
   | 'idle'
   | 'running'
@@ -162,6 +162,24 @@ export interface SACHyperparams {
   ent_coef: string
 }
 
+/** Twin Delayed DDPG knobs (S5b — off-policy continuous control, SAC's deterministic sibling). Same
+ *  off-policy machinery + raw obs/rewards as SAC, so ep_rew_mean + the skill meter read like PPO's. The
+ *  policy is deterministic (no entropy term), so instead of ent_coef it exposes train_noise — the std of
+ *  the Gaussian exploration noise it injects into collected actions. batch_size / learning_starts /
+ *  gradient_steps / policy_delay / target_policy_noise / target_noise_clip are fixed backend defaults. */
+export interface TD3Hyperparams {
+  learning_rate: number
+  gamma: number
+  /** Target-network soft-update coefficient (Polyak averaging). */
+  tau: number
+  /** Replay-buffer capacity (past transitions to learn from). */
+  buffer_size: number
+  /** Env steps collected between update phases (gradient_steps tracks this backend-side). */
+  train_freq: number
+  /** Std of the Gaussian exploration noise injected into collected actions (TD3 has no entropy bonus). */
+  train_noise: number
+}
+
 export interface TrainConfig {
   env_id: string
   algo: Algo
@@ -178,6 +196,8 @@ export interface TrainConfig {
   alphazero?: AlphaZeroHyperparams | null
   /** Present only for Soft Actor-Critic runs (algo "sac", S5a); null/omitted otherwise. */
   sac?: SACHyperparams | null
+  /** Present only for Twin Delayed DDPG runs (algo "td3", S5b); null/omitted otherwise. */
+  td3?: TD3Hyperparams | null
 }
 
 /** WS frame: {type:"metrics", ...} pushed once per PPO rollout. */

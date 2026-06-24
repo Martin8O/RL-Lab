@@ -57,6 +57,13 @@ from app.services.trainer_ppo import (
 # ~500 over a 1M MuJoCo run — frequent enough to plot, cheap enough not to slow the GPU update loop.
 _METRICS_INTERVAL_STEPS = 2_000
 
+# Minimum completed episodes before the LIVE chart plots a reward (the off-policy fix, shared with TD3).
+# The 1 Hz ticker fires within a few hundred steps, when the episode buffer holds only one or two
+# high-variance episodes (often a lucky random-warmup one) — which read as a misleading "starts high then
+# dips" before the rolling mean settled. Gating to a few episodes makes the curve start at the settled
+# baseline and climb cleanly. Snapshots/checkpoints still use any available reward (the default min of 1).
+_MIN_REPORT_EPISODES = 5
+
 
 def _build_sac_predict(model: BaseAlgorithm) -> Callable[[object], Any]:
     """A read-only CPU forward over a save/load **copy** of SAC's policy (the decoupled preview).
@@ -145,7 +152,8 @@ class _MetricsCallback(BaseCallback):
 
     def _emit(self) -> None:
         self.iteration_count += 1
-        ep_rew_mean, ep_len_mean = _ep_means(self.model)
+        # Gate the live chart reward to a few episodes so a 1–2-episode early fluke isn't plotted.
+        ep_rew_mean, ep_len_mean = _ep_means(self.model, _MIN_REPORT_EPISODES)
         # SAC logs train/critic_loss (the headline learning signal — no single "train/loss" like PPO)
         # + train/learning_rate; both absent until the first gradient update (after learning_starts).
         recorded = self.model.logger.name_to_value
@@ -269,6 +277,7 @@ def train_sac(
             config.total_timesteps,
             started_at,
             stop_event,
+            _MIN_REPORT_EPISODES,  # gate the live reward to a stable episode count (off-policy fix)
         ),
         name="sac-progress",
         daemon=True,

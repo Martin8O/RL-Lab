@@ -34,6 +34,27 @@ function fmtGen(n: number): string {
   return String(Math.round(n))
 }
 
+// Skill % for a finished run's score across the env's [min, solved] range — the same formula as the
+// live SCORE stat + skill meter (a shaped env starts negative, so −54 is ~37%, not 0%). Lets a compare
+// row read consistently and stay comparable across runs even when the raw reward scale differs per game.
+// null when there's no score or the env has no measurable range.
+function scorePct(reward: number | null, min: number, max: number): number | null {
+  return reward != null && max > min
+    ? Math.max(0, Math.min(100, ((reward - min) / (max - min)) * 100))
+    : null
+}
+
+// Compact run label for the compare UI: algorithm + budget, with the env dropped (every compared run
+// belongs to the already-selected game, so naming it is redundant). The budget unit is per-algo —
+// neuroevolution counts generations, every step-based algo counts env steps. Shared by the picker rows
+// and the on-chart overlay legend so the two read identically.
+function runShortLabel(t: (k: string) => string, meta: RunMeta): string {
+  const budget = meta.algo === 'neuroevolution'
+    ? (meta.generation != null ? `g${fmtGen(meta.generation)}` : '—')
+    : fmtSteps(meta.timesteps)
+  return `${algoLabel(t, meta.algo)} · ${budget}`
+}
+
 function fmtElapsed(s: number): string {
   if (s < 60) return `${Math.round(s)}s`
   const m = Math.floor(s / 60)
@@ -259,9 +280,13 @@ function LineChart({ series, markers = [], goal, width, height, xFmt, ariaLabel 
   )
 }
 
-// Categorical palette for overlaid past runs — the viz comparison hues (amber / violet /
-// cyan), which recolour per theme via CSS vars so overlays read on dark + light.
-const OVERLAY_COLORS = ['var(--viz-4)', 'var(--viz-5)', 'var(--viz-6)']
+// Categorical palette for overlaid past runs — up to SIX, from the dedicated, maximally-separated
+// run-compare palette (--cmp-*, defined in index.css; theme-aware). Ordered amber/cyan/rose/green/
+// violet/lime so the first runs picked get the most-different hues (≥128° apart) and never clash with
+// the live line's --accent. The overlay cap = this array's length, so growing it lifts the cap.
+const OVERLAY_COLORS = [
+  'var(--cmp-1)', 'var(--cmp-2)', 'var(--cmp-3)', 'var(--cmp-4)', 'var(--cmp-5)', 'var(--cmp-6)',
+]
 
 // Project a saved run's recorded frames onto the active tab's (x, y), or null if the run has
 // no data for that tab. The Reward tab's x-unit depends on the *live* algorithm (timesteps for
@@ -321,25 +346,38 @@ function LegendDot({ color, label }: { color: string; label: string }) {
 
 // ── Run-history compare (D2) ────────────────────────────────────────────────────
 
-// A run row in the compare popover: toggles its overlay, shows its final reward, deletes it.
-// The swatch colour matches the overlay line so the chart and list read together.
-function RunRow({ run, color, selected, atCap, onToggle, onDelete }: {
+// A run row in the compare popover: toggles its overlay, shows its score, deletes it.
+// The swatch colour matches the overlay line so the chart and list read together. The env is *not*
+// shown — every compared run belongs to the already-selected game (so it's redundant); the row carries
+// only what differs between runs: the algorithm, its budget, and the score as a % of the goal. The
+// budget unit + the score scale are per-algo / per-game (evolution counts generations, etc.).
+function RunRow({ run, color, selected, atCap, solveMin, solveMax, onToggle, onDelete }: {
   run: RunMeta
   color: string | null
   selected: boolean
   atCap: boolean
+  solveMin: number
+  solveMax: number
   onToggle: (id: string) => void
   onDelete: (run: RunMeta) => void
 }) {
   const { t } = useTranslation()
   const disabled = !selected && atCap
   const ellipsis: CSSProperties = { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }
+  const label = runShortLabel(t, run)  // algo + budget, env dropped (shared with the chart legend)
+  // Score as a % of the goal ([min, solved]) — reads consistently with the skill meter and stays
+  // comparable across runs even when the raw reward scale differs per game. Raw reward + seed in the tip.
+  const pct = scorePct(run.final_reward, solveMin, solveMax)
+  const rewardStr = run.final_reward != null ? run.final_reward.toFixed(1) : '—'
+  const title = disabled
+    ? t('runs.max_hint')
+    : `${label} · ${rewardStr} · ${t('sidebar.seed')} ${run.seed}`
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
       <button
         onClick={() => onToggle(run.id)}
         disabled={disabled}
-        title={disabled ? t('runs.max_hint') : run.label}
+        title={title}
         style={{
           flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 6,
           padding: '4px 6px', borderRadius: 4, border: 'none', textAlign: 'left',
@@ -353,7 +391,7 @@ function RunRow({ run, color, selected, atCap, onToggle, onDelete }: {
           border: `1px solid ${selected && color ? color : 'var(--border)'}`,
         }} />
         <span style={{ ...ellipsis, flex: 1, minWidth: 0, fontSize: 11, color: 'var(--text-h)' }}>
-          {run.label}
+          {label}
         </span>
         {run.solved_at != null && (
           <span
@@ -364,7 +402,7 @@ function RunRow({ run, color, selected, atCap, onToggle, onDelete }: {
           </span>
         )}
         <span style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--ok)', flexShrink: 0 }}>
-          {run.final_reward != null ? run.final_reward.toFixed(1) : '—'}
+          {pct != null ? `${Math.round(pct)}%` : '—'}
         </span>
       </button>
       <button
@@ -381,9 +419,11 @@ function RunRow({ run, color, selected, atCap, onToggle, onDelete }: {
   )
 }
 
-function ComparePopover({ runs, selectedOrder, onToggle, onDelete, onClear, onClose }: {
+function ComparePopover({ runs, selectedOrder, solveMin, solveMax, onToggle, onDelete, onClear, onClose }: {
   runs: RunMeta[]
   selectedOrder: string[]   // selected ids in overlay order (drives swatch colour)
+  solveMin: number          // env [min, solved] range → each row's score %
+  solveMax: number
   onToggle: (id: string) => void
   onDelete: (run: RunMeta) => void
   onClear: () => void
@@ -427,7 +467,7 @@ function ComparePopover({ runs, selectedOrder, onToggle, onDelete, onClear, onCl
         ) : (
           <>
             <div style={{ padding: '5px 10px 2px', fontSize: 10, color: 'var(--text-muted)' }}>
-              {t('runs.max_hint')}
+              {t('runs.max_hint', { n: OVERLAY_COLORS.length })}
             </div>
             <div style={{ flex: 1, overflowY: 'auto', padding: '2px 6px 6px' }}>
               {runs.map((run) => {
@@ -439,6 +479,8 @@ function ComparePopover({ runs, selectedOrder, onToggle, onDelete, onClear, onCl
                     selected={idx >= 0}
                     color={idx >= 0 ? OVERLAY_COLORS[idx % OVERLAY_COLORS.length] : null}
                     atCap={atCap}
+                    solveMin={solveMin}
+                    solveMax={solveMax}
                     onToggle={onToggle}
                     onDelete={onDelete}
                   />
@@ -467,6 +509,7 @@ const ALGO_CHART_TABS: Record<string, ChartTab[]> = {
   q_learning: ['reward'],
   alphazero: ['reward', 'loss'],  // eval-vs-MCTS curve (Reward) + the net's training loss (Loss)
   sac: ['reward', 'loss'],  // S5a: episode return (Reward) + the soft-Q critic loss (Loss)
+  td3: ['reward', 'loss'],  // S5b: episode return (Reward) + the twin-critic loss (Loss)
 }
 
 function algoLabel(t: (k: string) => string, algo: string): string {
@@ -476,6 +519,7 @@ function algoLabel(t: (k: string) => string, algo: string): string {
     case 'q_learning': return t('sidebar.algo_q')
     case 'alphazero': return t('sidebar.algo_az')
     case 'sac': return t('sidebar.algo_sac')
+    case 'td3': return t('sidebar.algo_td3')
     default: return algo
   }
 }
@@ -649,7 +693,7 @@ export default function RewardChart() {
     const s = runSeries(run, activeTab, color, algo)
     if (s) {
       overlaySeries.push(s)
-      overlays.push({ id: run.meta.id, label: run.meta.label, color })
+      overlays.push({ id: run.meta.id, label: runShortLabel(t, run.meta), color })
       // solved_at is in this tab's x-unit (timesteps for PPO, generation for evolution),
       // because a run only overlays on the tab matching its algorithm.
       if (run.meta.solved_at != null) {
@@ -871,6 +915,8 @@ export default function RewardChart() {
             <ComparePopover
               runs={envRuns}
               selectedOrder={selectedOrder}
+              solveMin={solveMin}
+              solveMax={solveMax}
               onToggle={(id) => void toggleRun(id)}
               onDelete={(run) => void removeRun(run)}
               onClear={() => setSelected((sel) => sel.filter((r) => r.meta.env_id !== selectedEnvId))}
@@ -933,22 +979,27 @@ export default function RewardChart() {
                 )}
               </div>
             )}
-            {/* Overlaid past-run legend (dashed lines) */}
+            {/* Overlaid past-run legend (dashed lines). Up to 6 runs → two columns of 3: the first
+                column stays anchored at the right edge and the next 3 appear in a column beside it
+                (row-reverse keeps the original column from shifting as more runs are added). */}
             {overlays.length > 0 && (
               <div style={{
-                position: 'absolute', top: 6, right: PAD.r, display: 'flex', flexDirection: 'column',
-                gap: 2, fontSize: 10, color: 'var(--text-muted)', alignItems: 'flex-end',
-                maxWidth: '55%', pointerEvents: 'none',
+                position: 'absolute', top: 6, right: PAD.r, display: 'flex', flexDirection: 'row-reverse',
+                gap: 14, fontSize: 10, color: 'var(--text-muted)', maxWidth: '70%', pointerEvents: 'none',
               }}>
-                {overlays.map((o) => (
-                  <span key={o.id} style={{
-                    display: 'inline-flex', alignItems: 'center', gap: 4, maxWidth: '100%',
-                  }}>
-                    <span style={{
-                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                    }}>{o.label}</span>
-                    <span style={{ width: 14, height: 0, flexShrink: 0, borderTop: `2px dashed ${o.color}` }} />
-                  </span>
+                {[overlays.slice(0, 3), overlays.slice(3, 6)].filter((c) => c.length > 0).map((col, ci) => (
+                  <div key={ci} style={{ display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'flex-end', minWidth: 0 }}>
+                    {col.map((o) => (
+                      <span key={o.id} style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 4, maxWidth: '100%',
+                      }}>
+                        <span style={{
+                          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                        }}>{o.label}</span>
+                        <span style={{ width: 14, height: 0, flexShrink: 0, borderTop: `2px dashed ${o.color}` }} />
+                      </span>
+                    ))}
+                  </div>
                 ))}
               </div>
             )}

@@ -91,6 +91,9 @@ function formatValue(id: string, v: number | string): string {
     case 'ent_coef':       return v.toFixed(3)
     case 'sac_tau':        return v.toFixed(3)  // small soft-update coefficient (≈0.005)
     case 'sac_buffer_size': return formatCount(v)  // 1000000 → "1M" (the shared count formatter)
+    case 'td3_tau':        return v.toFixed(3)  // same small soft-update coefficient as SAC
+    case 'td3_buffer_size': return formatCount(v)  // 1000000 → "1M"
+    case 'td3_train_noise': return v.toFixed(2)  // exploration-noise std (≈0.10)
     case 'q_learning_rate':
     case 'epsilon_start':
     case 'epsilon_end':
@@ -232,6 +235,7 @@ function ALGO_LABEL(t: (k: string) => string, id: string): string {
     case 'q_learning':     return t('sidebar.algo_q')
     case 'alphazero':      return t('sidebar.algo_az')
     case 'sac':            return t('sidebar.algo_sac')
+    case 'td3':            return t('sidebar.algo_td3')
     default:               return id
   }
 }
@@ -321,6 +325,8 @@ export default function Sidebar() {
   const setAlphaZeroParams = useAppStore((s) => s.setAlphaZeroParams)
   const sacParams       = useAppStore((s) => s.sacParams)
   const setSacParams    = useAppStore((s) => s.setSacParams)
+  const td3Params       = useAppStore((s) => s.td3Params)
+  const setTd3Params    = useAppStore((s) => s.setTd3Params)
   const seed            = useAppStore((s) => s.seed)
   const setSeed         = useAppStore((s) => s.setSeed)
   const totalTimesteps  = useAppStore((s) => s.totalTimesteps)
@@ -336,17 +342,19 @@ export default function Sidebar() {
   const azDefs  = selectedEnv?.hyperparams?.['alphazero'] ?? {}
   const sacDefs = selectedEnv?.hyperparams?.['sac'] ?? {}
   const sacEntChoices = sacDefs.ent_coef?.choices ?? null  // SAC entropy: ["auto", "0.1", "0.2"]
+  const td3Defs = selectedEnv?.hyperparams?.['td3'] ?? {}
   const isEvo = algo === 'neuroevolution'
   const isQ   = algo === 'q_learning'
   const isAz  = algo === 'alphazero'
   const isSac = algo === 'sac'
+  const isTd3 = algo === 'td3'
 
   // Per-env step ladder + the ★ recommended budget; always include the current value so the
-  // <select> can render it even after a reload with a value off the ladder. SAC (off-policy) is far more
-  // sample-efficient, so it uses its own much smaller ★ budget (sac_total_timesteps) — the ladder + ★
-  // then reflect SAC's real budget (~500k for BipedalWalker), not the PPO 5M.
+  // <select> can render it even after a reload with a value off the ladder. The off-policy algos (SAC +
+  // TD3) are far more sample-efficient, so they use their own much smaller ★ budget (sac_total_timesteps)
+  // — the ladder + ★ then reflect that real budget (~500k for BipedalWalker), not the PPO 5M.
   const defaultSteps =
-    (isSac && selectedEnv?.sac_total_timesteps) || selectedEnv?.default_total_timesteps || 50_000
+    ((isSac || isTd3) && selectedEnv?.sac_total_timesteps) || selectedEnv?.default_total_timesteps || 50_000
   const stepsOptions = Array.from(new Set([...stepsLadder(defaultSteps), totalTimesteps])).sort((a, b) => a - b)
 
   return (
@@ -383,7 +391,7 @@ export default function Sidebar() {
       {/* Scrollable params */}
       <div style={{ flex: 1, overflowY: 'auto', padding: 'var(--space-5)' }}>
         <div style={{ ...sectionEyebrow, marginBottom: 'var(--space-4)' }}>
-          {isEvo ? t('sidebar.evo_params_title') : isQ ? t('sidebar.q_params_title') : isAz ? t('sidebar.az_params_title') : isSac ? t('sidebar.sac_params_title') : t('sidebar.params_title')}
+          {isEvo ? t('sidebar.evo_params_title') : isQ ? t('sidebar.q_params_title') : isAz ? t('sidebar.az_params_title') : isSac ? t('sidebar.sac_params_title') : isTd3 ? t('sidebar.td3_params_title') : t('sidebar.params_title')}
         </div>
 
         {algo === 'ppo' && (
@@ -733,6 +741,75 @@ export default function Sidebar() {
           </>
         )}
 
+        {/* TD3 (S5b — off-policy continuous control, SAC's deterministic sibling): the learning rate +
+            discount, the target soft-update (tau), the replay-buffer size, how often it updates
+            (train_freq), and the exploration-noise std (train_noise — a deterministic policy must inject
+            noise to explore; TD3 has no entropy term). policy_delay / target-smoothing / batch_size /
+            learning_starts are fixed backend defaults. TD3 reuses the PPO "Total Steps" budget below. */}
+        {isTd3 && (
+          <>
+            {td3Defs.learning_rate && (
+              <ParamSlider
+                id="learning_rate" label={t('sidebar.learning_rate')}
+                value={td3Params.learning_rate}
+                min={td3Defs.learning_rate.min!} max={td3Defs.learning_rate.max!} step={0.01}
+                recommended={td3Defs.learning_rate.recommended as number}
+                onChange={(v) => setTd3Params({ learning_rate: v })}
+              />
+            )}
+
+            {td3Defs.gamma && (
+              <ParamSlider
+                id="gamma" label={t('sidebar.gamma')}
+                value={td3Params.gamma}
+                min={td3Defs.gamma.min!} max={td3Defs.gamma.max!} step={td3Defs.gamma.step!}
+                recommended={td3Defs.gamma.recommended as number}
+                onChange={(v) => setTd3Params({ gamma: v })}
+              />
+            )}
+
+            {td3Defs.tau && (
+              <ParamSlider
+                id="td3_tau" label={t('sidebar.td3_tau')}
+                value={td3Params.tau}
+                min={td3Defs.tau.min!} max={td3Defs.tau.max!} step={td3Defs.tau.step!}
+                recommended={td3Defs.tau.recommended as number}
+                onChange={(v) => setTd3Params({ tau: v })}
+              />
+            )}
+
+            {td3Defs.buffer_size && (
+              <ParamSlider
+                id="td3_buffer_size" label={t('sidebar.td3_buffer_size')}
+                value={td3Params.buffer_size}
+                min={td3Defs.buffer_size.min!} max={td3Defs.buffer_size.max!} step={td3Defs.buffer_size.step!}
+                recommended={td3Defs.buffer_size.recommended as number}
+                onChange={(v) => setTd3Params({ buffer_size: Math.round(v) })}
+              />
+            )}
+
+            {td3Defs.train_freq && (
+              <ParamSlider
+                id="td3_train_freq" label={t('sidebar.td3_train_freq')}
+                value={td3Params.train_freq}
+                min={td3Defs.train_freq.min!} max={td3Defs.train_freq.max!} step={td3Defs.train_freq.step!}
+                recommended={td3Defs.train_freq.recommended as number}
+                onChange={(v) => setTd3Params({ train_freq: Math.round(v) })}
+              />
+            )}
+
+            {td3Defs.train_noise && (
+              <ParamSlider
+                id="td3_train_noise" label={t('sidebar.td3_train_noise')}
+                value={td3Params.train_noise}
+                min={td3Defs.train_noise.min!} max={td3Defs.train_noise.max!} step={td3Defs.train_noise.step!}
+                recommended={td3Defs.train_noise.recommended as number}
+                onChange={(v) => setTd3Params({ train_noise: v })}
+              />
+            )}
+          </>
+        )}
+
         {/* Divider */}
         <div style={{ height: 1, background: 'var(--border-default)', margin: 'var(--space-3) 0 var(--space-4)' }} />
 
@@ -765,9 +842,9 @@ export default function Sidebar() {
           </div>
         </div>
 
-        {/* Total Steps — PPO + SAC (both run an env-step budget; evolution uses Generations, Q-learning
-            Episodes, AlphaZero Iterations). */}
-        {(algo === 'ppo' || algo === 'sac') && (
+        {/* Total Steps — PPO + SAC + TD3 (all run an env-step budget; evolution uses Generations,
+            Q-learning Episodes, AlphaZero Iterations). */}
+        {(algo === 'ppo' || algo === 'sac' || algo === 'td3') && (
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <label style={fieldLabel}>
               {t('sidebar.total_steps')}

@@ -106,7 +106,7 @@ def test_classic_control_g1b_continuous_envs(
     assert env["obs_type"] == "vector"
     assert env["action_space"] == "box"  # the distinguishing trait of G1b
     assert env["hw_requirement"] == "cpu"
-    assert env["supported_algos"] == ["ppo", "neuroevolution", "sac"]  # + SAC on the box envs (S5a)
+    assert env["supported_algos"] == ["ppo", "neuroevolution", "sac", "td3"]  # + SAC/TD3 on the box envs (S5a/S5b)
     assert env["solved_score"] == solved
     assert env["min_score"] == floor
     assert env["difficulty"] == difficulty

@@ -21,6 +21,7 @@ import type {
   QTableFrame,
   HwStats,
   SACHyperparams,
+  TD3Hyperparams,
   SelfPlayHyperparams,
   TrainingMetrics,
   TrainingProgress,
@@ -106,6 +107,19 @@ const DEFAULT_SAC_PARAMS: SACHyperparams = {
   ent_coef:      'auto',
 }
 
+// Matches the registry's ★ TD3 block (S5b — off-policy continuous control; SAC's deterministic sibling).
+// Snaps from the registry on env switch like the others. learning_rate ★ is 1e-3 (TD3's canonical value);
+// instead of an entropy temperature it has train_noise — the exploration-noise std a deterministic policy
+// injects to explore.
+const DEFAULT_TD3_PARAMS: TD3Hyperparams = {
+  learning_rate: 1e-3,
+  gamma:         0.99,
+  tau:           0.005,
+  buffer_size:   1_000_000,
+  train_freq:    1,
+  train_noise:   0.1,
+}
+
 // The run-result state that must NOT outlive its run: chart history, the latest stats frame, the
 // session-best, and every algorithm's curve. Cleared both between runs (clearMetrics) and when the
 // user switches game — otherwise a finished run's chart/stats/skill linger and get silently rescaled
@@ -125,12 +139,13 @@ const EMPTY_RUN_RESULTS = {
   lastMa:           null as MultiAgentMetrics | null,
 }
 
-// The ★ step budget for the active algorithm: SAC (off-policy, ~5–10× more sample-efficient) reaches a
-// strong policy in far fewer steps than PPO, so it carries its own much smaller per-env budget; every
-// other step-ladder algo (PPO) uses the env's default. Used to snap totalTimesteps on algo / env switch.
+// The ★ step budget for the active algorithm: the off-policy methods (SAC + TD3, ~5–10× more
+// sample-efficient) reach a strong policy in far fewer steps than PPO, so they share a much smaller per-env
+// budget (sac_total_timesteps); every other step-ladder algo (PPO) uses the env's default. Used to snap
+// totalTimesteps on algo / env switch.
 function budgetFor(spec: EnvSpec | undefined, algo: Algo): number {
   if (!spec) return 50_000
-  if (algo === 'sac' && spec.sac_total_timesteps) return spec.sac_total_timesteps
+  if ((algo === 'sac' || algo === 'td3') && spec.sac_total_timesteps) return spec.sac_total_timesteps
   return spec.default_total_timesteps || 50_000
 }
 
@@ -146,6 +161,7 @@ function envDefaults(
     selfPlayParams: SelfPlayHyperparams
     alphaZeroParams: AlphaZeroHyperparams
     sacParams: SACHyperparams
+    td3Params: TD3Hyperparams
     totalTimesteps: number
   },
 ): {
@@ -155,6 +171,7 @@ function envDefaults(
   selfPlayParams: SelfPlayHyperparams
   alphaZeroParams: AlphaZeroHyperparams
   sacParams: SACHyperparams
+  td3Params: TD3Hyperparams
   totalTimesteps: number
 } | null {
   if (!spec) return null
@@ -163,6 +180,7 @@ function envDefaults(
   const ql = spec.hyperparams?.q_learning ?? {}
   const az = spec.hyperparams?.alphazero ?? {}
   const sac = spec.hyperparams?.sac ?? {}
+  const td3 = spec.hyperparams?.td3 ?? {}
   const num = (key: string, block: Record<string, { recommended: number | string }>, fb: number) =>
     block[key] !== undefined ? Number(block[key].recommended) : fb
   return {
@@ -217,6 +235,16 @@ function envDefaults(
       train_freq:    Math.round(num('train_freq', sac, prev.sacParams.train_freq)),
       ent_coef:      (sac.ent_coef?.recommended as string) ?? prev.sacParams.ent_coef,
     },
+    // TD3 block (S5b — continuous-Box envs, SAC's deterministic sibling). All-numeric (no categorical);
+    // train_noise is the exploration-noise std. Reuses the off-policy totalTimesteps budget like SAC.
+    td3Params: {
+      learning_rate: num('learning_rate', td3, prev.td3Params.learning_rate),
+      gamma:         num('gamma', td3, prev.td3Params.gamma),
+      tau:           num('tau', td3, prev.td3Params.tau),
+      buffer_size:   Math.round(num('buffer_size', td3, prev.td3Params.buffer_size)),
+      train_freq:    Math.round(num('train_freq', td3, prev.td3Params.train_freq)),
+      train_noise:   num('train_noise', td3, prev.td3Params.train_noise),
+    },
     totalTimesteps: spec.default_total_timesteps || prev.totalTimesteps,
   }
 }
@@ -233,6 +261,7 @@ interface AppState {
   selfPlayParams:  SelfPlayHyperparams   // G7b-2: competitive self-play round schedule (simple_tag)
   alphaZeroParams: AlphaZeroHyperparams  // G6f: AlphaZero-lite board self-play knobs
   sacParams:       SACHyperparams        // S5a: Soft Actor-Critic (off-policy continuous control)
+  td3Params:       TD3Hyperparams        // S5b: Twin Delayed DDPG (off-policy continuous control)
   seed:            number
   totalTimesteps:  number
   emaAlpha:        number     // 1 = raw; 0.05 = heavy smoothing
@@ -293,6 +322,7 @@ interface AppState {
   setSelfPlayParams:  (s: Partial<SelfPlayHyperparams>) => void
   setAlphaZeroParams: (a: Partial<AlphaZeroHyperparams>) => void
   setSacParams:       (s: Partial<SACHyperparams>)      => void
+  setTd3Params:       (s: Partial<TD3Hyperparams>)      => void
   setSeed:            (s: number)                       => void
   setTotalTimesteps:  (n: number)                       => void
   setEmaAlpha:        (a: number)                       => void
@@ -344,6 +374,7 @@ export const useAppStore = create<AppState>()(
       selfPlayParams:  DEFAULT_SELF_PLAY_PARAMS,
       alphaZeroParams: DEFAULT_AZ_PARAMS,
       sacParams:       DEFAULT_SAC_PARAMS,
+      td3Params:       DEFAULT_TD3_PARAMS,
       seed:            42,
       totalTimesteps:  50_000,
       emaAlpha:        0.3,
@@ -444,6 +475,7 @@ export const useAppStore = create<AppState>()(
       setSelfPlayParams: (sp)             => set((s) => ({ selfPlayParams: { ...s.selfPlayParams, ...sp } })),
       setAlphaZeroParams:(a)              => set((s) => ({ alphaZeroParams: { ...s.alphaZeroParams, ...a } })),
       setSacParams:      (sp)             => set((s) => ({ sacParams: { ...s.sacParams, ...sp } })),
+      setTd3Params:      (sp)             => set((s) => ({ td3Params: { ...s.td3Params, ...sp } })),
       setSeed:           (seed)           => set({ seed }),
       setTotalTimesteps: (n)              => set({ totalTimesteps: n }),
       setEmaAlpha:       (emaAlpha)       => set({ emaAlpha }),
@@ -628,6 +660,7 @@ export const useAppStore = create<AppState>()(
         selfPlayParams:  s.selfPlayParams,
         alphaZeroParams: s.alphaZeroParams,
         sacParams:       s.sacParams,
+        td3Params:       s.td3Params,
         seed:            s.seed,
         totalTimesteps:  s.totalTimesteps,
         emaAlpha:        s.emaAlpha,

@@ -67,6 +67,16 @@
   --viz-5: #c08cff;   /* violet — comparison run           */
   --viz-6: #4ec5f0;   /* cyan   — comparison run           */
   --goal:  #e3b341;   /* gold   — the "solved" goal line on the reward chart */
+  /* Run-compare palette (up to 6 overlaid past runs). A dedicated, maximally-separated set — not the
+     --viz tokens (those collide with the live line's --accent + each other). Ordered so the first runs
+     picked get the most-different hues: amber, cyan, rose, green, violet, lime (≥128° apart pairwise as
+     selected). Theme-aware so overlays read on dark + light. */
+  --cmp-1: #f6c358;   /* amber  */
+  --cmp-2: #38bdf8;   /* cyan   */
+  --cmp-3: #fb7185;   /* rose   */
+  --cmp-4: #4ade80;   /* green  */
+  --cmp-5: #c084fc;   /* violet */
+  --cmp-6: #a3e635;   /* lime   */
   --viz-1-soft: rgba(124, 139, 255, 0.16);
   --viz-2-soft: rgba(52, 214, 165, 0.16);
   --viz-3-soft: rgba(251, 122, 142, 0.16);
@@ -135,6 +145,13 @@
   --viz-5: #8b3fd6;
   --viz-6: #1499c7;
   --goal:  #b8860b;   /* gold (darker for light theme) */
+  /* Run-compare palette (light theme — darker, more saturated to read on white). Same hue order as dark. */
+  --cmp-1: #c2820a;   /* amber  */
+  --cmp-2: #0284c7;   /* cyan   */
+  --cmp-3: #e11d48;   /* rose   */
+  --cmp-4: #059669;   /* green  */
+  --cmp-5: #7c3aed;   /* violet */
+  --cmp-6: #4d7c0f;   /* lime   */
   --viz-1-soft: rgba(86, 95, 179, 0.12);
   --viz-2-soft: rgba(14, 159, 110, 0.12);
   --viz-3-soft: rgba(224, 54, 79, 0.12);

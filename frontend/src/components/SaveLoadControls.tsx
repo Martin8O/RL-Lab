@@ -45,6 +45,7 @@ function algoLabel(t: (k: string) => string, algo: Algo): string {
   if (algo === 'q_learning') return t('sidebar.algo_q')
   if (algo === 'alphazero') return t('sidebar.algo_az')
   if (algo === 'sac') return t('sidebar.algo_sac')
+  if (algo === 'td3') return t('sidebar.algo_td3')
   return t('sidebar.algo_ppo')
 }
 
