@@ -52,6 +52,7 @@ from stable_baselines3.common.noise import NormalActionNoise
 from app.envs.factory import make_env
 from app.schemas.training import TrainConfig, TrainingMetrics, TrainState
 from app.services.checkpoints import CheckpointArtifact
+from app.services.offpolicy import ResumeBufferGate
 
 # Reuse PPO's stable, load-bearing helpers rather than duplicate them — exactly as trainer_sac does. The
 # recent-episode mean reader and the decoupled ~1 Hz progress ticker both read only `num_timesteps` /
@@ -253,15 +254,25 @@ def _build_model(config: TrainConfig, gym_id: str) -> TD3:
     )
 
 
+class _ResumeTD3(ResumeBufferGate, TD3):
+    """TD3 with the off-policy resume guard (gradient updates wait for the buffer to refill)."""
+
+
 def _load_model(config: TrainConfig, gym_id: str, resume_blob: bytes) -> TD3:
     """Rebuild a TD3 model from a saved ``model.zip`` and attach a fresh env (resume).
 
     ``num_timesteps`` is restored so ``reset_num_timesteps=False`` continues the counter. The replay
-    buffer is **not** in the blob (SB3 excludes it), so a resumed run starts with an empty buffer and
-    refills it — the policy weights continue, training re-stabilises within a short window.
+    buffer is **not** in the blob (SB3 excludes it), so a resumed run starts with an empty buffer; the
+    :class:`ResumeBufferGate` stops the first updates from overfitting the twin critics to that
+    near-empty buffer and degrading the restored policy (see :mod:`app.services.offpolicy`).
     """
     env = make_env(config.env_id, gym_id)
-    return TD3.load(io.BytesIO(resume_blob), env=env, device="cpu")  # CPU is faster for the small MLP (ADR-056)
+    model = _ResumeTD3.load(io.BytesIO(resume_blob), env=env, device="cpu")  # CPU is faster for the small MLP
+    # Hold gradient updates until the empty-on-resume buffer refills to the same warmup the fresh run
+    # used; collection meanwhile rides the restored policy (num_timesteps > learning_starts ⇒ not random).
+    n_actions = int(np.asarray(env.action_space.shape).prod())
+    model.grad_start_size = _td3_kwargs(config, n_actions)["learning_starts"]
+    return model
 
 
 def train_td3(
