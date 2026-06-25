@@ -111,6 +111,37 @@ def random_obstacle_count(rng: Any) -> int:
     return int(rng.integers(_OBSTACLE_MIN, _OBSTACLE_MAX + 1))
 
 
+# Pursuit's render draws each pursuer's field-of-view as a translucent orange wash (alpha 128) which
+# dominates the frame and buries the agents. We redraw it far fainter so it's a barely-there hint. Patched
+# on the PREVIEW env instance only (render_mode set) — never the training env — so SuperSuit's cloudpickle
+# clone (which can't carry a closure/method ref) is untouched.
+_VISION_OVERLAY_ALPHA = 16  # was 128 — a faint tint instead of a dominating orange wash
+
+
+def _dim_vision_overlay(parallel_env: Any) -> None:
+    """Make pursuit's pursuer field-of-view overlay near-invisible (preview render only). No-op for any
+    env without that overlay, so it's safe to call for the whole SISL-image family."""
+    base = getattr(getattr(parallel_env, "unwrapped", parallel_env), "env", None)
+    if base is None or not hasattr(base, "draw_pursuers_observations"):
+        return
+    import pygame
+
+    def _faint() -> None:
+        for i in range(base.pursuer_layer.n_agents()):
+            x, y = base.pursuer_layer.get_position(i)
+            patch = pygame.Surface(
+                (base.pixel_scale * base.obs_range, base.pixel_scale * base.obs_range)
+            )
+            patch.set_alpha(_VISION_OVERLAY_ALPHA)
+            patch.fill((255, 152, 72))
+            ofst = base.obs_range / 2.0
+            base.screen.blit(
+                patch, (base.pixel_scale * (x - ofst + 0.5), base.pixel_scale * (y - ofst + 0.5))
+            )
+
+    base.draw_pursuers_observations = _faint
+
+
 def is_multi_agent(spec: EnvSpec | None) -> bool:
     """True for a PettingZoo multi-agent env (the 5th seam), False for every single-agent env."""
     return spec is not None and spec.family == "petting_zoo"
@@ -147,18 +178,23 @@ def species_present(env_id: str) -> list[str]:
 
 
 def _load_scenario(name: str) -> Any:
-    """Import an MPE scenario module by name (e.g. ``"simple_spread_v3"``).
+    """Import a PettingZoo scenario module by name (e.g. ``"simple_spread_v3"``, ``"pursuit_v4"``).
 
-    Prefers the modern split-out ``mpe2`` package; falls back to the legacy ``pettingzoo.mpe``
-    namespace for older installs (the version split noted in the registry's MPE section).
+    Two families share this loader: **MPE** (the particle worlds — ``simple_spread`` / ``simple_tag``,
+    G7a/G7b) and **SISL** (the Stanford cooperative-swarm worlds — ``pursuit``, G7-SISL). MPE prefers
+    the modern split-out ``mpe2`` package and falls back to the legacy ``pettingzoo.mpe`` namespace (the
+    version split noted in the registry's MPE section); SISL lives under ``pettingzoo.sisl``. We probe
+    the packages in order and return the first that has the scenario, so an MPE id resolves from
+    ``mpe2`` and a SISL id from ``pettingzoo.sisl`` with one code path.
     """
-    for pkg in ("mpe2", "pettingzoo.mpe"):
+    for pkg in ("mpe2", "pettingzoo.mpe", "pettingzoo.sisl"):
         try:
             return importlib.import_module(f"{pkg}.{name}")
         except ModuleNotFoundError:
             continue
     raise ModuleNotFoundError(
-        f"MPE scenario '{name}' not found in mpe2 or pettingzoo.mpe — install 'mpe2'"
+        f"PettingZoo scenario '{name}' not found in mpe2 / pettingzoo.mpe / pettingzoo.sisl "
+        "— install 'mpe2' (MPE) or 'pettingzoo[sisl]' (SISL)"
     )
 
 
@@ -188,6 +224,8 @@ def make_parallel_env(
         env = module.parallel_env(**kwargs)
     if spec.competitive:  # harder collisions for the predator–prey world (preview path; no clone here)
         _stiffen_collisions(env, _TAG_CONTACT_FORCE)
+    if render_mode is not None and spec.ma_render == "image":
+        _dim_vision_overlay(env)  # faint pursuit's dominating FOV wash — preview only, training clone safe
     return env
 
 

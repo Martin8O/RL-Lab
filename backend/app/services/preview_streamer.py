@@ -330,6 +330,14 @@ class PreviewStreamer:
         trainer publishes (numpy forward), never the live SB3 model (ADR-019).
         """
         from app.envs.registry import get_env
+
+        spec = get_env(env_id)
+        if spec is not None and spec.ma_render == "image":
+            # SISL (pursuit, ADR-075): no MPE world to read positions from → render the env's own
+            # rgb_array frame as a server JPEG instead of the position-based swarm canvas.
+            self._run_ma_image(env_id)
+            return
+
         from app.services.ma_env import (
             _randomize_obstacles,
             close_env,
@@ -337,7 +345,6 @@ class PreviewStreamer:
             random_obstacle_count,
         )
 
-        spec = get_env(env_id)
         competitive = spec is not None and spec.competitive
         rng = np.random.default_rng()
         # simple_tag: a random obstacle count for this watch session + a re-rolled size/layout per episode.
@@ -417,6 +424,73 @@ class PreviewStreamer:
                 "reward": reward,
                 "agents": agent_sprites(env),
                 "world": world_entities(env),
+            }
+        )
+
+    def _run_ma_image(self, env_id: str) -> None:
+        """Preview loop for a SISL multi-agent env (pursuit) — server-JPEG render (ADR-075).
+
+        SISL worlds expose no MPE ``world`` object to read per-agent positions from (the swarm-canvas
+        source), but ship a native pygame renderer — so this loop renders the env's own ``rgb_array``
+        frame and streams it as a JPEG, exactly like the single-agent Atari/MuJoCo path. It still steps
+        the *parallel* env with the shared decoupled policy applied to **every** agent (parameter
+        sharing), reading the ADR-019 snapshot the trainer publishes, never the live SB3 model. Random
+        actions until a snapshot arrives (or during a training-free "watch").
+        """
+        from app.services.ma_env import close_env, make_parallel_env
+
+        try:
+            env = make_parallel_env(env_id, render_mode="rgb_array")
+        except Exception:  # noqa: BLE001 — a bad MA env must not crash anything
+            logger.exception("Preview SISL env creation failed for %s", env_id)
+            return
+
+        meta = getattr(env, "metadata", {}) or {}
+        render_fps = float(meta.get("render_fps", _DEFAULT_RENDER_FPS)) or _DEFAULT_RENDER_FPS
+        base_dt = 1.0 / render_fps
+        send_interval = 1.0 / _SEND_FPS_CAP
+        episode = 0
+        last_sent = 0.0
+        try:
+            while self._active_and_visual():
+                episode += 1
+                obs, _ = env.reset()
+                ep_reward = 0.0
+                step = 0
+                while env.agents and self._active_and_visual():
+                    if self._is_paused():  # training paused → freeze the last frame
+                        time.sleep(0.05)
+                        continue
+                    actions = self._choose_ma_actions(env, obs)
+                    obs, rewards, _, _, _ = env.step(actions)
+                    ep_reward += float(np.mean(list(rewards.values()))) if rewards else 0.0
+                    step += 1
+
+                    now = time.monotonic()
+                    if now - last_sent >= send_interval or not env.agents:
+                        last_sent = now
+                        self._emit_ma_image_frame(env, episode, step, ep_reward)
+                    time.sleep(base_dt / self._current_speed())
+        finally:
+            close_env(env)  # serialize the global pygame.quit() against any other MPE/SISL env
+
+    def _emit_ma_image_frame(self, env: Any, episode: int, step: int, reward: float) -> None:
+        try:
+            rgb = np.asarray(env.render(), dtype=np.uint8)
+            image, width, height = encode_frame(rgb)
+        except Exception:  # noqa: BLE001 — drop a bad frame, keep the loop alive
+            logger.debug("Preview SISL frame render/encode failed", exc_info=True)
+            return
+        # Matches schemas.preview.FrameMessage (image fields); built by hand to skip per-frame validation.
+        self._broadcast(
+            {
+                "type": "frame",
+                "episode": episode,
+                "step": step,
+                "reward": reward,
+                "width": width,
+                "height": height,
+                "image": image,
             }
         )
 

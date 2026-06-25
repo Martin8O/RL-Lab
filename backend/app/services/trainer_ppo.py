@@ -180,6 +180,21 @@ def _build_preview_predict(model: BaseAlgorithm) -> Callable[[object], Any]:
     return _build_numpy_predict(model)
 
 
+def load_preview_predict(blob: bytes) -> Callable[[object], Any]:
+    """Load a saved **cooperative** PPO ``model.zip`` and return its decoupled preview predict fn.
+
+    The Watch-AI loader for a cooperative multi-agent checkpoint — a single shared brain over
+    homogeneous agents (simple_spread, pursuit). The preview streamer applies the one returned fn to
+    **every** agent (parameter sharing). (The *competitive* simple_tag case packs a per-species
+    ``species.zip`` and is loaded by :func:`app.services.trainer_tag.load_species_predicts` instead.)
+
+    Loaded for inference only (``env=None`` — the saved zip carries the obs/action spaces, so no env is
+    built and no pygame is touched). Dispatches exactly like the live preview: pursuit's 3-D local-view
+    obs → the CPU torch snapshot, a vector obs → the numpy MLP forward (ADR-019)."""
+    model = _InterruptiblePPO.load(io.BytesIO(blob), env=None, device="cpu")
+    return _build_preview_predict(model)
+
+
 def _snapshot(model: BaseAlgorithm, total_timesteps: int, iteration: int) -> CheckpointArtifact:
     """Serialize the model to an in-memory ``model.zip`` for the checkpoint store.
 

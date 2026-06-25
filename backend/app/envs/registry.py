@@ -61,6 +61,13 @@ class EnvSpec(BaseModel):
     # not exact skill — the two reward *curves* are the real signal.
     prey_min_score: float | None = None
     prey_solved_score: float | None = None
+    # How a multi-agent (``petting_zoo``) env is drawn in the preview. ``"swarm"`` = the client canvas
+    # drawn from streamed per-agent + landmark world positions (MPE — ``simple_spread`` / ``simple_tag``,
+    # ADR-038): the MPE world exposes ``world.agents[i].state.p_pos``, so the swarm renderer reads them.
+    # ``"image"`` = a server-rendered JPEG of the env's own ``rgb_array`` frame (SISL — ``pursuit``,
+    # ADR-075): the SISL worlds have no MPE ``world`` object to read positions from, but ship a native
+    # pygame renderer, so they stream a JPEG like Atari/MuJoCo. Ignored for every single-agent env.
+    ma_render: Literal["swarm", "image"] = "swarm"
     # Recommended PPO training budget for this env (the ★ default in the sidebar). Harder envs
     # need far more steps than CartPole, so this is per-env data; the sidebar builds its step
     # dropdown as a ladder around this value (×0.2 … ×4) and the store seeds it on env switch.
@@ -1789,6 +1796,92 @@ _MPE_TAG_GAMES: list[
 
 for _mpe_tag_row in _MPE_TAG_GAMES:
     register(_mpe_tag_spec(*_mpe_tag_row))
+
+
+# ---------------------------------------------------------------------------
+# Multi-agent — SISL "cooperative swarm" (Stanford Intelligent Systems Lab) — ADR-075.
+#
+# A second PettingZoo family alongside MPE, the user's ⭐ cooperative-swarm deep-dive. SISL ships three
+# worlds; **Pursuit** is the canonical cooperative swarm and lands first (the seam-builder), with
+# Multiwalker (continuous Box2D) and Waterworld (continuous, needs ``pymunk``) PARKED for follow-up
+# sessions (see Local/memory). Pursuit is **homogeneous + cooperative** — eight identical pursuers
+# share one reward and one brain — so it rides the EXISTING parameter-sharing path verbatim: the
+# manager's cooperative-MA branch → ``trainer_ppo`` → ``ma_env.make_vec_env`` (SuperSuit
+# ``pettingzoo_env_to_vec_env_v1`` + ``concat_vec_envs_v1``), with NO new trainer. The two things SISL
+# needs that MPE didn't:
+#   * scenario loading from ``pettingzoo.sisl`` (``ma_env._load_scenario`` now probes it too); and
+#   * a **server-JPEG render** — SISL has no MPE ``world`` object for the swarm-canvas position read, but
+#     ships a native pygame renderer, so ``ma_render="image"`` streams an ``rgb_array`` JPEG like
+#     Atari/MuJoCo (the preview's ``_run_ma`` branches on it; the client draws it on the same canvas).
+#
+# obs_type="vector": Pursuit's per-agent obs is a small (7,7,3) **local view**, but it is FLOAT (not a
+# uint8 image), so SB3's MlpPolicy flattens it through its FlattenExtractor — we train it as a flattened
+# vector on the CPU (so the device badge honestly reads CPU, like every other MlpPolicy env). It is NOT
+# the Atari image-CnnPolicy path.
+#
+# Scores (venv-measured per the new-env checklist): a do-nothing / random swarm scores ≈ **−47** per
+# agent (the −0.1/step urgency penalty over 500 cycles ≈ −50, barely offset by stray tag rewards), so
+# ``min_score=-50`` is the idle/timeout floor (ADR-026). ``solved_score=30`` is a genuinely good
+# cooperative capture rate (each capture pays +5, shared); like the competitive simple_tag scales it is
+# an approximate reference line — the *reward curve climbing off the −50 floor* is the real signal.
+# Watch-and-train only (``human_playable=False`` — a single human can't drive a whole swarm).
+# ---------------------------------------------------------------------------
+
+register(
+    EnvSpec(
+        id="pursuit",
+        gym_id="pursuit_v4",  # the pettingzoo.sisl scenario module (resolved by app.services.ma_env)
+        display_name=Bilingual(en="Pursuit (8-agent swarm)", cz="Pursuit (roj 8 agentů)"),
+        description=Bilingual(
+            en="A swarm of eight pursuers spreads out across a shared grid to hunt down randomly-fleeing "
+            "evaders — a pursuer catches an evader by reaching its square. Each pursuer sees only a small "
+            "window around itself and they all share one brain (parameter sharing), so the team's job is "
+            "to fan out and cover the whole board so no evader can hide — cooperation through coverage. "
+            "It's the canonical cooperative-swarm task: coordinated hunting emerges from a single policy "
+            "controlling the whole group. The evaders don't learn — they wander at random; only the "
+            "pursuers improve.",
+            cz="Roj osmi pronásledovatelů (pursuers) se rozprostře po sdílené mřížce a loví náhodně "
+            "prchající kořist (evaders) — pronásledovatel kořist chytí tím, že dorazí na její políčko. "
+            "Každý vidí jen malé okno kolem sebe a všichni sdílejí jeden „mozek“ (sdílení parametrů), "
+            "takže úkolem týmu je rozprostřít se a pokrýt celou plochu, aby se kořist neměla kam schovat "
+            "— spolupráce skrze pokrytí. Kanonická úloha kooperativního roje: koordinovaný lov vzniká z "
+            "jediné strategie řídící celou skupinu. Kořist se neučí — pohybuje se náhodně; zlepšují se "
+            "jen pronásledovatelé.",
+        ),
+        family="petting_zoo",
+        obs_type="vector",  # (7,7,3) local view, FLOAT → flattened by MlpPolicy's FlattenExtractor (CPU)
+        action_space="discrete",  # Discrete(5): stay + 4 cardinal moves
+        supported_algos=["ppo"],  # parameter-sharing PPO only; evo / Q-learning have no MA path
+        hyperparams=_standard_hyperparams(),
+        # PettingZoo parallel_env kwargs (consumed by ma_env.make_parallel_env / make_vec_env). Every flag
+        # here was chosen by measurement to get ACTIVE, spread-out hunting with a cleanly rising skill curve:
+        #  • surround=True + 30 evaders → a random policy catches ~0.25/ep: no reachable signal, PPO
+        #    collapses into a do-nothing blob no matter how it's tuned. Rejected.
+        #  • surround=False + n_catch=2 (catch = 2 pursuers on the evader's cell) *structurally forces
+        #    clumping* (you NEED two on one cell to catch) → a passive blob (spread ≈ 3/8). Rejected.
+        #  • surround=False + **n_catch=1** (a single pursuer tags an evader by stepping on it) lets each
+        #    pursuer hunt independently → they FAN OUT (spread ≈ 7.8/8) and actively chase. ✓
+        #  • **shared_reward=False** (each pursuer scored for its OWN catches, not the team mean) is the key
+        #    that makes it LEARN: with the shared team reward PPO hits a credit-assignment wall and trains
+        #    *worse* than random (drifts to clumping); with local reward it climbs cleanly (random ≈ −30 →
+        #    trained ≈ +8 at 220k CPU steps, all prey caught). This also makes bigger + busier boards work,
+        #    so we use 18×18 with 16 evaders. obs_range=7 keeps the per-agent obs (7,7,3) at any map size.
+        make_kwargs={
+            "x_size": 18, "y_size": 18, "max_cycles": 500, "n_pursuers": 8, "n_evaders": 16,
+            "obs_range": 7, "n_catch": 1, "surround": False, "shared_reward": False,
+        },
+        ma_render="image",  # SISL has no MPE world to read positions from → server-JPEG (ADR-075)
+        solved_score=20.0,  # a strong active-hunting per-agent return (approx reference line)
+        min_score=-45.0,  # idle/do-nothing floor (measured ≈ −42: −0.1/step urgency, no own catches)
+        default_total_timesteps=1_000_000,  # ★ budget; the GPU desktop scales it
+        play_step_scale=1,
+        floor_scales_with_steps=False,  # shaped per-step reward; the floor is the fixed do-nothing −50
+        human_playable=False,  # a swarm has no single human driver — watch + train only
+        competitive=False,  # homogeneous cooperative → parameter-sharing PPO (the simple_spread lane)
+        difficulty="advanced",  # eight-agent coordination + a partial local view is genuinely hard
+        hw_requirement="cpu",  # parameter-sharing PPO trains its small MlpPolicy on CPU
+    )
+)
 
 
 # ---------------------------------------------------------------------------

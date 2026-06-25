@@ -325,6 +325,10 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
         en: 'PPO only, same as the 3-vs-1 version — a six-predator pack and two prey, still two opposed species that each need their own policy (the per-species trainer is the next step). Watch-only for now.',
         cz: 'Jen PPO, stejně jako verze 3 na 1 — šestičlenná smečka predátorů a dvě kořisti, stále dva protichůdné druhy, z nichž každý potřebuje vlastní strategii (trenér pro jednotlivé druhy je dalším krokem). Zatím jen ke sledování.',
       },
+      pursuit: {
+        en: 'PPO only — Pursuit is a *cooperative* swarm, so (like Simple Spread) PPO trains one shared "brain" that drives all eight pursuers at once (parameter sharing). Neuroevolution and Q-learning have no multi-agent path, so they are turned off. Watch the shared policy learn to surround the evaders together rather than chase them one by one.',
+        cz: 'Jen PPO — Pursuit je *kooperativní* roj, takže (jako Simple Spread) PPO trénuje jeden sdílený „mozek“, který řídí všech osm pronásledovatelů najednou (sdílení parametrů). Neuroevoluce ani Q-učení nemají více­agentní cestu, takže jsou vypnuté. Sledujte, jak se sdílená strategie učí kořist společně obkličovat místo aby ji honila po jednom.',
+      },
       hopper: MUJOCO_ALGO,
       walker2d: MUJOCO_ALGO,
       halfcheetah: MUJOCO_ALGO,
@@ -937,6 +941,10 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
       mpe_tag_pack: {
         en: 'The bigger pack-vs-prey world needs the larger ★ 1M budget once training is built (next step), and is really a showcase to scale on the GPU desktop.',
         cz: 'Větší svět smečka vs. kořist potřebuje větší rozpočet ★ 1M, jakmile bude trénink hotový (další krok), a je hlavně ukázkou pro škálování na stroji s GPU.',
+      },
+      pursuit: {
+        en: 'Early on the swarm just drifts; with training the pursuers learn to fan out and actively chase the evaders, and the reward climbs off the floor. Even a few hundred thousand steps shows visible hunting on this CPU; the ★ 1M budget gives it room to get genuinely good. The step counter sums steps across all eight pursuers, so it climbs fast; watch the reward trend rather than the raw count.',
+        cz: 'Zpočátku roj jen bloudí; s tréninkem se pronásledovatelé naučí rozprostřít a aktivně honit kořist a odměna se odrazí ode dna. I pár set tisíc kroků ukáže na tomto CPU viditelný lov; rozpočet ★ 1M mu dá prostor být opravdu dobrý. Počítadlo kroků sčítá kroky přes všech osm pronásledovatelů, takže roste rychle; sledujte spíš trend odměny než holé číslo.',
       },
       hopper: MUJOCO_STEPS,
       walker2d: MUJOCO_STEPS,

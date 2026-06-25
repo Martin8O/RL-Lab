@@ -276,3 +276,81 @@ def test_preview_watch_endpoint_toggles_active() -> None:
         assert off["active"] is False
     finally:
         client.post("/api/preview", json={"visual": True})
+
+
+# -- SISL "cooperative swarm" — Pursuit (ADR-075) --------------------------------------------------
+#
+# A second PettingZoo family alongside MPE. Pursuit is homogeneous + cooperative, so it rides the
+# EXISTING parameter-sharing path (trainer_ppo → make_vec_env) with no new trainer — the only new
+# seams are SISL scenario loading (pettingzoo.sisl) and the server-JPEG render (ma_render="image",
+# since SISL has no MPE world object for the position-based swarm canvas).
+
+
+def test_pursuit_registered() -> None:
+    spec = get_env("pursuit")
+    assert spec is not None, "pursuit not registered"
+    assert spec.family == "petting_zoo"
+    assert spec.gym_id == "pursuit_v4"  # the pettingzoo.sisl scenario module name
+    assert spec.obs_type == "vector"  # (7,7,3) local view, FLOAT → flattened by MlpPolicy (CPU, not Cnn)
+    assert spec.action_space == "discrete"  # Discrete(5): stay + 4 cardinal moves
+    assert spec.supported_algos == ["ppo"]  # parameter-sharing PPO only
+    assert spec.competitive is False  # homogeneous cooperative → the simple_spread lane (one shared brain)
+    assert spec.human_playable is False  # a swarm has no single human driver — watch + train only
+    assert spec.train_implemented is True
+    assert spec.hw_requirement == "cpu"  # small MlpPolicy trains on CPU
+    assert spec.ma_render == "image"  # SISL → server-JPEG render (no MPE world to read positions from)
+    assert spec.min_score < spec.solved_score  # the do-nothing floor sits below a good cooperative return
+    # The config chosen for ACTIVE hunting (measured, ADR-075): surround=False + n_catch=1 (a single
+    # pursuer tags an evader by reaching its square) so pursuers hunt independently and fan out (spread
+    # ≈ 7.8/8), and shared_reward=False (each scored for its OWN catches) — the local reward that lets PPO
+    # actually learn (the shared team reward hits a credit-assignment wall and trains worse than random).
+    assert spec.make_kwargs["surround"] is False
+    assert spec.make_kwargs["n_catch"] == 1
+    assert spec.make_kwargs["shared_reward"] is False
+    assert spec.make_kwargs["n_evaders"] == 16 and spec.make_kwargs["n_pursuers"] == 8
+
+
+def test_sisl_scenario_loads_from_pettingzoo_sisl() -> None:
+    """ma_env._load_scenario resolves a SISL id from pettingzoo.sisl (the generalised loader), the way
+    an MPE id resolves from mpe2 — proving the new family shares one code path."""
+    module = ma_env._load_scenario("pursuit_v4")
+    assert hasattr(module, "parallel_env")  # the PettingZoo parallel-env factory
+
+
+def test_pursuit_make_vec_env_bridges_to_sb3() -> None:
+    """SuperSuit stacks the 8 homogeneous pursuers as 8 SB3 sub-envs (parameter sharing); the (7,7,3)
+    local-view obs flows through unchanged (MlpPolicy flattens it)."""
+    vec = ma_env.make_vec_env("pursuit")
+    try:
+        assert vec.num_envs == 8  # one sub-env per pursuer
+        assert vec.observation_space.shape == (7, 7, 3)  # per-agent local view
+        assert int(vec.action_space.n) == 5
+    finally:
+        ma_env.close_env(vec)
+
+
+def test_pursuit_ppo_smoke_and_cooperative_watch_load() -> None:
+    """train_ppo runs the cooperative SISL env through the SuperSuit bridge (the manager's path, on
+    CPU) and snapshots a single shared model.zip; load_preview_predict then round-trips that checkpoint
+    into a working predict over the (7,7,3) obs — the Watch-AI loader for a cooperative swarm."""
+    from app.services.trainer_ppo import load_preview_predict
+
+    metrics: list = []
+    snapshots: list = []
+    terminal = train_ppo(
+        TrainConfig(
+            env_id="pursuit", algo="ppo", seed=0, total_timesteps=2048,
+            hyperparams=PPOHyperparams(n_steps=128, batch_size=64),
+        ),
+        "pursuit_v4", TrainControl(),
+        metrics.append, lambda _p: None, on_snapshot=snapshots.append,
+    )
+    assert terminal == "finished"
+    assert metrics, "no metrics frames from the SISL bridge"
+    assert metrics[-1].timesteps >= 2048  # 8 stacked sub-envs advance the shared counter
+    # The cooperative checkpoint is a single shared model.zip (NOT a per-species species.zip).
+    assert snapshots and snapshots[-1].artifact_name == "model.zip"
+    predict = load_preview_predict(snapshots[-1].blob)
+    obs = np.zeros((7, 7, 3), dtype=np.float32)  # a pursuer's local view
+    action = predict(obs)
+    assert isinstance(action, int) and 0 <= action < 5  # a valid Discrete(5) move

@@ -36,9 +36,14 @@ async def watch_preview(req: PreviewWatch) -> PreviewState:
     # a random rollout. Bind the loop here too — a watch can be the first thing that touches the streamer.
     preview_streamer.bind_loop(asyncio.get_running_loop())
     if req.on:
-        # Load the saved per-species policies off the event loop (SB3 load is blocking) BEFORE starting
-        # the watch, so the swarm renders the trained ecosystem from the first frames.
+        # Load the saved policy off the event loop (SB3 load is blocking) BEFORE starting the watch, so
+        # the swarm renders the trained model from the first frames. Two checkpoint shapes:
+        #   * competitive simple_tag packs a per-species ``species.zip`` → a {role -> predict} map; and
+        #   * a cooperative single brain (simple_spread, pursuit) is a plain ``model.zip`` → one shared
+        #     predict applied to every agent (parameter sharing).
+        # Try the species map first; an empty result means the blob is a cooperative single model.
         predicts = None
+        predict = None
         if req.checkpoint_id:
             from app.services.checkpoints import checkpoint_store
             from app.services.trainer_tag import load_species_predicts
@@ -46,9 +51,15 @@ async def watch_preview(req: PreviewWatch) -> PreviewState:
             loaded = await asyncio.to_thread(checkpoint_store.load, req.checkpoint_id)
             if loaded is not None:
                 predicts = await asyncio.to_thread(load_species_predicts, loaded.blob)
+                if not predicts:
+                    from app.services.trainer_ppo import load_preview_predict
+
+                    predict = await asyncio.to_thread(load_preview_predict, loaded.blob)
         preview_streamer.start_watch(req.env_id)
         if predicts:
             preview_streamer.set_policies(predicts)
+        elif predict is not None:
+            preview_streamer.set_policy(predict)
     else:
         preview_streamer.stop_watch()
     return preview_streamer.state()

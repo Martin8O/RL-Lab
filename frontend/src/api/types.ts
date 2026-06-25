@@ -71,6 +71,10 @@ export interface EnvSpec {
    *  null for every single-species env. */
   prey_min_score?: number | null
   prey_solved_score?: number | null
+  /** Multi-agent (petting_zoo) render mode: `"swarm"` = the client canvas drawn from streamed per-agent
+   *  positions (MPE — simple_spread/simple_tag); `"image"` = a server-rendered JPEG of the env's own
+   *  frame (SISL — pursuit, which has no MPE world to read positions from). Absent/`"swarm"` elsewhere. */
+  ma_render?: 'swarm' | 'image'
 }
 
 // --- System capabilities (G4a) ---------------------------------------------

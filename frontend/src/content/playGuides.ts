@@ -941,11 +941,40 @@ const MPE_TAG_WATCH_TIP: Bilingual = {
     + 'kořist se učí uhýbat a využívat překážky — vznikající obkličování a léčky, jimiž je tento svět proslulý.',
 }
 
+// Pursuit (SISL cooperative swarm, ADR-075). Server-rendered like Atari. Render legend (pursuit_base.py):
+// RED circles = the 8 pursuers (the learners), BLUE circles = the evaders (random, they do NOT learn).
+// Each pursuer's field of view is a faint orange tint (we dimmed the default wash so it doesn't dominate).
+// When pieces stack on one cell the renderer shows ONE dot + a small count (cyan = #evaders, yellow =
+// #pursuers) — an overlap indicator, not a mechanic. Catch config = n_catch=1 (a single pursuer tags an
+// evader by reaching its square → it vanishes), so pursuers HUNT INDEPENDENTLY and fan out across the
+// board, rather than the passive blob that n_catch=2 (must pair up on one cell) forced.
+const PURSUIT_WATCH_TIP: Bilingual = {
+  en: 'Red circles are the eight pursuers (the ones that learn); blue circles are the evaders, which '
+    + 'move at random and never learn — so don\'t expect clever dodging from them. The faint orange tint '
+    + 'around a pursuer is its field of view (what it can see). When pieces land on the same cell they '
+    + 'overlap into one dot with a small number — cyan counts evaders there, yellow counts pursuers — so '
+    + 'a jumping number just means pieces stacked up, nothing merged. A pursuer catches an evader by '
+    + 'reaching its square (the evader then vanishes); the team shares one brain, so its job is to spread '
+    + 'out and cover the whole board so no evader can hide. Early on the swarm drifts; as it trains, watch '
+    + 'the pursuers fan out and actively chase — each heading for nearby blue evaders and sweeping them up '
+    + 'across the grid. The climbing reward number tracks how many they\'re catching.',
+  cz: 'Červené kroužky jsou osm pronásledovatelů (ti se učí); modré kroužky jsou kořist, která se '
+    + 'pohybuje náhodně a nikdy se neučí — nečekejte od ní chytré uhýbání. Slabý oranžový nádech kolem '
+    + 'pronásledovatele je jeho zorné pole (co vidí). Když kousky stojí na stejném políčku, překryjí se v '
+    + 'jednu tečku s malým číslem — azurové počítá kořist, žluté pronásledovatele — takže poskakující '
+    + 'číslo jen znamená, že se kousky navršily, nic se nesloučilo. Pronásledovatel chytí kořist tím, že '
+    + 'dorazí na její políčko (kořist pak zmizí); tým sdílí jeden „mozek“, takže jeho úkolem je rozprostřít '
+    + 'se a pokrýt celou plochu, aby se kořist neměla kam schovat. Zpočátku roj bloudí; jak se učí, '
+    + 'sledujte, jak se pronásledovatelé rozprostřou a aktivně loví — každý míří na blízkou modrou kořist '
+    + 'a pročešou mřížku. Stoupající číslo odměny ukazuje, kolik kořisti chytají.',
+}
+
 export const WATCH_TIPS: Record<string, Bilingual> = {
   mpe_spread: MPE_SPREAD_WATCH_TIP,
   mpe_spread_swarm: MPE_SPREAD_WATCH_TIP,
   mpe_tag: MPE_TAG_WATCH_TIP,
   mpe_tag_pack: MPE_TAG_WATCH_TIP,
+  pursuit: PURSUIT_WATCH_TIP,
 }
 
 /** The "what to look for" watch note for a watch-only env, or null if it has none. */

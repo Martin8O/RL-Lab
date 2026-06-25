@@ -122,7 +122,8 @@ export default function EnvPreview() {
     : selectedEnvId === 'pendulum' ? 'pendulum'
     : selectedEnvId === 'acrobot' ? 'acrobot'
     : selectedEnvId === 'lunarlander' ? 'lunarlander'
-    : selectedEnv?.family === 'petting_zoo' ? 'mpe'  // multi-agent swarm canvas (G7a)
+    : selectedEnv?.family === 'petting_zoo'
+      ? (selectedEnv.ma_render === 'image' ? null : 'mpe')  // SISL (pursuit) → server JPEG; MPE → swarm canvas (ADR-075/G7a)
     : selectedEnv?.family === 'board' ? 'board'      // OpenSpiel board renderer (G6a)
     : isGridEnv(selectedEnvId) ? 'grid'
     : null
@@ -160,8 +161,10 @@ export default function EnvPreview() {
   }, [backendStatus])
 
   // Watch AI (G7b-2 follow-up): the saved checkpoints for THIS multi-agent env, picked in the footer
-  // bar. Refetched after a run reaches a terminal state (a fresh save may have appeared).
-  const isMaEnv = clientKind === 'mpe'
+  // bar. Refetched after a run reaches a terminal state (a fresh save may have appeared). Keyed on the
+  // family, not clientKind, so it also covers SISL (pursuit), whose preview is a server JPEG (clientKind
+  // null) yet is still a watch-only swarm needing the WatchInfo bar — not the human PlayControls.
+  const isMaEnv = selectedEnv?.family === 'petting_zoo'
   const [maCheckpoints, setMaCheckpoints] = useState<CheckpointMeta[]>([])
   const [maCkpt, setMaCkpt] = useState<string>('')
   useEffect(() => {
@@ -912,7 +915,7 @@ export default function EnvPreview() {
           Multi-agent envs can't be driven by a single human (G7a), so the play bar is replaced by a
           watch-only "What am I watching?" affordance — keeping the env explanation the play bar used
           to carry (its How-to-play guide) instead of leaving the swarm unlabelled. */}
-      {clientKind !== 'mpe' ? <PlayControls /> : (
+      {!isMaEnv ? <PlayControls /> : (
         <WatchInfo
           checkpoints={maCheckpoints}
           selected={maCkpt}
