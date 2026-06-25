@@ -103,6 +103,16 @@ def make_env(
         limit = _episode_limit(spec, play_scale)
         if limit is not None:
             kwargs["max_episode_steps"] = limit
+        # MuJoCo locomotion robots render a finite checker plane and a trained runner outruns it,
+        # then appears to sprint over a grey void. Swap in a floor-enlarged copy of the model XML
+        # (cosmetic only — the plane collides as infinite regardless of size, so physics/obs/repro are
+        # unchanged). Returns None for non-locomotion envs / on failure → stock model. Ant fix.
+        if spec.family == "mujoco":
+            from app.envs.mujoco_floor import floored_xml_path
+
+            patched = floored_xml_path(gid)
+            if patched is not None:
+                kwargs.setdefault("xml_file", patched)
     if render_mode is not None:
         kwargs["render_mode"] = render_mode
 

@@ -147,6 +147,56 @@ def test_make_env_builds_mujoco_vector_box(env_id: str) -> None:
         env.close()
 
 
+@pytest.mark.parametrize(
+    ("env_id", "gym_id", "asset", "want_half"),
+    [("ant", "Ant-v5", "ant.xml", 160.0),
+     ("halfcheetah", "HalfCheetah-v5", "half_cheetah.xml", 160.0),
+     ("walker2d", "Walker2d-v5", "walker2d.xml", 160.0),
+     ("hopper", "Hopper-v5", "hopper.xml", 80.0),
+     ("humanoid", "Humanoid-v5", "humanoid.xml", 80.0),
+     ("swimmer", "Swimmer-v5", "swimmer.xml", 160.0)],
+)
+def test_mujoco_floor_enlarged(env_id: str, gym_id: str, asset: str, want_half: float) -> None:
+    """The locomotion robots render a finite checker plane and a trained runner outruns it, then
+    sprints over a grey void. make_env swaps in a floor-enlarged copy of the model XML (×4) so the
+    floor geom is bigger — but this is cosmetic only (a plane collides as infinite regardless of
+    size), so obs/action are untouched and rendering still works.
+
+    Crucially the patched model also pins <statistic> to the *stock* extent: MuJoCo derives the camera
+    clip planes and the shadow frustum from extent, which is auto-computed from the floor size, so a
+    naively enlarged floor inflated extent → coarse depth → shadow acne (flickering dark blotches). We
+    assert the loaded model's extent matches the stock model's, i.e. the bigger floor no longer drives
+    render scaling. Ant fix."""
+    from pathlib import Path
+
+    import gymnasium.envs.mujoco as mj
+    import mujoco
+
+    stock = mujoco.MjModel.from_xml_path(str(Path(mj.__file__).resolve().parent / "assets" / asset))
+    env = make_env(env_id, render_mode="rgb_array")
+    try:
+        model = env.unwrapped.model  # type: ignore[attr-defined]
+        size = model.geom("floor").size
+        assert abs(float(size[0]) - want_half) < 1e-6  # X half-extent scaled ×4
+        assert abs(float(size[1]) - want_half) < 1e-6  # Y half-extent scaled ×4
+        # The shadow-acne fix: render scaling stays pinned to the stock model despite the bigger floor.
+        assert abs(float(model.stat.extent) - float(stock.stat.extent)) < 1e-6
+        env.reset(seed=0)
+        env.step(env.action_space.sample())
+        rgb = np.asarray(env.render(), dtype=np.uint8)
+        assert rgb.ndim == 3 and rgb.shape[2] == 3  # still renders with the bigger floor
+    finally:
+        env.close()
+
+
+def test_reacher_keeps_stock_floor() -> None:
+    """Reacher is a fixed top-down arm that never travels, so it is NOT in the big-floor set — its
+    model loads unchanged (the helper returns None → make_env keeps the stock xml_file)."""
+    from app.envs.mujoco_floor import floored_xml_path
+
+    assert floored_xml_path("Reacher-v5") is None
+
+
 def test_reacher_play_scale_extends_short_episode() -> None:
     """Reacher's native 50-step episode is too short to play, so play_step_scale=6 lengthens it (the
     factory multiplies the cap); the locomotion envs keep their native length (play_scale=1 → None)."""
