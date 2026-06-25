@@ -109,6 +109,22 @@ scipy==1.17.1
 SuperSuit==3.11.0
 tinyscaler==1.2.8
 
+# --- Vendored SISL Waterworld (continuous cooperative swarm) — needs pymunk (ADR-077) ---
+# PettingZoo REMOVED Waterworld in 1.25.0 (it depends on `pymunk`, which Farama dropped from the
+# maintained set), so the 1.26.1 pinned above ships only `pursuit_v4` + `multiwalker_v9` — installing
+# pymunk is necessary but NOT sufficient, the env *code* is gone from the library. Rather than downgrade
+# PettingZoo (which would regress the two SISL envs + MPE), the env source is vendored in-tree at
+# `backend/app/envs/vendored/waterworld_v4` (MIT, from PettingZoo tag 1.24.3), so it rides the existing
+# cooperative parameter-sharing path with no PettingZoo change. Its only extra dep is `pymunk` (the 2D
+# physics engine the env steps). **Pin pymunk to the 6.x line:** pymunk 7.0 removed
+# `Space.add_collision_handler` (the API the vendored env's food/poison/reward callbacks use), so 7.x
+# breaks it; the collision API is stable across all of 6.x. pymunk is used by NOTHING else in the app,
+# so this pin has zero blast radius. cffi + pycparser are its transitive deps; pymunk uses its own
+# cffi bindings and pulls NO pygame, so the `pygame-ce`-only rule (the box2d corruption guard) is safe.
+cffi==2.0.0
+pycparser==3.0
+pymunk==6.11.1
+
 # --- MuJoCo stack (G5a — continuous-control / robotics) ---
 # `pip install gymnasium[mujoco]` pulls the `mujoco` wheel (the DeepMind physics engine, native
 # libs bundled — no compiler) plus its GL backends. The risk the prompt flagged — offscreen

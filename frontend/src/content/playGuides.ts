@@ -994,6 +994,33 @@ const MULTIWALKER_WATCH_TIP: Bilingual = {
     + 'je těžké a chce hodně tréninku.',
 }
 
+// Waterworld (SISL continuous cooperative foraging, ADR-077). Server-rendered like Pursuit/Multiwalker.
+// Render legend (waterworld_models.py colors): the five archea/pursuers are BLUE-PURPLE circles (the
+// learners) with thin BLACK sensor lines radiating out (their field of view); food blobs are GREEN
+// circles (bigger), poison blobs are RED circles (smaller), and there is one TEAL obstacle to swim
+// around in the middle. Two archea must touch a green food blob at the same time to eat it (it then
+// respawns elsewhere); touching red poison hurts.
+const WATERWORLD_WATCH_TIP: Bilingual = {
+  en: 'The five blue-purple circles are the swimmers (the ones that learn); the thin black lines fanning '
+    + 'out of each are its sensors (what it can feel around it). Green circles are food, red circles are '
+    + 'poison, and the teal blob in the middle is an obstacle to swim around. Here is the cooperative '
+    + 'catch: it takes TWO swimmers touching the same green blob at the same moment to eat it — a lone '
+    + 'swimmer can\'t feed itself — and the blob then pops up somewhere new. They all share one brain, so '
+    + 'their job is to spread out to find food and then converge in pairs to eat it, all while steering '
+    + 'clear of the red poison. Early on they just drift and bump into things; as it trains, watch them '
+    + 'start dodging poison and pairing up on the green blobs. This is genuinely hard, so the climbing '
+    + 'reward number — and the AI Skill meter — may rise only slowly even after a lot of training.',
+  cz: 'Pět modrofialových kroužků jsou plavci (ti, co se učí); tenké černé čáry vějířem z každého jsou '
+    + 'jeho senzory (čím vnímá okolí). Zelené kroužky jsou jídlo, červené kroužky jed a azurový chuchvalec '
+    + 'uprostřed je překážka, kterou je třeba obeplout. Tady je ten kooperativní háček: aby snědli zelený '
+    + 'chuchvalec, musí se ho DVA plavci dotknout ve stejný okamžik — osamělý plavec se nenají — a chuchvalec '
+    + 'se pak objeví jinde. Všichni sdílejí jeden „mozek“, takže jejich úkolem je rozprostřít se za jídlem a '
+    + 'pak se ve dvojicích sbíhat, aby ho snědli, a přitom se vyhýbat červenému jedu. Zpočátku jen bloudí a '
+    + 'do všeho narážejí; jak se učí, sledujte, jak začínají uhýbat jedu a párovat se na zelených '
+    + 'chuchvalcích. Je to opravdu těžké, takže stoupající číslo odměny — i měřič „AI Skill“ — může růst jen '
+    + 'pomalu i po hodně tréninku.',
+}
+
 export const WATCH_TIPS: Record<string, Bilingual> = {
   mpe_spread: MPE_SPREAD_WATCH_TIP,
   mpe_spread_swarm: MPE_SPREAD_WATCH_TIP,
@@ -1001,6 +1028,7 @@ export const WATCH_TIPS: Record<string, Bilingual> = {
   mpe_tag_pack: MPE_TAG_WATCH_TIP,
   pursuit: PURSUIT_WATCH_TIP,
   multiwalker: MULTIWALKER_WATCH_TIP,
+  waterworld: WATERWORLD_WATCH_TIP,
 }
 
 /** The "what to look for" watch note for a watch-only env, or null if it has none. */

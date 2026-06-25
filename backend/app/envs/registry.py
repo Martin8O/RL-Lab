@@ -1983,6 +1983,101 @@ register(
 
 
 # ---------------------------------------------------------------------------
+# SISL Waterworld (continuous cooperative foraging) — the 3rd and LAST SISL world (ADR-077).
+#
+# The third cooperative swarm: five "archea" (pursuers) swim a 2D pool, working together to consume
+# food while dodging poison. Homogeneous + cooperative ⇒ the SAME parameter-sharing path as Pursuit /
+# Multiwalker (manager's cooperative-MA branch → trainer_ppo → ma_env.make_vec_env), one shared
+# MlpPolicy over all five archea, NO new trainer. Like Multiwalker it has **continuous Box(2) actions**
+# (a 2D thrust vector per archea), so it rides the box-aware MA preview/predict the same way; obs is a
+# (162,) float **sensor vector** (30→ here 20 range-limited sensors, 8 features each, + 2 collision
+# flags) → MlpPolicy's FlattenExtractor → CPU, so obs_type="vector". Server-JPEG render (ma_render=
+# "image"): pymunk physics + a pygame rgb_array frame, no MPE world to read positions from.
+#
+# VENDORED, because PettingZoo REMOVED Waterworld in 1.25.0 (its `pymunk` dependency was dropped from
+# the maintained set), so the 1.26.1 we pin ships only pursuit_v4 + multiwalker_v9 — `pip install
+# pymunk` is necessary but NOT sufficient, the env *code* is gone. Rather than downgrade PettingZoo
+# (regressing the two SISL envs + MPE), the env source is vendored in-tree at
+# app/envs/vendored/waterworld_v4 (MIT, from tag 1.24.3) and resolved by ma_env._load_scenario, which
+# now probes app.envs.vendored after the real PettingZoo namespaces. pymunk is pinned to 6.x (7.0
+# removed the collision-handler API the env uses); see backend/requirements.txt.
+#
+# CONFIG — the cooperative knob is the whole game (measured A/B). Waterworld's `n_coop` = how many
+# archea must touch one food blob *simultaneously* to eat it (food_reward=10, then the blob respawns).
+# This INVERTS the Pursuit n_catch lesson: there, n_catch=1 made the agents fan out and learn while
+# n_catch=2 forced a passive blob — but here food *drifts into* the agents and respawns, so n_coop=1 is
+# trivial (a 150k A/B: random ≈ +31 already, trained ≈ +28 — NO learnable gap → a useless skill meter).
+# **n_coop=2** is what creates the gap: random can't get two archea on a blob at once (≈ −4, dominated
+# by the thrust penalty + poison), and training has to learn to pair up to eat (150k: −4 → −0.8, a clean
+# +3 climb). So n_coop=2 — the canonical cooperative setting — is the honest choice. local_ratio=1.0
+# (fully LOCAL reward, the Pursuit/Multiwalker "local beats shared" lesson, and already the env default).
+#
+# SCORES (measured). The skill floor min_score = the do-nothing/idle baseline (ADR-026): a zero-thrust
+# archea pays no thrust penalty and just gets bumped by drifting poison ⇒ idle ≈ −1.4 per agent
+# (venv-measured over 3 seeds). min_score=-2 puts idle ≈ 0 % (and a random flailer, ≈ −4, clamps to
+# 0 % — it *wastes* energy so it scores BELOW do-nothing, which is correct). solved_score=20 is an
+# approximate reference line for a genuinely cooperative forager (repeated paired catches at +10), like
+# the other swarm scales. Honest framing (the Multiwalker pattern): plain parameter-sharing PPO learns
+# to beat random — dodge poison, make some coordinated catches — but tight cooperative foraging is hard,
+# so the meter can sit low even as the reward chart climbs off the floor. ★ 2M budget (continuous +
+# cooperation is slow; the desktop scales it). Watch-and-train only (five archea × a 2D thrust each —
+# no single human driver).
+# ---------------------------------------------------------------------------
+
+register(
+    EnvSpec(
+        id="waterworld",
+        gym_id="waterworld_v4",  # resolved by ma_env._load_scenario from app.envs.vendored (vendored)
+        display_name=Bilingual(en="Waterworld (5-agent swarm)", cz="Waterworld (roj 5 agentů)"),
+        description=Bilingual(
+            en="Five microscopic swimmers (archea) share one pool, hunting drifting food blobs while "
+            "dodging poison. To eat a food blob, two archea must touch it at the same time — so a lone "
+            "swimmer can't feed itself; the team has to pair up and herd food together. Each archea "
+            "steers with a continuous 2D thrust and senses its surroundings through a ring of range-"
+            "limited sensors. All five share one brain (parameter sharing), so cooperative foraging — "
+            "spreading out to find food, then converging in pairs to eat it, all while avoiding poison "
+            "— has to emerge from a single policy. The continuous-control, free-swimming cousin of "
+            "Pursuit.",
+            cz="Pět mikroskopických plavců (archea) sdílí jeden bazén, loví unášené chuchvalce jídla a "
+            "vyhýbá se jedu. Aby chuchvalec snědli, musí se ho dva plavci dotknout zároveň — takže "
+            "osamělý plavec se nenají; tým se musí spárovat a jídlo společně nahnat. Každý plavec se "
+            "řídí spojitým 2D tahem a okolí vnímá věncem dosahově omezených senzorů. Všech pět sdílí "
+            "jeden „mozek“ (sdílení parametrů), takže kooperativní lov — rozprostřít se za jídlem a pak "
+            "se ve dvojicích sbíhat, aby ho snědli, a přitom se vyhýbat jedu — musí vzejít z jediné "
+            "strategie. Spojitá, volně plovoucí obdoba Pursuitu.",
+        ),
+        family="petting_zoo",
+        obs_type="vector",  # (162,) sensor vector, FLOAT → flattened by MlpPolicy's FlattenExtractor (CPU)
+        action_space="box",  # Box(-1,1,(2,)): a 2D thrust per archea — continuous, like Multiwalker
+        supported_algos=["ppo"],  # parameter-sharing PPO only; evo / Q-learning have no MA path
+        hyperparams=_standard_hyperparams(),
+        # PettingZoo parallel_env kwargs (consumed by ma_env.make_parallel_env / make_vec_env):
+        #  • n_pursuers=5 → five homogeneous archea → SuperSuit stacks them as 5 SB3 sub-envs.
+        #  • n_coop=2 → two archea must touch a food blob at once to eat it (the cooperative knob; the
+        #    measured A/B above — n_coop=1 leaves no learnable gap, n_coop=2 makes cooperation the task).
+        #  • local_ratio=1.0 → fully LOCAL per-archea reward (the Pursuit/Multiwalker "local beats the
+        #    shared team mean for parameter-sharing PPO" lesson; also the env's own default).
+        #  • n_sensors=20 → a 162-dim obs (8·20+2); sensor_range/accel/speeds at the canonical defaults.
+        make_kwargs={
+            "n_pursuers": 5, "n_evaders": 5, "n_poisons": 10, "n_coop": 2,
+            "n_sensors": 20, "sensor_range": 0.2, "pursuer_max_accel": 0.01,
+            "local_ratio": 1.0, "speed_features": True, "max_cycles": 500,
+        },
+        ma_render="image",  # pymunk physics + a pygame rgb_array frame, no MPE world → server-JPEG
+        solved_score=20.0,  # approx reference line: a genuinely cooperative forager (repeated +10 catches)
+        min_score=-2.0,  # the do-nothing/idle baseline (idle ≈ −1.4); a random flailer (≈ −4) clamps to 0%
+        default_total_timesteps=2_000_000,  # ★ budget; continuous + cooperation is slow — desktop scales it
+        play_step_scale=1,
+        floor_scales_with_steps=False,  # fixed-length episodes; the floor is the constant do-nothing idle
+        human_playable=False,  # five archea, a 2D thrust each — no single human driver; watch + train
+        competitive=False,  # homogeneous cooperative → parameter-sharing PPO (the simple_spread lane)
+        difficulty="advanced",  # continuous control + a hard cooperative-foraging credit-assignment task
+        hw_requirement="cpu",  # parameter-sharing PPO trains its small MlpPolicy on CPU
+    )
+)
+
+
+# ---------------------------------------------------------------------------
 # MuJoCo family (continuous control / robotics) — G5a "install + human-play on CPU
 # now, training GPU-gated" (the Atari/BipedalWalker pattern).
 #

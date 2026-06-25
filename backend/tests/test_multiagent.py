@@ -465,3 +465,88 @@ def test_choose_ma_actions_passes_box_vectors_through() -> None:
             assert np.allclose(np.asarray(a, dtype=np.float32), vec)  # the box vector, untouched
     finally:
         preview_streamer.detach_run()  # reset the published policy (clears _predict / _policies)
+
+
+# -- SISL Waterworld — the 3rd/LAST SISL world, VENDORED (ADR-077) ---------------------------------
+#
+# Waterworld is the continuous cooperative forager (five archea pair up to eat food, dodge poison). It
+# rides the SAME parameter-sharing path + SISL seams as Pursuit/Multiwalker, with one structural twist:
+# PettingZoo REMOVED Waterworld in 1.25.0 (its pymunk dep), so the env is VENDORED in-tree at
+# app/envs/vendored/waterworld_v4 and resolved by ma_env._load_scenario probing app.envs.vendored after
+# the real PettingZoo namespaces. Like Multiwalker its action space is a continuous Box.
+
+
+def test_waterworld_registered() -> None:
+    spec = get_env("waterworld")
+    assert spec is not None, "waterworld not registered"
+    assert spec.family == "petting_zoo"
+    assert spec.gym_id == "waterworld_v4"  # resolved from app.envs.vendored (vendored, not pettingzoo.sisl)
+    assert spec.obs_type == "vector"  # (162,) sensor vector, FLOAT → flattened by MlpPolicy (CPU, not Cnn)
+    assert spec.action_space == "box"  # Box(2): a 2D thrust per archea — continuous, like Multiwalker
+    assert spec.supported_algos == ["ppo"]  # parameter-sharing PPO only
+    assert spec.competitive is False  # homogeneous cooperative → the simple_spread/pursuit lane
+    assert spec.human_playable is False  # five archea, a 2D thrust each — watch + train only
+    assert spec.train_implemented is True
+    assert spec.hw_requirement == "cpu"  # small MlpPolicy trains on CPU
+    assert spec.ma_render == "image"  # SISL → server-JPEG render (pymunk + pygame, no MPE world)
+    # min_score=-2 is the do-nothing/idle baseline (idle ≈ −1.4): a zero-thrust archea pays no thrust
+    # penalty, so a random flailer (≈ −4) scores BELOW it and clamps to 0%. solved_score=20 is an approx
+    # cooperative-forager reference line.
+    assert spec.min_score == -2.0
+    assert spec.min_score < spec.solved_score  # -2 < 20: a real cooperative return sits above do-nothing
+    # The cooperative knob (measured A/B): n_coop=2 (two archea must touch a food blob at once to eat it)
+    # is what creates a learnable gap — n_coop=1 leaves random ≈ trained. local_ratio=1.0 = fully local
+    # per-archea reward (the Pursuit/Multiwalker "local beats shared" lesson; also the env default).
+    assert spec.make_kwargs["n_coop"] == 2
+    assert spec.make_kwargs["local_ratio"] == 1.0
+    assert spec.make_kwargs["n_pursuers"] == 5
+
+
+def test_waterworld_loads_from_vendored() -> None:
+    """The NEW seam: ma_env._load_scenario resolves waterworld_v4 from the in-tree vendored package
+    (app.envs.vendored), since PettingZoo 1.26.1 no longer ships it. Proves the probe-list extension —
+    a vendored id resolves with the same one code path as a stock pettingzoo.sisl id."""
+    module = ma_env._load_scenario("waterworld_v4")
+    assert hasattr(module, "parallel_env")  # the PettingZoo parallel-env factory
+    assert module.__name__.startswith("app.envs.vendored")  # came from the vendored package, not upstream
+
+
+def test_waterworld_make_vec_env_bridges_to_sb3() -> None:
+    """SuperSuit stacks the 5 homogeneous archea as 5 SB3 sub-envs (parameter sharing); the (162,)
+    sensor obs and the continuous Box(2) thrust action flow through the vendored env unchanged."""
+    vec = ma_env.make_vec_env("waterworld")
+    try:
+        assert vec.num_envs == 5  # one sub-env per archea
+        assert vec.observation_space.shape == (162,)  # per-archea sensor vector (8·20 + 2)
+        assert getattr(vec.action_space, "n", None) is None  # a Box, not a Discrete
+        assert vec.action_space.shape == (2,)  # a 2D thrust per archea
+    finally:
+        ma_env.close_env(vec)
+
+
+def test_waterworld_ppo_smoke_and_box_watch_load() -> None:
+    """train_ppo runs the vendored continuous SISL env through the SuperSuit bridge (the manager's
+    cooperative path, on CPU) and snapshots one shared model.zip; load_preview_predict round-trips it
+    into a working BOX predict — a clipped float vector of shape (2,)."""
+    from app.services.trainer_ppo import load_preview_predict
+
+    metrics: list = []
+    snapshots: list = []
+    terminal = train_ppo(
+        TrainConfig(
+            env_id="waterworld", algo="ppo", seed=0, total_timesteps=2048,
+            hyperparams=PPOHyperparams(n_steps=128, batch_size=64),
+        ),
+        "waterworld_v4", TrainControl(),
+        metrics.append, lambda _p: None, on_snapshot=snapshots.append,
+    )
+    assert terminal == "finished"
+    assert metrics, "no metrics frames from the vendored SISL bridge"
+    assert metrics[-1].timesteps >= 2048  # 5 stacked sub-envs advance the shared counter
+    assert snapshots and snapshots[-1].artifact_name == "model.zip"  # cooperative single shared brain
+    predict = load_preview_predict(snapshots[-1].blob)
+    obs = np.zeros((162,), dtype=np.float32)  # an archea's sensor vector
+    action = np.asarray(predict(obs), dtype=np.float32)
+    # A continuous (box) action: a float vector of shape (2,) clipped into the [-1, 1] thrust range.
+    assert action.shape == (2,)
+    assert np.all(action >= -1.0) and np.all(action <= 1.0)

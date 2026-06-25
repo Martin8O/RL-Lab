@@ -2,6 +2,9 @@
 target-version = "py311"
 line-length = 100
 src = ["app", "tests"]
+# Vendored third-party env source (app/envs/vendored/*) is kept faithful to its upstream (PettingZoo,
+# MIT) — we don't restyle it, so it's excluded from our lint/format rules. See app/envs/vendored.
+extend-exclude = ["app/envs/vendored"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "B", "C4", "SIM"]
@@ -13,7 +16,8 @@ ignore = [
 python_version = "3.11"
 strict = false
 ignore_missing_imports = true
-exclude = ["^tests/"]
+# Skip tests and the vendored third-party env source (kept faithful to upstream — see app/envs/vendored).
+exclude = ["^tests/", "/vendored/"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

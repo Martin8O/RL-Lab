@@ -180,21 +180,25 @@ def species_present(env_id: str) -> list[str]:
 def _load_scenario(name: str) -> Any:
     """Import a PettingZoo scenario module by name (e.g. ``"simple_spread_v3"``, ``"pursuit_v4"``).
 
-    Two families share this loader: **MPE** (the particle worlds — ``simple_spread`` / ``simple_tag``,
-    G7a/G7b) and **SISL** (the Stanford cooperative-swarm worlds — ``pursuit``, G7-SISL). MPE prefers
-    the modern split-out ``mpe2`` package and falls back to the legacy ``pettingzoo.mpe`` namespace (the
-    version split noted in the registry's MPE section); SISL lives under ``pettingzoo.sisl``. We probe
-    the packages in order and return the first that has the scenario, so an MPE id resolves from
-    ``mpe2`` and a SISL id from ``pettingzoo.sisl`` with one code path.
+    Three families share this loader: **MPE** (the particle worlds — ``simple_spread`` / ``simple_tag``,
+    G7a/G7b), **SISL** (the Stanford cooperative-swarm worlds — ``pursuit`` / ``multiwalker``, G7-SISL),
+    and **vendored** worlds we ship in-tree (``app.envs.vendored.<id>``) because upstream dropped them
+    (``waterworld_v4`` — PettingZoo removed it in 1.25.0; see ``app.envs.vendored``). MPE prefers the
+    modern split-out ``mpe2`` package and falls back to the legacy ``pettingzoo.mpe`` namespace (the
+    version split noted in the registry's MPE section); SISL lives under ``pettingzoo.sisl``; the
+    vendored package is probed **last** so it only catches ids the real libraries no longer carry. We
+    probe the packages in order and return the first that has the scenario, so an MPE id resolves from
+    ``mpe2``, a stock SISL id from ``pettingzoo.sisl`` and a vendored id from ``app.envs.vendored`` with
+    one code path.
     """
-    for pkg in ("mpe2", "pettingzoo.mpe", "pettingzoo.sisl"):
+    for pkg in ("mpe2", "pettingzoo.mpe", "pettingzoo.sisl", "app.envs.vendored"):
         try:
             return importlib.import_module(f"{pkg}.{name}")
         except ModuleNotFoundError:
             continue
     raise ModuleNotFoundError(
-        f"PettingZoo scenario '{name}' not found in mpe2 / pettingzoo.mpe / pettingzoo.sisl "
-        "— install 'mpe2' (MPE) or 'pettingzoo[sisl]' (SISL)"
+        f"PettingZoo scenario '{name}' not found in mpe2 / pettingzoo.mpe / pettingzoo.sisl / "
+        "app.envs.vendored — install 'mpe2' (MPE) or 'pettingzoo[sisl]' (SISL), or add a vendored copy"
     )
 
 
