@@ -141,13 +141,26 @@ export default function TopBar() {
       {/* Brand */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 11 }}>
         <div style={{
-          width: 30, height: 30, borderRadius: 'var(--radius-md)', background: 'var(--accent)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          width: 30, height: 30, borderRadius: 'var(--radius-md)', overflow: 'hidden',
           boxShadow: 'var(--shadow-sm)', flexShrink: 0,
         }}>
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
-            <path d="M4 18 L9 11 L13 14 L20 5" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
-            <circle cx="20" cy="5" r="2.3" fill="#fff" />
+          {/* RL Lab mark: the agent↔environment loop (white arcs + amber arrowheads) with the
+              reward star — a flat, glow-free version of the GitHub hero, legible at 30px. */}
+          <svg width="30" height="30" viewBox="0 0 64 64" fill="none" aria-hidden>
+            <defs>
+              <linearGradient id="rlMark" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" stopColor="#322A63" />
+                <stop offset="1" stopColor="#16122C" />
+              </linearGradient>
+            </defs>
+            <rect width="64" height="64" fill="url(#rlMark)" />
+            <path d="M20.3 24.4 A14 14 0 0 1 43.7 24.4" stroke="#fff" strokeWidth="3.2" strokeLinecap="round" />
+            <path d="M43.7 39.6 A14 14 0 0 1 20.3 39.6" stroke="#fff" strokeWidth="3.2" strokeLinecap="round" />
+            <path d="M44.6 27.5 L46 23.7 L41.3 25.1 Z" fill="#F0A93A" />
+            <path d="M19.4 36.5 L18 40.3 L22.7 38.9 Z" fill="#F0A93A" />
+            <circle cx="32" cy="32" r="3.6" fill="#F0A93A" />
+            <circle cx="30.95" cy="30.83" r="1.3" fill="#FFE0A6" />
+            <path d="M46.9 15.1 L48 18 L51 19.2 L48 20.3 L46.9 23.25 L45.7 20.3 L42.8 19.2 L45.7 18 Z" fill="#FAC775" />
           </svg>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.1 }}>
@@ -157,6 +170,7 @@ export default function TopBar() {
           <span style={{
             fontSize: 'var(--fs-micro)', fontWeight: 'var(--fw-semibold)',
             letterSpacing: 'var(--ls-eyebrow)', textTransform: 'uppercase', color: 'var(--text-faint)',
+            whiteSpace: 'nowrap',
           }}>
             {t('app.subtitle')}
           </span>

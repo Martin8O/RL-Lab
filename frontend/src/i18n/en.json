@@ -1,5 +1,5 @@
 {
-  "app": { "title": "RL Dashboard", "subtitle": "Laboratory" },
+  "app": { "title": "RL Lab", "subtitle": "Reinforcement Learning" },
   "status": {
     "connecting": "Connecting…",
     "online": "Backend online",

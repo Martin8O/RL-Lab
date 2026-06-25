@@ -1,5 +1,5 @@
 {
-  "app": { "title": "RL Přehled", "subtitle": "Laboratoř" },
+  "app": { "title": "RL Lab", "subtitle": "Posilované učení" },
   "status": {
     "connecting": "Připojování…",
     "online": "Backend online",

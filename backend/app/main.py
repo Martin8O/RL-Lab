@@ -41,7 +41,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     logger.info("Backend shutting down")
 
 
-app = FastAPI(title="RL Dashboard", version=settings.app_version, lifespan=lifespan)
+app = FastAPI(title="RL Lab", version=settings.app_version, lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,

@@ -8,7 +8,7 @@ import App from './App'
 describe('<App /> smoke render', () => {
   it('mounts the full dashboard shell', async () => {
     render(<App />)
-    expect(await screen.findByText('RL Dashboard')).toBeInTheDocument() // TopBar brand
+    expect(await screen.findByText('RL Lab')).toBeInTheDocument() // TopBar brand
     expect(screen.getByText('Parameters')).toBeInTheDocument()           // Sidebar header
     expect(screen.getByText(/High Scores/)).toBeInTheDocument()          // bottom leaderboards
   })
