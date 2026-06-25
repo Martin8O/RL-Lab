@@ -13,6 +13,8 @@ negative skill bands, the watch-only gate (not human-playable), and a real smoke
 ``train_ppo`` (the same path the manager uses) confirming ``ep_rew_mean`` populates on CPU.
 """
 
+from typing import Any
+
 import numpy as np
 from app.envs.registry import get_env, list_envs
 from app.main import app
@@ -354,3 +356,112 @@ def test_pursuit_ppo_smoke_and_cooperative_watch_load() -> None:
     obs = np.zeros((7, 7, 3), dtype=np.float32)  # a pursuer's local view
     action = predict(obs)
     assert isinstance(action, int) and 0 <= action < 5  # a valid Discrete(5) move
+
+
+# -- SISL Multiwalker — the CONTINUOUS cooperative swarm (ADR-076) ---------------------------------
+#
+# Multiwalker is the continuous-control sibling of Pursuit: three homogeneous walkers carry one
+# package, so it rides the SAME parameter-sharing path (trainer_ppo → make_vec_env) and the SAME SISL
+# seams (pettingzoo.sisl loading + ma_render="image") — the only new thing is the Box(4) action space,
+# which the cooperative MA path routes end to end (the preview's box-aware predict + the SuperSuit
+# bridge passing the Box space through).
+
+
+def test_multiwalker_registered() -> None:
+    spec = get_env("multiwalker")
+    assert spec is not None, "multiwalker not registered"
+    assert spec.family == "petting_zoo"
+    assert spec.gym_id == "multiwalker_v9"  # the pettingzoo.sisl scenario module name
+    assert spec.obs_type == "vector"  # (31,) sensor vector, FLOAT → flattened by MlpPolicy (CPU, not Cnn)
+    assert spec.action_space == "box"  # Box(4): continuous leg-joint torques — the NEW bit vs pursuit
+    assert spec.supported_algos == ["ppo"]  # parameter-sharing PPO only
+    assert spec.competitive is False  # homogeneous cooperative → the simple_spread/pursuit lane
+    assert spec.human_playable is False  # twelve leg joints across three robots — watch + train only
+    assert spec.train_implemented is True
+    assert spec.hw_requirement == "cpu"  # small MlpPolicy trains on CPU
+    assert spec.ma_render == "image"  # SISL → server-JPEG render (Box2D pygame, no MPE world)
+    # min_score=0 is the no-progress baseline, NOT the −100 fall floor: the forward reward is
+    # potential-based (telescopes to package displacement), so a frozen don't-fall-but-don't-walk pose
+    # scores ≈ 0; anchoring the meter at −100 would read that frozen policy as ~71% (the ADR-026 trap).
+    assert spec.min_score == 0.0
+    assert spec.min_score < spec.solved_score  # 0 < 40: a real forward traverse sits above no-progress
+    # Config: three walkers, and shared_reward=False (local per-walker reward) per the Pursuit
+    # credit-assignment lesson — cleaner gradient for parameter-sharing PPO than the shared team mean.
+    assert spec.make_kwargs["n_walkers"] == 3
+    assert spec.make_kwargs["shared_reward"] is False
+
+
+def test_multiwalker_make_vec_env_bridges_to_sb3() -> None:
+    """SuperSuit stacks the 3 homogeneous walkers as 3 SB3 sub-envs (parameter sharing); the (31,)
+    sensor obs and the continuous Box(4) action space flow through unchanged."""
+    vec = ma_env.make_vec_env("multiwalker")
+    try:
+        assert vec.num_envs == 3  # one sub-env per walker
+        assert vec.observation_space.shape == (31,)  # per-walker sensor vector
+        assert getattr(vec.action_space, "n", None) is None  # a Box, not a Discrete
+        assert vec.action_space.shape == (4,)  # four leg-joint torques per walker
+    finally:
+        ma_env.close_env(vec)
+
+
+def test_multiwalker_ppo_smoke_and_box_watch_load() -> None:
+    """train_ppo runs the continuous SISL env through the SuperSuit bridge (the manager's cooperative
+    path, on CPU) and snapshots one shared model.zip; load_preview_predict round-trips it into a working
+    BOX predict — a clipped float vector of shape (4,), the continuous-MA Watch-AI loader."""
+    from app.services.trainer_ppo import load_preview_predict
+
+    metrics: list = []
+    snapshots: list = []
+    terminal = train_ppo(
+        TrainConfig(
+            env_id="multiwalker", algo="ppo", seed=0, total_timesteps=2048,
+            hyperparams=PPOHyperparams(n_steps=128, batch_size=64),
+        ),
+        "multiwalker_v9", TrainControl(),
+        metrics.append, lambda _p: None, on_snapshot=snapshots.append,
+    )
+    assert terminal == "finished"
+    assert metrics, "no metrics frames from the SISL bridge"
+    assert metrics[-1].timesteps >= 2048  # 3 stacked sub-envs advance the shared counter
+    assert snapshots and snapshots[-1].artifact_name == "model.zip"  # cooperative single shared brain
+    predict = load_preview_predict(snapshots[-1].blob)
+    obs = np.zeros((31,), dtype=np.float32)  # a walker's sensor vector
+    action = predict(obs)
+    # A continuous (box) action: a float vector of shape (4,) clipped into the [-1, 1] joint range —
+    # NOT an int. (Casting this to int — the old _choose_ma_actions bug — would crash → random.)
+    action = np.asarray(action, dtype=np.float32)
+    assert action.shape == (4,)
+    assert np.all(action >= -1.0) and np.all(action <= 1.0)
+
+
+def test_preload_scenario_is_idempotent() -> None:
+    """ma_env.preload_scenario imports the env's pygame-importing scenario module single-threaded
+    (the launch-path guard against the trainer↔preview pygame import deadlock, ADR-076). It must be
+    a no-op-safe, idempotent best-effort call — safe to run twice, and a no-op for an unknown id."""
+    ma_env.preload_scenario("multiwalker")
+    ma_env.preload_scenario("multiwalker")  # idempotent — a second call must not raise
+    ma_env.preload_scenario("not_a_real_env")  # unknown id → silently returns, no raise
+
+
+def test_choose_ma_actions_passes_box_vectors_through() -> None:
+    """The preview's _choose_ma_actions must hand a continuous (box) predict's vector straight to the
+    env, not cast it to int (which raises on a length-4 array → silent fall-back to random, so the
+    trained Multiwalker swarm would never show). Guards the ADR-076 box-aware fix with a fake env."""
+    from app.services.preview_streamer import preview_streamer
+
+    class _FakeBoxEnv:
+        agents = ["walker_0", "walker_1"]
+
+        def action_space(self, _agent: str) -> Any:  # only reached on the random fallback (a failure here)
+            raise AssertionError("box action should pass through, not fall back to action_space.sample()")
+
+    vec = np.array([0.5, -0.5, 1.0, -1.0], dtype=np.float32)
+    preview_streamer.set_policy(lambda _obs: vec)  # a cooperative box predict (same vector for all agents)
+    try:
+        obs = {"walker_0": np.zeros(31, dtype=np.float32), "walker_1": np.zeros(31, dtype=np.float32)}
+        actions = preview_streamer._choose_ma_actions(_FakeBoxEnv(), obs)
+        assert set(actions) == {"walker_0", "walker_1"}
+        for a in actions.values():
+            assert np.allclose(np.asarray(a, dtype=np.float32), vec)  # the box vector, untouched
+    finally:
+        preview_streamer.detach_run()  # reset the published policy (clears _predict / _policies)

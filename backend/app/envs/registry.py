@@ -1885,6 +1885,104 @@ register(
 
 
 # ---------------------------------------------------------------------------
+# SISL Multiwalker (continuous cooperative locomotion) — the 2nd SISL world (ADR-076).
+#
+# The CONTINUOUS sibling of Pursuit: three BipedalWalker-like robots carry one package across rough
+# terrain *together* — if any walker falls the package drops and the episode ends, so they must
+# coordinate their gaits. Homogeneous + cooperative ⇒ the SAME parameter-sharing path as Pursuit /
+# Simple Spread (manager's cooperative-MA branch → trainer_ppo → ma_env.make_vec_env), one shared
+# MlpPolicy over all three walkers, with NO new trainer. It reuses BOTH SISL seams Pursuit built —
+# scenario loading from pettingzoo.sisl and the server-JPEG render (ma_render="image", Box2D ships a
+# pygame renderer but no MPE world to read positions from).
+#
+# The ONE new thing vs Pursuit: **continuous Box(4) actions** (each walker = four leg-joint torques,
+# like BipedalWalker). The cooperative MA path already routes box actions end to end — the numpy
+# preview-predict snapshot has a box branch (Gaussian mean → clipped), and the SuperSuit bridge passes
+# the Box action space straight through — the only fix this needed was making the preview's
+# _choose_ma_actions box-aware (it cast every MA action to int, which crashed on a box vector and
+# silently fell back to random → the trained swarm never showed). obs is a (31,) sensor **vector**
+# (unbounded Box, like MuJoCo), float → MlpPolicy's FlattenExtractor → trains on CPU, so
+# obs_type="vector" keeps the device badge honest. NOT the Atari image-CnnPolicy path.
+#
+# shared_reward=False (each walker keeps its OWN local reward rather than the team mean) follows the
+# Pursuit credit-assignment lesson and was confirmed by a 500k-step CPU A/B: with **local** reward PPO
+# climbs cleanly and monotonically off the floor, whereas the **shared** team reward peaks similarly
+# then degrades/oscillates — local wins, the same finding as Pursuit.
+#
+# SCORES — the subtle part (measured, and a corrected meter). Multiwalker's forward reward is
+# **potential-based**: ``package_shaping = forward_reward·130·package.x/SCALE`` and each step pays the
+# *difference*, so over an episode it telescopes to the package's **net forward displacement**. A fall
+# pays a one-off ``terminate_reward = −100``. So the episode return decomposes into two very different
+# things: "did it avoid the −100 fall" and "how far did it actually carry the package". The trap: PPO
+# at a feasible budget converges to a **degenerate non-walking optimum** — it splays its legs into a
+# stable pose that holds the package up for the full 500 cycles WITHOUT moving it (return ≈ 0, package
+# displacement ≈ 0; venv-measured: even a survive-the-whole-episode policy carries the package ~0.1 m).
+# If min_score were the −100 fall floor, that frozen "I just don't fall" policy would read ~71 % — the
+# exact ADR-026 failure (a do-nothing agent reading as mastery; user-caught). So **min_score=0**: the
+# skill meter then measures the *task* (forward progress) — a frozen/no-progress policy reads ~0 %
+# (matching what you see), an immediate fall (≈ −100) clamps to 0 %, and only genuinely walking the
+# package forward lifts the bar. solved_score=40 is a real cooperative traverse (forward_reward=1 ⇒
+# ~9 m of travel); like the other swarm scales it is an approximate reference line. Honest framing for
+# this env: with PPO it reliably learns to *stop falling* (the reward chart climbs −100 → 0) but
+# learning to actually *walk* is much harder and may not happen at this budget — so the skill meter can
+# sit near 0 % even as the reward curve looks healthy (the two measure different things). Box2D
+# locomotion is slow, so the ★ budget is large (2M; the desktop scales it). Watch-and-train only
+# (human_playable=False — one human can't drive twelve leg joints across three robots at once).
+# ---------------------------------------------------------------------------
+
+register(
+    EnvSpec(
+        id="multiwalker",
+        gym_id="multiwalker_v9",  # the pettingzoo.sisl scenario module (resolved by app.services.ma_env)
+        display_name=Bilingual(en="Multiwalker (3-agent swarm)", cz="Multiwalker (roj 3 agentů)"),
+        description=Bilingual(
+            en="Three two-legged robots carry one long package across rough terrain — together. Each "
+            "walker balances its own legs (continuous joint torques, like BipedalWalker) while keeping "
+            "its end of the package up; if any walker falls, the package drops and the round ends. They "
+            "all share one brain (parameter sharing), so the team's job is to match gaits and move the "
+            "package to the right without anyone tipping over — cooperation through balance. It's the "
+            "continuous-control cousin of Pursuit: coordinated walking has to emerge from a single policy "
+            "driving the whole group.",
+            cz="Tři dvounozí roboti nesou jeden dlouhý balík přes nerovný terén — společně. Každý chodec "
+            "(walker) balancuje vlastní nohy (spojité momenty v kloubech, jako BipedalWalker) a zároveň "
+            "drží svůj konec balíku nahoře; když některý spadne, balík spadne a kolo končí. Všichni "
+            "sdílejí jeden „mozek“ (sdílení parametrů), takže úkolem týmu je sladit chůzi a posunout "
+            "balík doprava, aniž by se někdo převrátil — spolupráce skrze rovnováhu. Je to spojitá "
+            "(continuous) obdoba Pursuitu: koordinovaná chůze musí vzejít z jediné strategie řídící "
+            "celou skupinu.",
+        ),
+        family="petting_zoo",
+        obs_type="vector",  # (31,) sensor vector, FLOAT → flattened by MlpPolicy's FlattenExtractor (CPU)
+        action_space="box",  # Box(-1,1,(4,)): four leg-joint torques per walker — the continuous SISL world
+        supported_algos=["ppo"],  # parameter-sharing PPO only; evo / Q-learning have no MA path
+        hyperparams=_standard_hyperparams(),
+        # PettingZoo parallel_env kwargs (consumed by ma_env.make_parallel_env / make_vec_env):
+        #  • n_walkers=3 → three homogeneous walkers → SuperSuit stacks them as 3 SB3 sub-envs.
+        #  • shared_reward=False (each walker keeps its OWN local reward, not the team mean): the Pursuit
+        #    credit-assignment lesson (ADR-075) — local reward gives parameter-sharing PPO a cleaner
+        #    gradient than the shared team reward, which stalls on a coupled task.
+        #  • terminate_on_fall + remove_on_fall (defaults): a fall ends the round (the −100 penalty that
+        #    sets the idle floor), so the policy has a clear "don't tip over" signal.
+        make_kwargs={
+            "n_walkers": 3, "max_cycles": 500, "shared_reward": False,
+            "terminate_on_fall": True, "remove_on_fall": True,
+        },
+        ma_render="image",  # Box2D ships a pygame renderer but no MPE world → server-JPEG (ADR-075/076)
+        solved_score=40.0,  # a real cooperative traverse (~9 m of forward package travel; approx ref line)
+        min_score=0.0,  # the no-progress baseline: forward reward telescopes to displacement, so 0 = the
+        # frozen "don't-fall-but-don't-walk" pose; the −100 fall floor would read frozen as ~71% (ADR-026)
+        default_total_timesteps=2_000_000,  # ★ budget; Box2D locomotion is slow — the desktop scales it
+        play_step_scale=1,
+        floor_scales_with_steps=False,  # a fall is terminal; the floor is the fixed do-nothing −100
+        human_playable=False,  # twelve leg joints across three robots — no single human driver; watch + train
+        competitive=False,  # homogeneous cooperative → parameter-sharing PPO (the simple_spread lane)
+        difficulty="advanced",  # continuous balance + three-robot coordination is genuinely hard
+        hw_requirement="cpu",  # parameter-sharing PPO trains its small MlpPolicy on CPU
+    )
+)
+
+
+# ---------------------------------------------------------------------------
 # MuJoCo family (continuous control / robotics) — G5a "install + human-play on CPU
 # now, training GPU-gated" (the Atari/BipedalWalker pattern).
 #

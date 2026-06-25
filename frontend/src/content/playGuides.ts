@@ -969,12 +969,38 @@ const PURSUIT_WATCH_TIP: Bilingual = {
     + 'a pročešou mřížku. Stoupající číslo odměny ukazuje, kolik kořisti chytají.',
 }
 
+// Multiwalker (SISL continuous cooperative locomotion, ADR-076). Server-rendered like Pursuit/Atari.
+// The scene: three two-legged walkers stand side by side on rough brown terrain carrying one long
+// package (a bar) across their backs; the camera scrolls right as they move. A walker that tips over
+// drops the package and the round restarts. All three share one brain, so coordinated walking has to
+// emerge from a single policy — the continuous-control cousin of Pursuit.
+const MULTIWALKER_WATCH_TIP: Bilingual = {
+  en: 'Three two-legged walkers carry one long package across the terrain together — they all share a '
+    + 'single brain, so they learn as a team. Early on they tip over almost immediately and the round '
+    + 'restarts. The first thing they learn is simply to stop falling — and here is the catch to watch '
+    + 'for: a common trick is to splay the legs into a stable pose that holds the package up for the '
+    + 'whole episode WITHOUT moving it forward. That looks like success (no falls) but it is not walking, '
+    + 'so the AI Skill meter — which measures how far the package actually travels — stays low. Real '
+    + 'progress is the package visibly sliding to the right. If one walker drops, the package falls and '
+    + 'the episode ends, so the team must stay balanced; learning to truly walk it forward is hard and '
+    + 'takes a lot of training.',
+  cz: 'Tři dvounozí chodci nesou jeden dlouhý balík přes terén společně — všichni sdílejí jediný „mozek“, '
+    + 'takže se učí jako tým. Zpočátku se skoro hned převrátí a kolo se restartuje. První, co se naučí, je '
+    + 'prostě přestat padat — a tady je háček, na který koukejte: častý trik je rozkročit nohy do stabilní '
+    + 'pozice, která drží balík nahoře celou epizodu, ANIŽ by ho posunula dopředu. Vypadá to jako úspěch '
+    + '(nepadá), ale není to chůze, takže měřič „AI Skill“ — který měří, jak daleko balík opravdu dojede — '
+    + 'zůstává nízko. Skutečný pokrok je, když balík viditelně klouže doprava. Když jeden chodec spadne, '
+    + 'balík spadne a epizoda končí, takže tým musí udržet rovnováhu; naučit se ho opravdu odnést dopředu '
+    + 'je těžké a chce hodně tréninku.',
+}
+
 export const WATCH_TIPS: Record<string, Bilingual> = {
   mpe_spread: MPE_SPREAD_WATCH_TIP,
   mpe_spread_swarm: MPE_SPREAD_WATCH_TIP,
   mpe_tag: MPE_TAG_WATCH_TIP,
   mpe_tag_pack: MPE_TAG_WATCH_TIP,
   pursuit: PURSUIT_WATCH_TIP,
+  multiwalker: MULTIWALKER_WATCH_TIP,
 }
 
 /** The "what to look for" watch note for a watch-only env, or null if it has none. */

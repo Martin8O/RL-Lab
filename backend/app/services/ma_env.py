@@ -198,6 +198,32 @@ def _load_scenario(name: str) -> Any:
     )
 
 
+def preload_scenario(env_id: str) -> None:
+    """Import ``env_id``'s PettingZoo scenario module (and its transitive **pygame** import) on the
+    CALLING thread, before the trainer + preview threads spawn for a run.
+
+    The SISL render worlds (``pursuit``, ``multiwalker``) — and the MPE worlds — import ``pygame`` at
+    module load. When a run starts, the trainer thread (``make_vec_env``) and the visual preview thread
+    (``make_parallel_env``) both cold-import that scenario on the process's first multi-agent run; if
+    the two first-time imports race, Python's per-module import locks can **deadlock** (observed as a
+    ``_DeadlockError`` on ``_ModuleLock('pygame.mixer')``). This is the exact class of bug the image-env
+    ``import stable_baselines3`` preload guards against (ADR-065/076) — a single-threaded preload here,
+    before either worker thread spawns, lets both then hit a fully-initialised module cache.
+
+    Idempotent + cheap after the first import. Best-effort: a failed preload must not block the launch
+    — the real import error (a missing extra, etc.) still surfaces on the worker thread exactly as
+    before."""
+    from app.envs.registry import get_env
+
+    spec = get_env(env_id)
+    if spec is None:
+        return
+    try:
+        _load_scenario(spec.gym_id)
+    except Exception:  # noqa: BLE001 — preload is an optimisation; let the worker thread surface errors
+        logger.debug("MA scenario preload failed for %s", env_id, exc_info=True)
+
+
 def make_parallel_env(
     env_id: str, *, render_mode: str | None = None, obstacle_count: int | None = None
 ) -> Any:

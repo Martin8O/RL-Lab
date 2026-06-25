@@ -392,7 +392,13 @@ class PreviewStreamer:
         """One action per live agent. Competitive self-play (simple_tag) publishes a per-species
         {role -> predict} map, so each agent is driven by its own species' policy (predators by the
         predator net, prey by the prey net); the cooperative case shares one ``_predict`` across all
-        agents. Random until the relevant policy is published; a flaky predict falls back to random."""
+        agents. Random until the relevant policy is published; a flaky predict falls back to random.
+
+        The predict fn already returns the right shape for the env's action space — an **int** for a
+        discrete swarm (pursuit / simple_spread / simple_tag) or a **clipped float vector** for a
+        continuous one (Multiwalker's ``Box(4)``), exactly like the single-agent / image preview paths
+        — so it is passed through unchanged (NOT cast to int, which would crash on a box vector and
+        silently fall back to random, never showing the trained policy)."""
         from app.services.ma_env import agent_role
 
         with self._lock:
@@ -405,7 +411,7 @@ class PreviewStreamer:
                 actions[agent] = env.action_space(agent).sample()
                 continue
             try:
-                actions[agent] = int(fn(obs[agent]))
+                actions[agent] = fn(obs[agent])
             except Exception:  # noqa: BLE001 — never let inference contention disturb the run
                 logger.debug("Preview MA predict failed; using random action", exc_info=True)
                 actions[agent] = env.action_space(agent).sample()

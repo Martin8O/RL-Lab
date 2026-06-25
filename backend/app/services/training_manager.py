@@ -182,6 +182,15 @@ class TrainingManager:
         launch_spec = get_env(config.env_id)
         if launch_spec is not None and launch_spec.obs_type == "image":
             import stable_baselines3  # noqa: F401 — single-threaded preload to avoid the import deadlock
+        elif launch_spec is not None and launch_spec.family == "petting_zoo":
+            # The SISL/MPE multi-agent envs import pygame at scenario load; the trainer thread
+            # (make_vec_env) and the visual preview thread (make_parallel_env) both cold-import it,
+            # and racing first-time imports can deadlock on _ModuleLock('pygame.mixer') (observed for
+            # multiwalker). Same guard as the image preload above — import it single-threaded here,
+            # before either worker thread spawns, so both hit a warm cache (ADR-076).
+            from app.services.ma_env import preload_scenario
+
+            preload_scenario(config.env_id)
         # Algo-independent HW telemetry for the lifetime of THIS run. The stop event is created per
         # run and handed to both the ticker and _run, so a back-to-back start can't have the finishing
         # run's teardown stop the next run's ticker (a shared field would race; see _run's finally).
