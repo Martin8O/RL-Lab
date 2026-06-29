@@ -1,3 +1,4 @@
+import platform
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field, model_validator
@@ -1708,8 +1709,11 @@ def _board_hyperparams(
         # generating self-play in parallel — only effective on a GPU. Risk-gated on the RTX 5070: 2 is the
         # Windows sweet spot (~1.6× chess, GPU 49→94 %); 3 ≈ worse, 4 collapses (no MPS on Windows). ★ 2 for
         # the high-throughput games (chess), 1 for the small boards where one actor already saturates.
+        # Linux has real multiprocessing fork + MPS-style GPU sharing, so it scales further — raise the
+        # ceiling to 8 there; Windows stays capped at 4.
         "actor_processes": HyperparamDef(
-            type="int", default=1, recommended=az_actors, min=1, max=4, step=1,
+            type="int", default=1, recommended=az_actors, min=1,
+            max=8 if platform.system() == "Linux" else 4, step=1,
         ),
     }
     return hp
