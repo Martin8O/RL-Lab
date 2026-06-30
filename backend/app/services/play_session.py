@@ -396,17 +396,19 @@ class PlaySession:
         fn. The JPEG still shows the **raw colour** frame (the obs preprocessing only rewrites the
         observation), exactly like human play. One episode, then rate — the vector AI path's shape.
 
-        Score = the summed step reward. CarRacing isn't reward-clipped, so the sum IS the true return
-        on its ``[min_score=-100, solved_score=900]`` meter. (Atari's ``AtariWrapper`` clips reward to
-        its sign, but every symmetric duel game scores ±1 per point — Pong −21…21, Boxing/Tennis/… —
-        so the clipped sum is still the true game score there, the games where a skill reading is
-        meaningful; the high-scoring arcade clip reflects training-shaped reward, out of scope here.)
+        Score = the summed step reward, and AI play builds the vec env with ``clip_reward=False`` so
+        that sum is the **raw game score** — the same scale as the registry's ``solved_score`` and the
+        training chart's ``ep_rew_mean`` (whose Monitor sits inside the clip, so it already reads raw).
+        Without this the AtariWrapper's sign-clip would make the meter under-read every high-scoring
+        arcade game (a Breakout agent that clears the first wall, 432 pts, would sum ~108 clipped ones
+        and read ~25%). CarRacing isn't clipped either way, so its ``[-100, 900]`` return is unchanged.
         """
         from app.envs.image_vec import make_image_vec
 
         try:
             # AI play keeps the configured seed (a reproducible demo); the builder seeds the vec env.
-            venv = make_image_vec(spec, 1, seed=seed)
+            # clip_reward=False → the summed reward is the raw game score (see the meter note above).
+            venv = make_image_vec(spec, 1, seed=seed, clip_reward=False)
         except Exception:  # noqa: BLE001 — a bad env must surface as state, not crash the thread
             logger.exception("Play image env creation failed for %s", spec.gym_id)
             self._finalize(0.0, 0, completed=False, error="Could not create play environment")

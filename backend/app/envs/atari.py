@@ -42,12 +42,20 @@ def make_atari(
     *,
     make_kwargs: dict[str, Any] | None = None,
     seed: int | None = None,
+    clip_reward: bool = True,
 ) -> VecEnv:
     """Build the shared Atari vec env: ``make_atari_env`` + ``VecFrameStack(4)``.
 
     ``gym_id`` is the ``ALE/<Game>-v5`` id; ``make_kwargs`` is the registry row's kwargs (carries
     ``full_action_space=True``). Used with ``n_envs=8`` by the trainer and ``n_envs=1`` by the
     preview streamer so both see byte-identical obs/action shapes.
+
+    ``clip_reward`` is the AtariWrapper's reward sign-clip (``True`` for training/preview — the DQN
+    recipe). **AI play passes ``False``** so the per-step reward it sums is the *raw game score*, on
+    the same scale as the registry's ``solved_score`` and the training chart's ``ep_rew_mean`` (whose
+    Monitor sits inside the clip, so it already reads raw). Clipping touches only the reward, never
+    the observation, so the obs stays byte-identical to the clipped paths — the policy doesn't see
+    reward at inference, so an unclipped AI-play env can't drift the CnnPolicy.
     """
     import ale_py  # noqa: F401 — import side effect registers the "ALE/*" namespace
     from stable_baselines3.common.env_util import make_atari_env
@@ -57,5 +65,8 @@ def make_atari(
     if make_kwargs:
         env_kwargs.update(make_kwargs)  # full_action_space=True (from the registry row)
 
-    venv = make_atari_env(gym_id, n_envs=n_envs, seed=seed, env_kwargs=env_kwargs)
+    venv = make_atari_env(
+        gym_id, n_envs=n_envs, seed=seed, env_kwargs=env_kwargs,
+        wrapper_kwargs={"clip_reward": clip_reward},
+    )
     return VecFrameStack(venv, n_stack=_N_STACK)

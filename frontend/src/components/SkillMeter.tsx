@@ -201,7 +201,7 @@ export default function SkillMeter({ slot, overlay = false }: {
         {measuring
           ? t('skill.measuring')
           : showReading
-            ? `${t(`skill.${band.key}`)} · ${Math.round(value)}`
+            ? `${t(`skill.${band.key}`)} · ${Math.round(value)}${value >= scale.max ? ' ✓' : ''}`
             : t('skill.no_data')}
       </span>
     </div>

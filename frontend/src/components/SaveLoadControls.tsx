@@ -117,6 +117,10 @@ function SlotCard({ slot, manage, onLoad, onDelete }: {
   const showCategory = !!category && !game.toLowerCase().includes(category.toLowerCase())
   const headline = [showCategory ? category : null, game, algoLabel(t, slot.algo)].filter(Boolean).join(' · ')
   const pct = env ? solvedPct(slot.reward, env.min_score, env.solved_score) : null
+  // Raw score is the source of truth that distinguishes two saves the clamped % can't: once an agent
+  // passes solved_score every save reads 100%, so the raw return (e.g. Breakout 432 vs 180) is what
+  // tells them apart. ✓ marks a save that reached the "solved" mark (% would clamp to 100 there).
+  const solved = env != null && slot.reward != null && slot.reward >= env.solved_score
   const date = fmtSaveDate(slot.created_at)
   const progressPct = Math.round(Math.min(1, frac) * 100)
 
@@ -129,9 +133,9 @@ function SlotCard({ slot, manage, onLoad, onDelete }: {
         }} title={headline}>
           {headline}
         </span>
-        {pct != null && (
+        {pct != null && slot.reward != null && (
           <span style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--success)', flexShrink: 0 }}>
-            {Math.round(pct)}% {t('saveload.solved')}
+            {Math.round(slot.reward)} · {Math.round(pct)}%{solved ? ' ✓' : ''} {t('saveload.solved')}
           </span>
         )}
       </div>

@@ -71,7 +71,9 @@ def make_carracing(
     return VecFrameStack(venv, n_stack=_CARRACING_N_STACK)
 
 
-def make_image_vec(spec: EnvSpec, n_envs: int, *, seed: int | None = None) -> VecEnv:
+def make_image_vec(
+    spec: EnvSpec, n_envs: int, *, seed: int | None = None, clip_reward: bool = True
+) -> VecEnv:
     """Dispatch an image-obs env to its vec builder by family — the single seam every image-obs
     caller (trainer / preview / AI play) uses so the CnnPolicy obs shape matches on all three.
 
@@ -79,9 +81,15 @@ def make_image_vec(spec: EnvSpec, n_envs: int, *, seed: int | None = None) -> Ve
     image-obs is CarRacing → the raw-RGB + frame-stack pipeline (``make_carracing``). Both read the
     registry row's ``make_kwargs`` (Atari: ``full_action_space``; CarRacing: ``continuous``) so the
     builder choice stays data-driven.
+
+    ``clip_reward`` reaches the AtariWrapper's reward sign-clip (default ``True`` = the training/
+    preview recipe). AI play passes ``False`` so its summed reward is the raw game score, on the same
+    scale as ``solved_score``; CarRacing never clips, so the flag is a no-op there.
     """
     if spec.family == "atari":
         from app.envs.atari import make_atari
 
-        return make_atari(spec.gym_id, n_envs, make_kwargs=spec.make_kwargs, seed=seed)
+        return make_atari(
+            spec.gym_id, n_envs, make_kwargs=spec.make_kwargs, seed=seed, clip_reward=clip_reward
+        )
     return make_carracing(spec.gym_id, n_envs, make_kwargs=spec.make_kwargs, seed=seed)

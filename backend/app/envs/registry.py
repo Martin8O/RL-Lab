@@ -1105,7 +1105,7 @@ _ATARI_GAMES: list[
      "your own side. First to 21 wins; your score is your points minus the opponent's (−21 to +21).",
      "Úplně první videohra: odrážejte míček za pálku vestavěného soupeře a zároveň braňte svou stranu. "
      "Kdo první nasbírá 21 bodů, vyhrává; skóre je vaše body mínus soupeřovy (−21 až +21)."),
-    ("breakout", "Breakout", "Breakout", "beginner", 0.0, 120.0,
+    ("breakout", "Breakout", "Breakout", "beginner", 0.0, 432.0,
      "Bounce a ball off a paddle to smash every brick in the wall above. Don't let the ball fall past "
      "the paddle — each brick destroyed scores points, and clearing the wall is the goal.",
      "Odrážejte míček pálkou a rozbijte všechny cihly ve zdi nahoře. Nenechte míček propadnout pod "
@@ -1130,7 +1130,7 @@ _ATARI_GAMES: list[
      "surface in time or you drown. Rescues and kills both score points.",
      "Řiďte ponorku, střílejte nepřátelské žraloky a ponorky a zachraňujte potápěče. Hlídejte kyslík — "
      "vynořte se včas, jinak se utopíte. Záchrany i zásahy přidávají body."),
-    ("enduro", "Enduro", "Enduro", "intermediate", 0.0, 700.0,
+    ("enduro", "Enduro", "Enduro", "intermediate", 0.0, 1000.0,
      "An endurance race: pass as many cars as you can over day-and-night cycles without crashing. Your "
      "score is the number of cars you overtake — keep the throttle down and weave through traffic.",
      "Vytrvalostní závod: předjeďte co nejvíc aut během střídání dne a noci, aniž byste havarovali. "
@@ -1140,52 +1140,52 @@ _ATARI_GAMES: list[
      "their fire. Survive each sector's wave to advance. Every enemy destroyed scores points.",
      "Braňte mřížku laserových paprsků: střílejte vlny nepřátelských lodí klouzajících po drahách a "
      "uhýbejte jejich palbě. Přežijte vlnu v každém sektoru. Každý zničený nepřítel přidá body."),
-    ("asteroids", "Asteroids", "Asteroids", "intermediate", 0.0, 10000.0,
+    ("asteroids", "Asteroids", "Asteroids", "intermediate", 0.0, 20000.0,
      "Fly a ship in open space, blasting drifting asteroids into smaller pieces and dodging the "
      "fragments and flying saucers. Clear the field to advance; each rock destroyed scores points.",
      "Pilotujte loď v otevřeném prostoru, rozstřelujte plující asteroidy na menší kusy a uhýbejte "
      "úlomkům a létajícím talířům. Vyčištěním pole postoupíte; každý kámen přidá body."),
-    ("asterix", "Asterix", "Asterix", "beginner", 0.0, 8000.0,
+    ("asterix", "Asterix", "Asterix", "beginner", 0.0, 10000.0,
      "Collect helpful objects while dodging the deadly ones that move across the rows. Grab the good "
      "items for points and avoid being hit — survive and collect as much as you can.",
      "Sbírejte užitečné předměty a vyhýbejte se smrtícím, které se pohybují po řadách. Dobré předměty "
      "dávají body; nenechte se zasáhnout — přežijte a posbírejte co nejvíc."),
-    ("alien", "Alien", "Alien", "intermediate", 0.0, 7000.0,
+    ("alien", "Alien", "Alien", "intermediate", 0.0, 7500.0,
      "Trapped in a spaceship's corridors, destroy the alien eggs while three aliens hunt you. Use your "
      "flamethrower and a power-up to fight back. Destroying eggs and aliens scores points.",
      "Uvězněni v chodbách kosmické lodi ničte vejce vetřelců, zatímco vás pronásledují tři vetřelci. "
      "Použijte plamenomet a posilu k obraně. Ničení vajec a vetřelců přidává body."),
-    ("amidar", "Amidar", "Amidar", "intermediate", 0.0, 1700.0,
+    ("amidar", "Amidar", "Amidar", "intermediate", 0.0, 1720.0,
      "Move along a grid painting its lines while avoiding roaming enemies. Outline a box to fill it for "
      "points; clear the board without being caught.",
      "Pohybujte se po mřížce a vybarvujte její čáry, zatímco se vyhýbáte bloudícím nepřátelům. Obkroužení "
      "obdélníku ho vyplní za body; vyčistěte plochu, aniž vás chytí."),
-    ("assault", "Assault", "Assault", "beginner", 0.0, 2500.0,
+    ("assault", "Assault", "Assault", "beginner", 0.0, 3500.0,
      "Defend against a mothership raining down enemy ships from above. Move your cannon and shoot them "
      "before they overwhelm you, watching your gun's heat. Every enemy destroyed scores points.",
      "Braňte se mateřské lodi, která shora chrlí nepřátelské stíhače. Posouvejte dělo a sestřelujte je, "
      "než vás zahltí; hlídejte přehřátí zbraně. Každý zničený nepřítel přidá body."),
-    ("atlantis", "Atlantis", "Atlantis", "beginner", 0.0, 30000.0,
+    ("atlantis", "Atlantis", "Atlantis", "beginner", 0.0, 100000.0,
      "Defend the underwater city of Atlantis with three gun emplacements, shooting down waves of enemy "
      "ships before they destroy your installations. Every ship shot down scores points.",
      "Braňte podmořské město Atlantis třemi dělostřeleckými pozicemi a sestřelujte vlny nepřátelských "
      "lodí dřív, než zničí vaše stavby. Každá sestřelená loď přidá body."),
-    ("bankheist", "Bank Heist", "BankHeist", "intermediate", 0.0, 1000.0,
+    ("bankheist", "Bank Heist", "BankHeist", "intermediate", 0.0, 1200.0,
      "Drive through a maze of city streets robbing banks while dodging police cars. Drop dynamite to "
      "block pursuers and manage your fuel. Each bank robbed scores points.",
      "Projíždějte bludištěm městských ulic, vykrádejte banky a unikejte policejním autům. Dynamitem "
      "blokujte pronásledovatele a hlídejte palivo. Každá vyloupená banka přidá body."),
-    ("battlezone", "Battle Zone", "BattleZone", "intermediate", 0.0, 35000.0,
+    ("battlezone", "Battle Zone", "BattleZone", "intermediate", 0.0, 37500.0,
      "A first-person tank battle on a wireframe battlefield: hunt and destroy enemy tanks and missiles "
      "from your cockpit while avoiding their fire. Each enemy destroyed scores points.",
      "Tanková bitva z pohledu první osoby na drátěném bojišti: z kokpitu hledejte a ničte nepřátelské "
      "tanky a rakety a vyhýbejte se jejich palbě. Každý zničený nepřítel přidá body."),
-    ("berzerk", "Berzerk", "Berzerk", "intermediate", 0.0, 1600.0,
+    ("berzerk", "Berzerk", "Berzerk", "intermediate", 0.0, 2600.0,
      "Escape a maze of rooms full of robots, shooting them down while avoiding the walls (which are "
      "deadly) and the relentless Evil Otto. Each robot destroyed scores points.",
      "Unikejte bludištěm místností plných robotů, sestřelujte je a vyhýbejte se stěnám (jsou smrtící) i "
      "neúnavnému Evil Ottovi. Každý zničený robot přidá body."),
-    ("bowling", "Bowling", "Bowling", "beginner", 0.0, 160.0,
+    ("bowling", "Bowling", "Bowling", "beginner", 0.0, 300.0,
      "Ten-pin bowling: time your throw and curve the ball to knock down as many pins as possible across "
      "ten frames. A perfect game is 300; a good score is around 160.",
      "Bowling: načasujte hod a zatočte míčem, abyste v deseti kolech srazili co nejvíc kuželek. Dokonalá "
@@ -1250,7 +1250,7 @@ _ATARI_GAMES: list[
      "and fill the tunnels before it steals the crop. Each hit scores points.",
      "Chraňte tři mrkve před hrabajícím se sysel: praštěte ho lopatou, jakmile vykoukne z díry, a "
      "zasypávejte tunely dřív, než úrodu ukradne. Každý zásah přidá body."),
-    ("gravitar", "Gravitar", "Gravitar", "advanced", 0.0, 3000.0,
+    ("gravitar", "Gravitar", "Gravitar", "advanced", 0.0, 2000.0,
      "Pilot a ship against real gravity, flying into planets to shoot bunkers and tractor-beam fuel "
      "while fighting inertia. A hard one — careful thrust is everything. Destroying targets scores points.",
      "Pilotujte loď proti skutečné gravitaci, nalétávejte na planety, ničte bunkry a vlečným paprskem "
@@ -1285,7 +1285,7 @@ _ATARI_GAMES: list[
      "boss on each floor to rescue the captive. Each enemy defeated scores points.",
      "Probojujte se údery a kopy vzhůru vícepatrovým chrámem, na každém patře poražte vlny poskoků a "
      "bosse a zachraňte zajatkyni. Každý poražený nepřítel přidá body."),
-    ("montezumarevenge", "Montezuma's Revenge", "MontezumaRevenge", "advanced", 0.0, 4000.0,
+    ("montezumarevenge", "Montezuma's Revenge", "MontezumaRevenge", "advanced", 0.0, 2500.0,
      "A notoriously hard exploration platformer: navigate a pyramid of rooms collecting keys to open "
      "doors, dodging skulls, snakes and traps. Treasures and progress score points.",
      "Pověstně těžká průzkumná plošinovka: procházejte pyramidou místností, sbírejte klíče k otevření "
@@ -1300,7 +1300,7 @@ _ATARI_GAMES: list[
      "shield to beat. Move, shoot and shield. Each enemy destroyed scores points.",
      "Vertikální střílečka skrz vlny mimozemských ptáků až k mateřské lodi, kterou musíte přes její štít "
      "rozbít. Pohybujte se, střílejte a kryjte se. Každý zničený nepřítel přidá body."),
-    ("pitfall", "Pitfall!", "Pitfall", "advanced", -300.0, 5000.0,
+    ("pitfall", "Pitfall!", "Pitfall", "advanced", -300.0, 3000.0,
      "Guide Pitfall Harry through a jungle, swinging on vines and leaping over logs, crocodiles and tar "
      "pits to collect treasure against the clock. Treasures score points; hazards cost them.",
      "Veďte Pitfall Harryho džunglí, houpejte se na lianách a přeskakujte klády, krokodýly a dehtové "
@@ -1310,7 +1310,7 @@ _ATARI_GAMES: list[
      "balloons before they reach the ground. Each wolf popped scores points.",
      "Maminka prasnice jezdí v koši nahoru a dolů po útesu a střílí šípy po vlcích snášejících se na "
      "balonech dřív, než dosednou. Každý sestřelený vlk přidá body."),
-    ("privateeye", "Private Eye", "PrivateEye", "advanced", 0.0, 70000.0,
+    ("privateeye", "Private Eye", "PrivateEye", "advanced", 0.0, 15000.0,
      "Drive a detective's car across the city collecting clues and stolen items to solve a case and "
      "catch the culprit before time runs out. Clues and arrests score points.",
      "Projíždějte detektivovým autem městem, sbírejte stopy a ukradené předměty, vyřešte případ a "
@@ -1320,27 +1320,27 @@ _ATARI_GAMES: list[
      "depots — run dry and you crash. Each target destroyed scores points.",
      "Leťte tryskáčem proti proudu klikaté řeky, ničte lodě, vrtulníky a mosty a doplňujte palivo nad "
      "sklady — bez paliva havarujete. Každý zničený cíl přidá body."),
-    ("roadrunner", "Road Runner", "RoadRunner", "beginner", 0.0, 30000.0,
+    ("roadrunner", "Road Runner", "RoadRunner", "beginner", 0.0, 40000.0,
      "Run as the Road Runner down the highway eating birdseed and outsmarting Wile E. Coyote, dodging "
      "trucks and traps. Seed eaten and the Coyote foiled score points.",
      "Běžte jako Uličník po dálnici, zobejte zrní a přelstěte kojota Wila E.; uhýbejte náklaďákům a "
      "pastem. Snězené zrní a přechytračený kojot dávají body."),
-    ("robotank", "Robotank", "Robotank", "intermediate", 0.0, 50.0,
+    ("robotank", "Robotank", "Robotank", "intermediate", 0.0, 60.0,
      "Command a tank in first-person night-and-fog combat, hunting enemy tanks squadron by squadron "
-     "while damage knocks out your sensors. Your score is enemy tanks destroyed.",
+     "while damage knocks out your sensors. Your score is enemy squadrons destroyed (12 tanks each).",
      "Velte tanku v boji z první osoby za noci a mlhy a likvidujte nepřátelské tanky letku po letce, "
-     "zatímco poškození vyřazuje vaše senzory. Skóre je počet zničených tanků."),
-    ("skiing", "Skiing", "Skiing", "advanced", -30000.0, -5000.0,
+     "zatímco poškození vyřazuje vaše senzory. Skóre je počet zničených letek (po 12 tancích)."),
+    ("skiing", "Skiing", "Skiing", "advanced", -30000.0, -4000.0,
      "Race downhill through the slalom gates as fast as you can. Your score is your time (lower is "
      "better, shown here as a large negative number) — missing gates adds a penalty.",
      "Sjíždějte co nejrychleji slalomovými brankami. Skóre je váš čas (čím nižší, tím lepší, zde jako "
      "velké záporné číslo) — vynechané branky přidávají penalizaci."),
-    ("solaris", "Solaris", "Solaris", "advanced", 0.0, 12000.0,
+    ("solaris", "Solaris", "Solaris", "advanced", 0.0, 6000.0,
      "A deep-space combat-and-navigation epic: jump between quadrants on a galactic map, dogfight enemy "
      "fleets and defend planets to find Solaris. Battles and rescues score points.",
      "Vesmírná epopej o boji a navigaci: skákejte mezi kvadranty na galaktické mapě, svádějte souboje s "
      "nepřátelskými flotilami a braňte planety, abyste našli Solaris. Boje a záchrany dávají body."),
-    ("stargunner", "Star Gunner", "StarGunner", "intermediate", 0.0, 12000.0,
+    ("stargunner", "Star Gunner", "StarGunner", "intermediate", 0.0, 14000.0,
      "A fast side-scrolling shooter: skim over a planet's surface blasting waves of enemy craft and "
      "dodging their fire. Each enemy destroyed scores points.",
      "Rychlá horizontální střílečka: klouzejte nad povrchem planety, ničte vlny nepřátelských strojů a "
@@ -1350,7 +1350,7 @@ _ATARI_GAMES: list[
      "and games. Your score is your games won minus your opponent's.",
      "Tenis proti vestavěnému hráči: zaujměte pozici a načasujte úder, abyste vyhrávali výměny a hry. "
      "Skóre je vaše vyhrané hry mínus soupeřovy."),
-    ("timepilot", "Time Pilot", "TimePilot", "intermediate", 0.0, 10000.0,
+    ("timepilot", "Time Pilot", "TimePilot", "intermediate", 0.0, 11000.0,
      "Dogfight through eras of history, shooting down enemy aircraft from biplanes to spaceships in an "
      "open, free-scrolling sky and beating each era's boss. Each kill scores points.",
      "Svádějte letecké souboje napříč epochami dějin, sestřelujte stroje od dvojplošníků po kosmické "
@@ -1360,7 +1360,7 @@ _ATARI_GAMES: list[
      "finding keys to unlock the exit. Treasure and kills score points.",
      "Prozkoumávejte jako archeolog bludiště egyptské hrobky, střílejte tvory, sbírejte poklady a "
      "hledejte klíče k odemčení východu. Poklady a zásahy dávají body."),
-    ("upndown", "Up'n Down", "UpNDown", "intermediate", 0.0, 15000.0,
+    ("upndown", "Up'n Down", "UpNDown", "intermediate", 0.0, 40000.0,
      "Drive a dune buggy along looping tracks, jumping over and onto other cars and collecting flags. "
      "Land on rivals to knock them out. Flags and takedowns score points.",
      "Řiďte buginu po klikatých tratích, přeskakujte ostatní vozy i na ně doskakujte a sbírejte vlajky. "
@@ -1370,7 +1370,7 @@ _ATARI_GAMES: list[
      "monsters while hall-roaming Hallmonsters chase you. Treasure and kills score points.",
      "Prozkoumávejte kobku jako usměvavý dobrodruh Winky, vcházejte do místností pro poklady a střílejte "
      "příšery, zatímco vás v chodbách honí Hallmonsteři. Poklady a zásahy dávají body."),
-    ("videopinball", "Video Pinball", "VideoPinball", "beginner", 0.0, 40000.0,
+    ("videopinball", "Video Pinball", "VideoPinball", "beginner", 0.0, 80000.0,
      "A classic pinball table: work the flippers to keep the ball alive, hit the bumpers and targets for "
      "points and rack up a high score without draining.",
      "Klasický pinball: ovládejte pálky, udržte míček ve hře, trefujte odrazníky a terče pro body a "
@@ -1380,7 +1380,7 @@ _ATARI_GAMES: list[
      "racing to clear each chamber. Each monster destroyed scores points.",
      "Probojujte se bludišti kobek a střílejte příšery, které jsou stále agresivnější a stávají se "
      "neviditelnými; vyčistěte co nejrychleji každou komnatu. Každá zničená příšera přidá body."),
-    ("yarsrevenge", "Yars' Revenge", "YarsRevenge", "intermediate", 0.0, 25000.0,
+    ("yarsrevenge", "Yars' Revenge", "YarsRevenge", "intermediate", 0.0, 55000.0,
      "As an insect-like Yar, nibble or shoot through a barrier to reach the Qotile, then fire the Zorlon "
      "Cannon to destroy it — all while dodging its destroyer missile. Progress scores points.",
      "Jako hmyzí Yar prokousejte nebo prostřílejte bariéru k Qotile a pak ho zničte dělem Zorlon — to "
@@ -1405,7 +1405,7 @@ _ATARI_GAMES: list[
      "mutate — use the radar and smart bombs. Kills and rescues score points.",
      "Leťte lodí nad posouvající se planetou a střílejte mimozemské únosce dřív, než unesou lidi dole a "
      "zmutují — využijte radar a chytré bomby. Zásahy a záchrany dávají body."),
-    ("kaboom", "Kaboom!", "Kaboom", "beginner", 0.0, 1000.0,
+    ("kaboom", "Kaboom!", "Kaboom", "beginner", 0.0, 3000.0,
      "Catch the bombs dropped by the Mad Bomber with a stack of buckets, sliding left and right. The "
      "bombs fall ever faster — miss one and a bucket blows up. Each bomb caught scores points.",
      "Chytejte bomby, které shazuje Šílený bombarďák, hromádkou kbelíků a klouzejte doleva a doprava. "
