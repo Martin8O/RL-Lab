@@ -1248,7 +1248,7 @@ _ATARI_GAMES: list[
     ("gopher", "Gopher", "Gopher", "beginner", 0.0, 8000.0,
      "Protect three carrots from a burrowing gopher: whack it with your shovel as it pops out of holes "
      "and fill the tunnels before it steals the crop. Each hit scores points.",
-     "Chraňte tři mrkve před hrabajícím se sysel: praštěte ho lopatou, jakmile vykoukne z díry, a "
+     "Chraňte tři mrkve před hrabajícím se syslem: praštěte ho lopatou, jakmile vykoukne z díry, a "
      "zasypávejte tunely dřív, než úrodu ukradne. Každý zásah přidá body."),
     ("gravitar", "Gravitar", "Gravitar", "advanced", 0.0, 2000.0,
      "Pilot a ship against real gravity, flying into planets to shoot bunkers and tractor-beam fuel "
@@ -1291,10 +1291,10 @@ _ATARI_GAMES: list[
      "Pověstně těžká průzkumná plošinovka: procházejte pyramidou místností, sbírejte klíče k otevření "
      "dveří a vyhýbejte se lebkám, hadům a pastem. Poklady a postup přidávají body."),
     ("namethisgame", "Name This Game", "NameThisGame", "intermediate", 0.0, 8000.0,
-     "An underwater shooter: defend your air hose from a giant octopus and a shark while collecting "
-     "oxygen, blasting threats with your diver. Each hit scores points.",
-     "Podmořská střílečka: braňte svou vzduchovou hadici před obří chobotnicí a žralokem a sbírejte "
-     "kyslík; potápěčem ničte hrozby. Každý zásah přidá body."),
+     "An underwater shooter: guard a treasure from a giant octopus and fend off a shark with your "
+     "harpoon, while keeping your air up from a passing boat's pole. Each hit scores points.",
+     "Podmořská střílečka: harpunou braňte poklad před obří chobotnicí a odrážejte žraloka a hlídejte "
+     "si vzduch, který si doplňujete u tyče z projíždějící lodi. Každý zásah přidá body."),
     ("phoenix", "Phoenix", "Phoenix", "intermediate", 0.0, 8000.0,
      "A vertical shooter through waves of alien birds up to a mothership boss you must crack open with a "
      "shield to beat. Move, shoot and shield. Each enemy destroyed scores points.",
@@ -1504,9 +1504,9 @@ _MINIGRID_GAMES: list[
     ("minigrid_fourrooms", "MiniGrid-FourRooms-v0", "MiniGrid Four Rooms", "intermediate", 500_000,
      "Find the goal in a layout of four rooms joined by narrow gaps. Far more exploration than the empty "
      "room: the goal and your start are placed randomly, so you must travel between rooms through the "
-     "doorways to find it. Sparse reward — you score only on reaching the goal.",
+     "gaps to find it. Sparse reward — you score only on reaching the goal.",
      "Najděte cíl v rozložení čtyř místností spojených úzkými průchody. Mnohem víc zkoumání než prázdná "
-     "místnost: cíl i váš start jsou umístěny náhodně, takže musíte procházet mezi místnostmi přes dveře, "
+     "místnost: cíl i váš start jsou umístěny náhodně, takže musíte procházet mezi místnostmi přes tyto průchody, "
      "abyste cíl našli. Řídká odměna — bodujete jen za dosažení cíle."),
     ("minigrid_doorkey", "MiniGrid-DoorKey-5x5-v0", "MiniGrid Door & Key", "intermediate", 300_000,
      "Pick up the key, use it to unlock the door, then reach the goal on the far side. The first level "

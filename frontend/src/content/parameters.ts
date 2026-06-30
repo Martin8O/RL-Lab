@@ -318,12 +318,12 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
         cz: 'Jen PPO, stejně jako u verze se třemi agenty — jedna sdílená strategie teď řídí roj šesti agentů. Čím větší roj, tím víc koordinace, ale stále se učí jeden sdílený mozek za všechny.',
       },
       mpe_tag: {
-        en: 'PPO only — but unlike Simple Spread the two species (predators vs. prey) have different observations and opposite rewards, so one shared brain will not do: each species needs its own policy. That per-species trainer is the next build step; for now you can watch the untrained world move.',
-        cz: 'Jen PPO — ale na rozdíl od Simple Spread mají oba druhy (predátoři vs. kořist) jiná pozorování a opačné odměny, takže jeden sdílený mozek nestačí: každý druh potřebuje vlastní strategii. Trenér pro jednotlivé druhy je dalším krokem vývoje; zatím můžete sledovat, jak se neučený svět pohybuje.',
+        en: 'PPO only — but unlike Simple Spread the two species (predators vs. prey) have different observations and opposite rewards, so one shared brain will not do: each species trains its own shared policy, alternating self-play against a frozen copy of the other. Watch the predators learn to fan out and corner the faster prey while the prey learns to dodge and use the obstacles.',
+        cz: 'Jen PPO — ale na rozdíl od Simple Spread mají oba druhy (predátoři vs. kořist) jiná pozorování a opačné odměny, takže jeden sdílený mozek nestačí: každý druh si trénuje vlastní sdílenou strategii střídavým self-play proti zmrazené kopii toho druhého. Sledujte, jak se predátoři učí rozprostřít se a zahnat rychlejší kořist do kouta, zatímco kořist se učí uhýbat a využívat překážky.',
       },
       mpe_tag_pack: {
-        en: 'PPO only, same as the 3-vs-1 version — a six-predator pack and two prey, still two opposed species that each need their own policy (the per-species trainer is the next step). Watch-only for now.',
-        cz: 'Jen PPO, stejně jako verze 3 na 1 — šestičlenná smečka predátorů a dvě kořisti, stále dva protichůdné druhy, z nichž každý potřebuje vlastní strategii (trenér pro jednotlivé druhy je dalším krokem). Zatím jen ke sledování.',
+        en: 'PPO only, same as the 3-vs-1 version — a six-predator pack and two prey, still two opposed species that each train their own shared policy by alternating self-play.',
+        cz: 'Jen PPO, stejně jako verze 3 na 1 — šestičlenná smečka predátorů a dvě kořisti, stále dva protichůdné druhy, z nichž každý si trénuje vlastní sdílenou strategii střídavým self-play.',
       },
       pursuit: {
         en: 'PPO only — Pursuit is a *cooperative* swarm, so (like Simple Spread) PPO trains one shared "brain" that drives all eight pursuers at once (parameter sharing). Neuroevolution and Q-learning have no multi-agent path, so they are turned off. Watch the shared policy learn to surround the evaders together rather than chase them one by one.',
