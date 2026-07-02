@@ -294,6 +294,46 @@ export const PLAY_GUIDES: Record<string, PlayGuide> = {
     },
   },
 
+  // Checkers / Dáma (G6-Dáma): a move-based board game with mandatory captures + multi-jumps + kinging.
+  checkers: {
+    goal: {
+      en: 'Capture or block all of the opponent\'s pieces on the 8×8 board. Each piece moves one square '
+        + 'diagonally forward, but **captures are mandatory** — when you can jump an enemy piece to the '
+        + 'empty square beyond it, you must, and you chain further jumps in the same turn when they are '
+        + 'available. Reach the far rank and your piece is crowned a **king**, which moves and captures '
+        + 'both forward and backward. You play one colour (pick your side); the built-in AI takes the '
+        + 'other — or train a net and face that.',
+      cz: 'Seberte nebo zablokujte všechny soupeřovy kameny na desce 8×8. Každý kámen jde o jedno pole '
+        + 'úhlopříčně vpřed, ale **braní je povinné** — když můžete přeskočit soupeřův kámen na volné pole '
+        + 'za ním, musíte, a pokud navazuje další skok, řetězíte ho ve stejném tahu. Když dojdete na '
+        + 'poslední řadu, kámen se korunuje na **dámu**, která táhne i bere vpřed i vzad. Hrajete jednu '
+        + 'barvu (vyberte si stranu); vestavěná AI hraje druhou — nebo si natrénujte síť a postavte se jí.',
+    },
+    controls: [
+      { keys: 'Click', action: { en: 'Click one of your pieces to light up its moves', cz: 'Klikněte na svůj kámen, ať se zvýrazní jeho tahy' } },
+      { keys: 'Click', action: { en: 'Then click a highlighted square to move or jump there', cz: 'Pak klikněte na zvýrazněné políčko, kam táhnout nebo skočit' } },
+      { keys: 'Click', action: { en: 'A multi-jump? Keep clicking the next landing square', cz: 'Víc skoků? Klikejte na další cílová políčka za sebou' } },
+    ],
+    tips: {
+      en: 'These are English/American draughts rules: men move one square diagonally FORWARD and capture '
+        + 'forward; a crowned piece (a **king**, shown as a chess king ♔) moves one square in ANY '
+        + 'diagonal direction — it does NOT fly across the board (that is Czech/international draughts). '
+        + 'Mouse-driven and turn-based: click a piece to see where it can go, then click a gold-marked '
+        + 'square. Captures are forced — if a jump exists you must take it, and a piece keeps jumping until '
+        + 'its chain ends. Getting a queen first is often decisive since it roams both ways. Drop to Easy '
+        + 'for a real chance to win, or "Watch AI vs AI". Train a net two ways — MaskablePPO vs the search '
+        + 'AI, or AlphaZero self-play on the GPU (the recommended one).',
+      cz: 'Platí pravidla anglické (americké) dámy: muž táhne o jedno pole úhlopříčně VPŘED a bere vpřed; '
+        + 'korunovaný kámen („dáma“, kreslená jako šachový **král** ♔) táhne o jedno pole libovolným '
+        + 'úhlopříčným směrem — ale **nelétá** přes celou desku (to je česká/mezinárodní dáma). Ovládá se '
+        + 'myší a je tahová: klikněte na kámen, ať vidíte, kam může, pak klikněte na zlatě označené '
+        + 'políčko. Braní je povinné — když skok existuje, musíte ho vzít, a kámen skáče dál, dokud řetěz '
+        + 'neskončí. Získat dámu jako první bývá rozhodující, protože se pohybuje oběma směry. Na Lehké '
+        + 'máte reálnou šanci vyhrát, nebo „Sledovat AI vs AI“. Síť natrénujete dvěma způsoby — MaskablePPO '
+        + 'proti prohledávací AI, nebo AlphaZero hrou sama proti sobě na GPU (ta je doporučená).',
+    },
+  },
+
   lunarlander: {
     goal: {
       en: 'Land the module gently on the pad between the two flags, upright and slow, with both '

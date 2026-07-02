@@ -295,6 +295,99 @@ def test_breakthrough_profile_trains_cheap_scores_vs_medium() -> None:
     assert prof.teacher_start == "novice" and prof.teacher_end == "easy"
 
 
+# -- G6-Dáma: Checkers — the 6th board game (move-based, digit-king glyph, both trainers) -----------
+
+
+def test_checkers_registered() -> None:
+    """Checkers ships as data + a small board_engine addition: like Breakthrough it is a move game, but it
+    supports BOTH trainers with AlphaZero ★ recommended (its low branching makes AZ its ideal small game —
+    the risk-gate measured it learning, unlike Othello/Breakthrough which stay PPO-only)."""
+    spec = get_env("checkers")
+    assert spec is not None and spec.gym_id == "checkers"
+    assert spec.family == "board" and spec.action_space == "discrete"
+    assert spec.supported_algos == ["ppo", "alphazero"]  # both board trainers
+    assert spec.recommended_algo == "alphazero"  # measured to learn checkers (Local/_probe_checkers_az.py)
+    assert spec.human_playable is True and spec.competitive is True and spec.turn_based is True
+    assert spec.train_implemented is True and spec.hw_requirement == "cpu"  # PPO on CPU; AZ on GPU when present
+    assert spec.min_score == -1.0 and spec.solved_score == 1.0  # same ±1 board chart scale
+
+
+def test_checkers_board_parses_kings_digit_safe() -> None:
+    """Checkers' king glyph ``"8"`` is a DIGIT, so the compact strip-leading-digits parser would eat a king
+    in column a. The ``"checkers"`` format takes the cell SUFFIX (last ``cols`` chars) instead → digit-safe
+    and case-preserved. This seed crowns a WHITE king (``"8"``) by ~ply 35; the parsed grid must keep it,
+    carry only valid glyphs, and match a manual suffix parse of ``str(state)`` (no row dropped/shifted)."""
+    import numpy as np
+
+    game = board_engine.load_game("checkers")
+    rng = np.random.default_rng(1)  # deterministically reaches a white king ('8') within one game
+    state = game.new_initial_state()
+    saw_king = False
+    while not state.is_terminal():
+        state.apply_action(int(rng.choice(state.legal_actions())))
+        cells = board_engine.board_cells(state)
+        if "8" in cells or "*" in cells:
+            saw_king = True
+            p = board_engine.board_payload(state, None)
+            assert p["rows"] == 8 and p["cols"] == 8 and len(p["cells"]) == 64
+            assert set(p["cells"]) <= {".", "o", "8", "+", "*"}  # the digit king must not corrupt the grid
+            rows_txt = [ln.rstrip() for ln in str(state).split("\n") if ln.lstrip()[:1].isdigit()]
+            manual = "".join(ln[-8:] for ln in rows_txt)  # a digit-safe suffix parse to cross-check
+            for ch in ("o", "8", "+", "*"):
+                assert p["cells"].count(ch) == manual.count(ch)
+            assert "8" in p["cells"]  # the white king really is present + preserved
+            break
+    assert saw_king, "the seeded checkers rollout never crowned a king"
+
+
+def test_checkers_streams_from_to_moves_including_a_jump() -> None:
+    """Checkers is a move game (``_MOVE_GAMES``): every legal action decodes to ``{from,to}`` from a clean
+    coordinate pair (a step ``"a3b4"`` or a distance-2 capture jump ``"d6f4"``). At the opening every white
+    move is a simple step; a seeded rollout then reaches a mandatory capture (a 2-rank jump)."""
+    import numpy as np
+
+    game = board_engine.load_game("checkers")
+    state = game.new_initial_state()
+    p = board_engine.board_payload(state, None)
+    moves = p["moves"]
+    assert moves is not None and {m["action"] for m in moves} == set(p["legal_actions"])  # all decoded
+    for m in moves:  # opening: white ('o') men step into empty diagonals (no captures yet)
+        assert 0 <= m["from_cell"] < 64 and 0 <= m["to_cell"] < 64
+        assert p["cells"][m["from_cell"]] == "o" and p["cells"][m["to_cell"]] == "."
+    assert p["last_from"] is None and p["last_to"] is None
+
+    rng = np.random.default_rng(2)  # this rollout reaches a capture jump
+    saw_jump = False
+    while not state.is_terminal():
+        for m in board_engine.board_payload(state, None)["moves"] or []:
+            if abs(m["from_cell"] // 8 - m["to_cell"] // 8) == 2:  # a jump spans two ranks
+                saw_jump = True
+                break
+        if saw_jump:
+            break
+        state.apply_action(int(rng.choice(state.legal_actions())))
+    assert saw_jump, "the seeded checkers rollout never offered a capture jump"
+
+
+def test_checkers_profile_scores_vs_easy() -> None:
+    """Checkers is scored vs the EASY reference (the risk-gate: a fresh net ≈−0.42 → +0.17 vs easy, no
+    regression; vs medium it stays pinned at −1.0). PPO is taught novice→easy so a fresh net gets wins."""
+    prof = board_engine.board_profile("checkers")
+    assert prof.eval_strength == "easy"
+    assert prof.teacher_start == "novice" and prof.teacher_end == "easy"
+
+
+def test_checkers_dirichlet_alpha_is_loose_for_low_branching() -> None:
+    """The AZ root-noise scale keys off action count as a *branching* proxy, which checkers breaks (512
+    actions but ~5 legal moves/pos), so it is special-cased to the loose 1.0 like Connect Four (validated
+    in the risk-gate) — bigger-action games otherwise get 0.3."""
+    from app.services.trainer_az import _dirichlet_alpha
+
+    assert _dirichlet_alpha(512, "checkers") == 1.0  # low branching despite the big action space
+    assert _dirichlet_alpha(512, "breakthrough") == 0.3  # other big-action games keep the tight noise
+    assert _dirichlet_alpha(7) == 1.0  # small action space (Connect Four) stays loose regardless
+
+
 def test_eval_vs_mcts_aborts_immediately_when_should_stop() -> None:
     """A long reference eval must yield the moment training Stop is requested (G6e review fix): with
     ``should_stop`` already True it returns at once without playing a game, so Stop isn't held up."""

@@ -63,13 +63,18 @@ function fmtElapsed(s: number): string {
 
 // ── Nice tick values ─────────────────────────────────────────────────────────
 
-function niceTicks(min: number, max: number, count = 4): number[] {
-  if (min === max) return [min]
-  const range = max - min
+// The "nice" tick step for a range (1/2/5 × 10ⁿ), so both the tick generator and the domain floor
+// round to the same clean grid.
+function niceStep(range: number, count = 4): number {
   const rough = range / count
   const mag   = Math.pow(10, Math.floor(Math.log10(rough)))
   const mult  = ([1, 2, 5, 10] as const).find((s) => s * mag >= rough) ?? 10
-  const step  = mult * mag
+  return mult * mag
+}
+
+function niceTicks(min: number, max: number, count = 4): number[] {
+  if (min === max) return [min]
+  const step  = niceStep(max - min, count)
   const start = Math.floor(min / step) * step
   const ticks: number[] = []
   for (let t = start; t <= max + step * 0.5; t = +(t + step).toFixed(12)) {
@@ -80,8 +85,12 @@ function niceTicks(min: number, max: number, count = 4): number[] {
 }
 
 function fmtTick(v: number): string {
-  if (Math.abs(v) >= 1_000_000) return `${(v / 1_000_000).toFixed(1)}M`
-  if (Math.abs(v) >= 1000) return `${(v / 1000).toFixed(0)}k`
+  // Keep one decimal in the k/M ranges so two adjacent ticks never collapse to the SAME label — e.g.
+  // 1500 and 2000 both rounding to "2k" (the axis then reads "…2k 2k…"); strip a trailing ".0" so
+  // round values stay clean ("2k", not "2.0k"). Same class of collision the Y axis hit near 0.
+  const short = (x: number, suffix: string) => `${x % 1 === 0 ? x.toFixed(0) : x.toFixed(1)}${suffix}`
+  if (Math.abs(v) >= 1_000_000) return short(v / 1_000_000, 'M')
+  if (Math.abs(v) >= 1000) return short(v / 1000, 'k')
   if (v % 1 !== 0)         return v.toFixed(1)
   return String(v)
 }
@@ -137,15 +146,35 @@ interface GoalLine { value: number; label: string }
 function chartYDomain(series: Series[], goalY?: number): { min: number; max: number } {
   const ys: number[] = []
   for (const s of series) for (const v of s.values) if (v !== null && v !== undefined) ys.push(v)
-  const min = Math.min(0, ...(ys.length ? ys : [0]), ...(goalY != null ? [goalY] : []))
-  let max = Math.max(1, ...(ys.length ? ys : [1]), ...(goalY != null ? [goalY] : []))
-  // Keep a little headroom above the goal line so the gold "solved" rule + its label clear the legend
-  // pinned at the top of the plot — otherwise (when the goal is the ceiling, e.g. board games at +1)
-  // both sit flush against the very top and overlap.
-  if (goalY != null && max - goalY < (max - min) * 0.08) {
-    max = goalY + (max - min) * 0.08
+  // Fit the axis to the DATA, always spanning 0 (a sign reference + a minimum span so a flat curve is
+  // not a degenerate zero-height line). The goal is folded in ADAPTIVELY below — never forced.
+  const dataLo = Math.min(0, ...(ys.length ? ys : [0]))
+  const dataHi = Math.max(0, ...(ys.length ? ys : [0]))
+  let lo = dataLo
+  let hi = dataHi
+  // Adaptive goal (the CarRacing fix): stretch the axis up to the goal ONLY while the data would still
+  // fill a readable share of the height (≥ ~20%). Once the goal sits far above the curve — e.g. CarRacing
+  // goal ~900 vs an early score of −50 — stretching to it squashes the real curve into an unreadable
+  // sliver, so we leave the goal off-screen (the caller draws a "↑ Goal N" marker) and keep the axis
+  // fitted to the data. Board games (goal +1 on the same −1…+1 scale as the data → ~29%) always clear the
+  // bar, so their gold line stays. As a curve climbs toward a far goal, the goal slides into view.
+  if (goalY != null) {
+    if (goalY > hi) { const span = hi - lo; if (span <= 0 || span / (goalY - lo) >= 0.2) hi = goalY }
+    else if (goalY < lo) lo = goalY
   }
-  return { min, max }
+  // Round the floor at the DATA's OWN scale (not the — possibly far coarser — goal scale). This is the
+  // fix for "the goal appeared and the axis jumped to −500": once the goal (900) is folded in, the tick
+  // step becomes 500, and flooring −50 to that step drops it to −500 (a huge empty gap under the curve).
+  // Using the data's step keeps the floor snug under the curve (−50 → −100). Half a step of headroom so
+  // the curve floats off the floor; the caller labels this floor explicitly.
+  // Floor at the DATA's own scale (a finer step than the goal's), snapped to the clean tick at/just below
+  // the lowest point — snug, so a score of −90 gives a −100 floor, NOT the −500 the goal's coarse 500-step
+  // produced. Only drop below 0 when the reward actually goes negative — a positive-only env (CartPole,
+  // reward ≥ 0) keeps 0 as its floor and never invents a sub-zero range.
+  const floorStep = niceStep((dataHi - lo) || 1, 6)
+  lo = lo < 0 ? Math.floor(lo / floorStep) * floorStep : 0
+  hi = hi + (hi - lo) * 0.08
+  return { min: lo, max: hi }
 }
 
 // Multi-series chart: each series carries its own x[], so live data and overlaid past runs
@@ -176,7 +205,11 @@ function LineChart({ series, markers = [], goal, width, height, xFmt, ariaLabel 
   const toX = (v: number) => PAD.l + ((v - xMin) / xRange) * chartW
   const toY = (v: number) => PAD.t + (1 - (v - yMin) / yRange) * chartH
 
-  const yTicks = niceTicks(yMin, yMax, 4)
+  // Always label the floor (yMin) so the bottom of the range reads as an explicit value, then the nice
+  // ticks above it (dropping any that would crowd the floor or overflow the top). For most envs yMin
+  // already IS a nice tick (no change); for a small score under a far goal (CarRacing: floor −100, goal
+  // 900) it adds the snug "−100" floor label instead of leaving the bottom unlabelled.
+  const yTicks = [yMin, ...niceTicks(yMin, yMax, 4).filter((t) => t > yMin + yRange * 0.04 && t <= yMax)]
   const xTicks = niceTicks(xMin, xMax, 3)
 
   return (
@@ -195,10 +228,16 @@ function LineChart({ series, markers = [], goal, width, height, xFmt, ariaLabel 
         ) : null))}
       </defs>
 
-      {/* Horizontal grid */}
+      {/* Horizontal grid — faint, so it reads as a backdrop, not as an axis. */}
       {yTicks.map((v) => (
         <line key={v} x1={PAD.l} y1={toY(v)} x2={PAD.l + chartW} y2={toY(v)} stroke="var(--chart-grid)" strokeWidth={1} />
       ))}
+
+      {/* Axis spines — the Y axis (left) + X axis (bottom), drawn stronger than the grid so the plot
+          reads as a properly framed, publication-style chart instead of floating gridlines. The bottom
+          spine sits on the (labelled) floor tick, giving the "baseline below the score" reference. */}
+      <line x1={PAD.l} y1={PAD.t} x2={PAD.l} y2={PAD.t + chartH} stroke="var(--chart-axis)" strokeWidth={1.25} />
+      <line x1={PAD.l} y1={PAD.t + chartH} x2={PAD.l + chartW} y2={PAD.t + chartH} stroke="var(--chart-axis)" strokeWidth={1.25} />
 
       {/* Y axis labels */}
       {yTicks.map((v) => (
@@ -208,8 +247,11 @@ function LineChart({ series, markers = [], goal, width, height, xFmt, ariaLabel 
         </text>
       ))}
 
-      {/* X axis labels */}
-      {xTicks.map((v) => (
+      {/* X axis labels — skip the origin "0": it sits on the Y axis and, since the reward axis has its
+          OWN "0" gridline (pushed down when the data goes negative), showing both reads as a confusing
+          "two zeros" in the bottom-left corner. The time axis obviously starts at the left, so dropping
+          its origin label is both cleaner and unambiguous. */}
+      {xTicks.filter((v) => v !== 0).map((v) => (
         <text key={v} x={toX(v)} y={PAD.t + chartH + 18} textAnchor="middle" fontSize={10}
           fontFamily="var(--font-mono)" fill="var(--chart-axis)">
           {xFmt(v)}
@@ -218,8 +260,10 @@ function LineChart({ series, markers = [], goal, width, height, xFmt, ariaLabel 
 
       {/* Goal line: the env's "solved" score as a gold dashed rule, so you can see how far the curve
           still has to climb. Drawn above the grid, below the data lines. Its label is an HTML overlay
-          (positioned by the parent) so it sits on the Y axis and is never clipped. */}
-      {goal && goalY != null && (
+          (positioned by the parent) so it sits on the Y axis and is never clipped. Only drawn when the
+          goal is IN the (adaptive) domain — when it's far above the data the axis fits the data instead
+          and the parent shows a "↑ Goal N" marker at the top edge, so the line isn't drawn off-plot. */}
+      {goal && goalY != null && goalY <= yMax && (
         <line x1={PAD.l} y1={toY(goalY)} x2={PAD.l + chartW} y2={toY(goalY)}
           stroke="var(--goal)" strokeWidth={1.5} strokeDasharray="6 4" opacity={0.9} />
       )}
@@ -937,20 +981,25 @@ export default function RewardChart() {
           <>
             <LineChart series={series} markers={markers} goal={chartGoal} width={size.w} height={size.h} xFmt={xFmt} ariaLabel={t('chart.aria_label')} />
             {/* "Goal" label pinned to the Y axis, just under the gold line, with an info popup that
-                explains what "solved" means (board games read on a −1…+1 scale, etc.). */}
-            {chartGoal && goalTopPx != null && (
-              <div style={{
-                position: 'absolute', top: goalTopPx + 3, left: PAD.l + 3,
-                display: 'inline-flex', alignItems: 'center', gap: 2, pointerEvents: 'none',
-              }}>
-                <span style={{
-                  fontSize: 10, fontWeight: 600, color: 'var(--goal)', fontFamily: 'var(--font-mono)',
-                }}>{chartGoal.label}</span>
-                <span style={{ pointerEvents: 'auto' }}>
-                  <ParamInfo paramId="goal" label={chartGoal.label} />
-                </span>
-              </div>
-            )}
+                explains what "solved" means (board games read on a −1…+1 scale, etc.). When the goal sits
+                ABOVE the (adaptive) axis — far out of reach, so the axis fits the data instead — the label
+                clamps to the top edge and shows "↑ Goal <value>", so the off-screen target is still read. */}
+            {chartGoal && goalTopPx != null && (() => {
+              const goalOffTop = goalTopPx < PAD.t + 1
+              return (
+                <div style={{
+                  position: 'absolute', top: (goalOffTop ? PAD.t : goalTopPx) + 3, left: PAD.l + 3,
+                  display: 'inline-flex', alignItems: 'center', gap: 2, pointerEvents: 'none',
+                }}>
+                  <span style={{
+                    fontSize: 10, fontWeight: 600, color: 'var(--goal)', fontFamily: 'var(--font-mono)',
+                  }}>{goalOffTop ? `↑ ${chartGoal.label} ${fmtTick(chartGoal.value)}` : chartGoal.label}</span>
+                  <span style={{ pointerEvents: 'auto' }}>
+                    <ParamInfo paramId="goal" label={chartGoal.label} />
+                  </span>
+                </div>
+              )
+            })()}
             {activeTab === 'fitness' && (
               <div style={{
                 position: 'absolute', top: 6, left: PAD.l, display: 'flex', gap: 10,

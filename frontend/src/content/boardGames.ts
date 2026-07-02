@@ -144,6 +144,31 @@ function chessIdleBoard(): BoardState {
   }
 }
 
+/** Checkers/Dáma opening position (row-major, rank 8 at row 0). Player 1 ('+', black) fills the top three
+ *  rows, player 0 ('o', white) the bottom three, both on the dark playable squares — those are the cells
+ *  where (row + col) is odd (matching the checkered board's dark squares). The middle two ranks are empty. */
+function checkersIdleBoard(): BoardState {
+  const cells = Array<string>(64).fill('.')
+  for (let r = 0; r < 8; r++) {
+    for (let c = 0; c < 8; c++) {
+      if ((r + c) % 2 !== 1) continue // pieces sit only on the dark squares
+      if (r <= 2) cells[r * 8 + c] = '+' // top three rows: black men (player 1)
+      else if (r >= 5) cells[r * 8 + c] = 'o' // bottom three rows: white men (player 0)
+    }
+  }
+  return {
+    cells,
+    rows: 8,
+    cols: 8,
+    legal_actions: [],
+    current_player: 0, // white (player 0) moves first in OpenSpiel checkers
+    last_action: null,
+    is_terminal: false,
+    winner: null,
+    moves: [],
+  }
+}
+
 export const BOARD_GAMES: Record<string, BoardGameMeta> = {
   // Tic-Tac-Toe: glyph 'x' = player 0 (moves first, accent), 'o' = player 1 (danger). The action
   // index equals the cell index (0–8), so a legal cell is directly clickable.
@@ -232,6 +257,30 @@ export const BOARD_GAMES: Record<string, BoardGameMeta> = {
     pieceImageBase: '/pieces/cburnett', // lichess cburnett SVGs (frontend/public/pieces/cburnett)
     checkered: true, // a real chessboard look for the image pieces
     idle: chessIdleBoard(),
+  },
+  // Checkers / Dáma (G6-Dáma): an 8×8 move game (actionMode 'move', like Breakthrough) on the checkered
+  // chess board — "the chess graphics we already have". It REUSES the cburnett SVGs to tell a man from a
+  // crowned piece at a glance: a man is a chess **pawn** (wP/bP), and a crowned piece — the **king** of
+  // English draughts — is drawn as a chess **king** (wK/bK). Player 0 ('o'/'8') = white, player 1
+  // ('+'/'*') = black (OpenSpiel's usual "player 0 first", so no firstPlayer override). The glyph fallback
+  // (● man / ♔ king, ○/♚ for black) also drives the winner banner mark, distinguished by FILL like Othello
+  // so "● wins" reads even though both share --text-strong. Glyphs are upright (SVGs), so uprightGlyphs
+  // counter-rotates them when the board flips for the black player.
+  checkers: {
+    pieces: {
+      o: { player: 0, glyph: '●', color: 'var(--text-strong)', lead: true, image: 'wP' }, // white man
+      8: { player: 0, glyph: '♔', color: 'var(--text-strong)', image: 'wK' }, // white king (glyph '8')
+      '+': { player: 1, glyph: '○', color: 'var(--text-strong)', lead: true, image: 'bP' }, // black man
+      '*': { player: 1, glyph: '♚', color: 'var(--text-strong)', image: 'bK' }, // black king (glyph '*')
+    },
+    actionMode: 'move',
+    // White (player 0) sits at the bottom of OpenSpiel's print, so the board flips 180° only when the human
+    // plays black (player 1), putting their pieces at the bottom. Watch/AI keep the default view.
+    orient: { bottomPlayer: 0 },
+    uprightGlyphs: true, // upright chess SVGs → counter-rotate on the orientation flip
+    pieceImageBase: '/pieces/cburnett', // reuse the lichess cburnett SVGs (pawns = men, kings = kings)
+    checkered: true, // the real chessboard look — pieces sit on the dark squares
+    idle: checkersIdleBoard(),
   },
 }
 

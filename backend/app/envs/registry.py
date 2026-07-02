@@ -2528,6 +2528,76 @@ register(
     )
 )
 
+# Checkers / Dáma (G6-Dáma) — the 6th board game and the one that showcases the WHOLE board stack: it reuses
+# the Breakthrough MOVE shape (_MOVE_GAMES — moves are clean coordinate pairs "a3b4"; captures are distance-2
+# jumps "d6f4"; multi-jumps are sequential single actions by the same player, so the from→to click flow
+# handles a jump chain one hop at a time) with only a small board_engine addition: a digit-king-safe grid
+# parse (the king glyph "8" is a DIGIT → BoardStrFormat kind "checkers" takes the cell SUFFIX, not
+# strip-leading-digits). Otherwise data-only — the [5,8,8] observation_tensor is a plane stack like every
+# board game. UNLIKE Othello/Breakthrough (AZ held back: their high branching gave noisy self-play targets),
+# checkers has the LOWEST branching here (~5 legal moves/pos — mandatory captures), so it is in Connect
+# Four's "sharp enough" regime and an AZ risk-gate (Local/_probe_checkers_az.py) measured it LEARNS (fresh
+# ≈−0.42 → +0.17 vs the easy reference, NO regression). So it supports BOTH board trainers — "ppo" =
+# MaskablePPO vs the MCTS teacher (checkers has a real random-rollout MCTS, unlike chess), "alphazero" =
+# self-play on the GPU — with AlphaZero the ★ recommended one (the batched-GPU engine's ideal small game).
+# Scored vs the EASY reference (board_engine.BOARD_PROFILES) so the honest curve climbs; hw stays "cpu"
+# (ungated — PPO on CPU, AZ on GPU when present, badge via api/device.trainsOnGpu board+alphazero).
+register(
+    EnvSpec(
+        id="checkers",
+        gym_id="checkers",  # the OpenSpiel short name (resolved by app.services.board_engine)
+        # English / American draughts (OpenSpiel's `checkers`) — NOT Czech/international "flying-king" dáma
+        # (OpenSpiel has no such game). The CZ name is qualified so a Czech player isn't surprised that the
+        # crowned piece (a "dáma") moves ONE square, not any distance. Rules honestly stated in the description.
+        display_name=Bilingual(en="Checkers", cz="Dáma (anglická)"),
+        description=Bilingual(
+            en="**English (American) draughts** on the classic 8×8 board: every man steps one square "
+            "diagonally forward and captures forward, and **captures are mandatory** — jump over an enemy "
+            "piece to the empty square beyond it, chaining multiple jumps in one turn when you can. Reach "
+            "the far rank and your man is crowned a **king** (shown as a chess king ♔), which moves and "
+            "captures one square in **any** diagonal direction — it does not fly across the board (that is "
+            "the Czech/international game). Win by capturing or blocking all of the opponent's pieces. Play "
+            "against a built-in AI that searches ahead (Monte-Carlo Tree Search) — pick a side and a "
+            "difficulty — or **train your own neural net** to play, by MaskablePPO against the search AI "
+            "**or** by **AlphaZero self-play** on the GPU, and then face it.",
+            cz="**Anglická (americká) dáma** na klasické desce 8×8: každý muž jde o jedno pole úhlopříčně "
+            "vpřed a bere vpřed, a **braní je povinné** — přeskočíte soupeřův kámen na volné pole za ním a "
+            "v jednom tahu můžete řetězit i více skoků. Když dojdete na poslední řadu, muž se korunuje na "
+            "**dámu** (kreslenou jako šachový král ♔), která táhne i bere o jedno pole **libovolným** "
+            "úhlopříčným směrem — ale **nelétá** přes celou desku (to je česká/mezinárodní varianta). "
+            "Vyhrává ten, kdo sebere nebo zablokuje všechny soupeřovy kameny. Hrajte proti vestavěné AI, "
+            "která prohledává tahy dopředu (Monte-Carlo stromové prohledávání) — vyberte si stranu a "
+            "obtížnost — nebo si **natrénujte vlastní neuronovou síť**: buď MaskablePPO proti prohledávací "
+            "AI, **nebo** **AlphaZero hrou sama proti sobě** na GPU, a pak se jí postavte.",
+        ),
+        family="board",
+        obs_type="vector",  # inert tag — board games are routed, never made via make_env
+        action_space="discrete",  # Discrete(512): OpenSpiel's checkers (from-square, direction) move encoding
+        # Both board trainers (routed by algo, is_board_game): "ppo" = MaskablePPO vs the MCTS teacher (G6b),
+        # "alphazero" = self-play AZ (G6f/h/i). Checkers' low branching makes AZ the ★ recommended one — the
+        # risk-gate showed it climbing (unlike Othello/Breakthrough, which stay PPO-only).
+        supported_algos=["ppo", "alphazero"],
+        recommended_algo="alphazero",  # measured: AZ learns checkers (Local/_probe_checkers_az.py); its ideal small game
+        # ★ AZ budget: low branching + short games ⇒ a modest single-actor run shows a moving, climbing curve
+        # in a tolerable time (30 iters × 32 self-play games on the GPU); raise Iterations for a stronger net
+        # (Load continues from the saved net). 1 actor process is plenty for this light game (chess needs 2).
+        hyperparams=_board_hyperparams(az_iterations=30, az_games=32, az_actors=1),
+        # Same eval-vs-reference-MCTS ∈ [−1, 1] chart scale as the other board games (solved = +1, min = −1);
+        # scored vs the EASY reference (BOARD_PROFILES) so the honest curve climbs instead of pinning at −1.
+        solved_score=1.0,
+        min_score=-1.0,
+        default_total_timesteps=200_000,  # ★ PPO budget — a deep 8×8 move game vs the MCTS teacher (≈7 min CPU)
+        play_step_scale=1,
+        floor_scales_with_steps=False,
+        turn_based=True,  # one move per click-pair (a jump chain = several); the board subsystem drives the loop
+        human_playable=True,  # play a side vs the MCTS AI or your trained net
+        competitive=True,  # 2-player zero-sum → routed to the board trainer, like the other board games
+        difficulty="intermediate",  # a familiar game, deeper than Connect Four but more approachable than Othello
+        hw_requirement="cpu",  # ungated — PPO on CPU; AZ runs on the GPU when present, else falls back to CPU
+        train_implemented=True,  # both game-agnostic board trainers (MaskablePPO-vs-MCTS G6b + AlphaZero G6f/h/i)
+    )
+)
+
 # Hopper, Walker2d and Humanoid render at 125 fps and topple in ~1 s, so even with human play capped at
 # the 30 fps frame rate the fall is over almost instantly. A MODEST slow-down lets a beginner actually see
 # the robot move and fall (≈2.5× → ~10–15 fps, ~15 s) — the earlier 8× overshot into an unplayably choppy

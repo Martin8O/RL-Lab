@@ -86,9 +86,15 @@ def _self_play_ply_cap(n_actions: int) -> int | None:
     return 160 if n_actions > 1000 else None
 
 
-def _dirichlet_alpha(n_actions: int) -> float:
+def _dirichlet_alpha(n_actions: int, gym_id: str = "") -> float:
     """Root-exploration noise scale ≈ 10 / typical-branching: looser for low-branching games (Connect
-    Four ~7 moves → 1.0), tighter for high-branching ones (Breakthrough/Othello/chess → 0.3)."""
+    Four ~7 moves → 1.0), tighter for high-branching ones (Breakthrough/Othello/chess → 0.3).
+
+    ``n_actions`` is only a *proxy* for branching, and **checkers** breaks it — 512 distinct actions but
+    only ~5 legal moves/position (mandatory captures), so it takes the loose 1.0 like Connect Four despite
+    the big action space (measured: AZ learns checkers with 1.0 in the G6-Dáma risk-gate)."""
+    if gym_id == "checkers":
+        return 1.0
     return 1.0 if n_actions < 50 else 0.3
 
 
@@ -133,7 +139,7 @@ def train_az(
     # two algorithms' learning curves are directly comparable. AZ has no teacher — it self-plays.
     eval_sims = board_engine.STRENGTH_SIMS[board_engine.board_profile(gym_id).eval_strength]
     n_actions = int(game.num_distinct_actions())
-    dir_alpha = _dirichlet_alpha(n_actions)
+    dir_alpha = _dirichlet_alpha(n_actions, gym_id)
     # Lighter eval for high-branching games (chess) so the per-iteration eval stays a few-tens-of-seconds.
     eval_games, eval_move_sims = _eval_budget(n_actions, hp.eval_simulations)
     # Cap self-play game length for unbounded games (chess) so a weak early net's near-random play doesn't

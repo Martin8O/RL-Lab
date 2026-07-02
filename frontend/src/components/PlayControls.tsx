@@ -6,18 +6,26 @@ import { fetchCheckpoints, startPlay, stopPlay, updatePlaySpeed } from '../api/c
 import type { CheckpointMeta } from '../api/types'
 import { keymapFor } from '../content/playKeymaps'
 import { boardMetaFor } from '../content/boardGames'
+import { solvedPct } from './checkpointBrowser'
 import PlayInstructions from './PlayInstructions'
 import ParamInfo from './ParamInfo'
 import type { BoardStrength } from '../api/types'
 
 const PLAY_SPEEDS = [0.1, 0.15, 0.25, 0.5, 1, 2, 4]
 
-// Compact label for the checkpoint picker: drop the leading "env · " (the env is already chosen)
-// and cap the length so a long name doesn't run into the <select> arrow on the right.
-function optionLabel(label: string): string {
-  const i = label.indexOf('·')
-  const s = (i >= 0 ? label.slice(i + 1) : label).trim()
-  return s.length > 20 ? `${s.slice(0, 19)}…` : s
+// Compact label for the checkpoint picker: the algorithm + the net's **skill %** — its "% solved" over
+// the env's score range, the SAME number the chart's SCORE stat and the save cards show. This keeps one
+// consistent unit across the UI instead of the raw training budget the stored label carries (PPO steps
+// "200k", AlphaZero self-play iterations "4 it"), which read as mixed, confusing units. Skill % also tells
+// the two saved nets apart by strength (the useful thing when picking an opponent), unlike a plain
+// progress % (every finished run is 100%). Falls back to the stored budget when there's no score yet.
+function optionLabel(c: CheckpointMeta, min?: number, solved?: number): string {
+  const parts = c.label.split('·').map((s) => s.trim())          // "env · algo · budget"
+  const algo = parts.length >= 2 ? parts[1] : parts[parts.length - 1]
+  const pct = min != null && solved != null ? solvedPct(c.reward, min, solved) : null
+  const tail = pct != null ? `${Math.round(pct)}%` : (parts[2] ?? '')
+  const label = tail ? `${algo} · ${tail}` : algo
+  return label.length > 20 ? `${label.slice(0, 19)}…` : label
 }
 
 // Play-vs-AI controls (E2): start/stop one interactive episode, pick who plays (human at the
@@ -278,7 +286,7 @@ export default function PlayControls() {
                     <option value="">{t('play.board_opponent_ai')}</option>
                     {envCheckpoints.map((c) => (
                       <option key={c.id} value={c.id} title={c.label}>
-                        {optionLabel(c.label)}
+                        {optionLabel(c, env?.min_score, env?.solved_score)}
                       </option>
                     ))}
                   </select>
@@ -314,7 +322,7 @@ export default function PlayControls() {
               >
                 {envCheckpoints.map((c) => (
                   <option key={c.id} value={c.id} title={c.label}>
-                    {optionLabel(c.label)}
+                    {optionLabel(c, env?.min_score, env?.solved_score)}
                   </option>
                 ))}
               </select>

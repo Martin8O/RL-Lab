@@ -86,6 +86,16 @@ BOARD_PROFILES: dict[str, BoardProfile] = {
     # to beat the weak searcher. A stronger reference (easy) pins a fresh net at ≈−0.7 AND makes the
     # random-rollout eval much slower (chess rollouts play full games), so novice is both honest and cheap.
     "chess": BoardProfile(eval_strength="novice", teacher_start="novice", teacher_end="novice"),
+    # Checkers / Dáma (G6-Dáma) — an 8×8 move game with the LOWEST branching of any board game here (~5
+    # legal moves/pos: mandatory captures prune the tree, min 1), so — like Connect Four, NOT the noisy
+    # high-branching Othello/Breakthrough — the value targets are sharp and BOTH trainers learn it.
+    # Scored against the EASY reference: an AZ risk-gate (Local/_probe_checkers_az.py) measured a fresh net
+    # at ≈−0.42 vs easy climbing to ≈+0.17 after ~600 self-play games (NO regression below fresh — the pass
+    # signature), while vs the MEDIUM (80-sim) MCTS both fresh and trained sit pinned at ≈−1.0 (too strong
+    # for a tolerable budget). So easy is the honest, climbing yardstick (medium would pin the curve at the
+    # loss floor). The PPO baseline trains novice→easy (a fresh net rarely beats easy, so the near-random
+    # novice teacher hands it early wins to start climbing) and is scored vs the same easy reference.
+    "checkers": BoardProfile(eval_strength="easy", teacher_start="novice", teacher_end="easy"),
 }
 _DEFAULT_PROFILE = BOARD_PROFILES["tic_tac_toe"]
 
@@ -164,14 +174,21 @@ class BoardStrFormat(NamedTuple):
       w KQkq - 0 1"``); the first space-separated field is the piece placement, ranks ``8 → 1`` split by
       ``/`` with digits = runs of empties. **Case is preserved** (uppercase = white, lowercase = black),
       unlike the other kinds, since chess distinguishes the two sides by piece-letter case, not glyph.
+    * ``"checkers"`` (Dáma, G6-Dáma) — a ``"compact"``-like packed grid (``"8.8.....8"`` = rank-label ``8``
+      glued to ``cols`` cells), BUT a **king glyph is a DIGIT** (``"8"`` = white king, ``"*"`` = black king,
+      ``"o"``/``"+"`` = men), so the ``"compact"`` strip-*all*-leading-digits parser would eat a king in
+      column ``a``. Here the rank label is a fixed-width **prefix** and the cells are the **suffix**, so we
+      take the **last ``cols`` chars** of each rank-digit-led line — digit-safe and **case-preserved** (the
+      renderer needs ``"8"``/``"*"`` to draw kings). The trailing coord line (``" abcdefgh"``) starts with a
+      space, not a rank digit, so it is skipped.
 
-    The ``"spaced"``/``"compact"``/``"fen"`` paths take the authoritative ``rows × cols`` from the
-    ``observation_tensor`` shape so header/label lines never leak into the grid. Keyed by the OpenSpiel
+    The ``"spaced"``/``"compact"``/``"fen"``/``"checkers"`` paths take the authoritative ``rows × cols`` from
+    the ``observation_tensor`` shape so header/label lines never leak into the grid. Keyed by the OpenSpiel
     short name; defaults to the clean format.
     """
 
     empty: str  # the empty-cell marker in str(state) ("." for most games, "-" for Othello)
-    kind: Literal["clean", "spaced", "compact", "fen"]
+    kind: Literal["clean", "spaced", "compact", "fen", "checkers"]
 
 
 _DEFAULT_STR_FORMAT = BoardStrFormat(empty=".", kind="clean")
@@ -179,6 +196,7 @@ _BOARD_STR_FORMATS: dict[str, BoardStrFormat] = {
     "othello": BoardStrFormat(empty="-", kind="spaced"),
     "breakthrough": BoardStrFormat(empty=".", kind="compact"),
     "chess": BoardStrFormat(empty=".", kind="fen"),
+    "checkers": BoardStrFormat(empty=".", kind="checkers"),
 }
 
 
@@ -220,6 +238,21 @@ def _board_grid(state: Any) -> tuple[int, int, list[str]]:
                     grid_fen.append(ch)
         return rows, cols, grid_fen[: rows * cols]
 
+    if fmt.kind == "checkers":
+        # Checkers (Dáma): "compact"-like packed rows, but the king glyph "8" is a DIGIT, so strip the
+        # rank label by taking the SUFFIX (the last `cols` chars) instead of stripping leading digits —
+        # digit-safe and case-preserved. Skip the trailing coord line (" abcdefgh", starts with a space).
+        shape = game.observation_tensor_shape()
+        rows, cols = int(shape[-2]), int(shape[-1])
+        grid_chk: list[str] = []
+        for ln in text.split("\n"):
+            if len(grid_chk) >= rows * cols:
+                break
+            row = ln.rstrip()
+            if row.lstrip()[:1].isdigit() and len(row) >= cols:
+                grid_chk.extend("." if ch == fmt.empty else ch for ch in row[-cols:])
+        return rows, cols, grid_chk
+
     # Decorated grids: the obs-tensor shape gives the authoritative rows × cols.
     shape = game.observation_tensor_shape()
     rows, cols = int(shape[-2]), int(shape[-1])
@@ -248,10 +281,14 @@ def _board_grid(state: Any) -> tuple[int, int, list[str]]:
 # the renderer needs the board cells each legal action moves between. Breakthrough's ``action_to_string``
 # is a clean coordinate pair (``"a7a6"`` = file a, rank 7 → file a, rank 6), which :func:`_parse_move`
 # decodes generically: a square token is ``<file letter><rank number>`` (file ``a`` = column 0, rank 1 =
-# the bottom row), so the convention carries to checkers and, with a richer decoder, chess (whose SAN
-# strings — ``"Nc3"``, ``"O-O"`` — *don't* parse to two squares here, deferred to G6g). Listed games stream
-# a per-legal-action ``{from,to}`` map; every other game leaves ``BoardState.moves`` absent (byte-identical).
-_MOVE_GAMES: frozenset[str] = frozenset({"breakthrough"})
+# the bottom row), so the convention carries to **checkers** — whose moves are the same clean coordinate
+# pairs (a step ``"a3b4"`` or a capture *jump* ``"d6f4"``, distance-2 but still exactly two squares) and
+# whose **multi-jumps are sequential single actions by the same player** (each continuation jump is its own
+# legal move, so the two-step select→destination click flow handles a jump chain one hop at a time) — and,
+# with a richer decoder, chess (whose SAN strings — ``"Nc3"``, ``"O-O"`` — *don't* parse to two squares
+# here, so it uses the board-diff decoder in ``_DIFF_MOVE_GAMES``). Listed games stream a per-legal-action
+# ``{from,to}`` map; every other game leaves ``BoardState.moves`` absent (byte-identical).
+_MOVE_GAMES: frozenset[str] = frozenset({"breakthrough", "checkers"})
 _SQUARE_RE = re.compile(r"([a-z])([0-9]+)")
 
 
