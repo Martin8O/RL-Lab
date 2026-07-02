@@ -148,6 +148,7 @@ class ParallelActor:
         buffer: deque[Any],
         buffer_lock: threading.Lock,
         live_games: list[int],
+        live_plies: list[int],
         control: Any,
     ) -> None:
         self._gym_id = gym_id
@@ -159,6 +160,7 @@ class ParallelActor:
         self._buffer = buffer
         self._buffer_lock = buffer_lock
         self._live_games = live_games
+        self._live_plies = live_plies
         self._control = control
 
         self._ctx = mp.get_context("spawn")
@@ -205,6 +207,7 @@ class ParallelActor:
         with self._buffer_lock:
             self._buffer.extend(game_examples)
         self._live_games[0] += 1
+        self._live_plies[0] += len(game_examples)  # each example is one ply → the env-steps axis (X1)
 
     def _collect(self) -> None:
         # Drain finished games into the shared buffer + counter, and mirror the trainer's pause/stop to the

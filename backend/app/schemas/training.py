@@ -6,7 +6,7 @@ metric/status frames, so backend and frontend agree on one source of truth.
 
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 Algo = Literal["ppo", "neuroevolution", "q_learning", "alphazero", "sac", "td3", "dqn"]
 TrainState = Literal[
@@ -271,8 +271,47 @@ class TrainConfig(BaseModel):
     dqn: DQNHyperparams | None = None
 
 
-class TrainingMetrics(BaseModel):
-    """One per-rollout metrics frame, pushed over WS as {type:"metrics", ...}."""
+class _CanonicalAxes(BaseModel):
+    """The two canonical comparison axes carried by every *persisted* metric frame (X1, ADR-082).
+
+    Cross-run / cross-algorithm comparison is only honest on a **shared** X-axis, but the trainers log
+    on different native ones (PPO per-rollout · off-policy per 2 000 env steps · neuroevolution per
+    generation · Q-learning per episode-batch · AlphaZero per self-play game). These two fields are the
+    algorithm-independent axes the analysis suite (DataLab, Phase X) rebins and overlays runs on:
+
+    * ``env_steps`` — cumulative **environment interactions** (the sample-efficiency axis, the RL
+      standard, defined for *every* algorithm). For every trainer whose ``timesteps`` already counts env
+      steps (PPO / SAC / TD3 / DQN / board-MaskablePPO / neuroevolution / Q-learning / competitive
+      self-play) this equals ``timesteps``. The one exception is **AlphaZero**, whose ``timesteps`` is
+      self-play *games* (its progress unit); it sets ``env_steps`` to the cumulative self-play **plies**
+      (moves) so it is directly comparable to the board MaskablePPO trainer, which counts moves.
+    * ``wall_clock`` — elapsed wall-clock seconds (== the frame's ``elapsed``).
+
+    Both default to a sentinel and are **auto-filled** from the frame's own ``timesteps`` / ``elapsed`` by
+    the validator below, so every trainer gets them for free and no future trainer can forget them. A
+    trainer whose ``timesteps`` is *not* env steps (AlphaZero) passes ``env_steps`` explicitly and it is
+    kept as-is. Legacy runs recorded before this contract are backfilled on read (see services/runs.py).
+    """
+
+    env_steps: int = -1  # sentinel <0 → filled from ``timesteps`` unless the trainer sets it (AlphaZero)
+    wall_clock: float = -1.0  # sentinel <0 → filled from ``elapsed``
+
+    @model_validator(mode="after")
+    def _fill_canonical_axes(self) -> "_CanonicalAxes":
+        # getattr (not self.timesteps) keeps the mixin standalone — the subclasses all carry both fields.
+        if self.env_steps < 0:
+            self.env_steps = int(getattr(self, "timesteps", 0))
+        if self.wall_clock < 0:
+            self.wall_clock = float(getattr(self, "elapsed", 0.0))
+        return self
+
+
+class TrainingMetrics(_CanonicalAxes):
+    """One per-rollout metrics frame, pushed over WS as {type:"metrics", ...}.
+
+    Carries the canonical ``env_steps`` + ``wall_clock`` axes (see :class:`_CanonicalAxes`); for the
+    step-based trainers (PPO / SAC / TD3 / DQN / board-MaskablePPO) ``env_steps`` == ``timesteps``.
+    """
 
     type: Literal["metrics"] = "metrics"
     iteration: int
@@ -357,8 +396,12 @@ class MutationDist(BaseModel):
     counts: list[int]
 
 
-class EvolutionMetrics(BaseModel):
-    """One per-generation frame, pushed over WS as {type:"evolution", ...}."""
+class EvolutionMetrics(_CanonicalAxes):
+    """One per-generation frame, pushed over WS as {type:"evolution", ...}.
+
+    ``env_steps`` == ``timesteps`` here (neuroevolution's ``timesteps`` already counts cumulative env
+    steps simulated across all generations); ``wall_clock`` == ``elapsed`` (see :class:`_CanonicalAxes`).
+    """
 
     type: Literal["evolution"] = "evolution"
     generation: int
@@ -372,8 +415,11 @@ class EvolutionMetrics(BaseModel):
     elapsed: float
 
 
-class QLearningMetrics(BaseModel):
+class QLearningMetrics(_CanonicalAxes):
     """One periodic Q-learning frame, pushed over WS as {type:"q_learning", ...}.
+
+    ``env_steps`` == ``timesteps`` here (Q-learning's ``timesteps`` already counts cumulative env steps
+    across all episodes); ``wall_clock`` == ``elapsed`` (see :class:`_CanonicalAxes`).
 
     Q-learning is *episodic* (not rollout/timestep- or generation-based), so its x-axis is the
     episode counter. ``ep_rew_mean`` is the mean return over the most recent batch of episodes
@@ -433,8 +479,11 @@ class SpeciesMetrics(BaseModel):
     timesteps: int
 
 
-class MultiAgentMetrics(BaseModel):
+class MultiAgentMetrics(_CanonicalAxes):
     """One competitive self-play frame, pushed over WS as {type:"ma_metrics", ...} (simple_tag, G7b-2).
+
+    ``env_steps`` == ``timesteps`` here (the cumulative env steps across both species); ``wall_clock``
+    == ``elapsed`` (see :class:`_CanonicalAxes`).
 
     Two species learn by alternating frozen-opponent rounds (ADR-048), so a single reward line can't
     describe the run — this frame carries **both** species at once for the two-line "ecosystem" chart.

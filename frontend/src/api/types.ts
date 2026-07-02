@@ -234,7 +234,10 @@ export interface TrainConfig {
   dqn?: DQNHyperparams | null
 }
 
-/** WS frame: {type:"metrics", ...} pushed once per PPO rollout. */
+/** WS frame: {type:"metrics", ...} pushed once per PPO rollout.
+ *  `env_steps` + `wall_clock` are the canonical comparison axes (X1) present on every persisted metric
+ *  frame: `env_steps` = cumulative environment interactions (== `timesteps` for step-based trainers;
+ *  self-play plies for AlphaZero, whose `timesteps` is games), `wall_clock` = elapsed seconds. */
 export interface TrainingMetrics {
   type: 'metrics'
   iteration: number
@@ -245,6 +248,8 @@ export interface TrainingMetrics {
   loss: number | null
   learning_rate: number | null
   elapsed: number
+  env_steps: number
+  wall_clock: number
 }
 
 /** Live hardware telemetry (G4b). CPU + RAM always present; GPU fields are null when NVML/pynvml is
@@ -309,6 +314,9 @@ export interface EvolutionMetrics {
   mutation_dist: MutationDist
   timesteps: number
   elapsed: number
+  /** Canonical comparison axes (X1); here env_steps == timesteps (cumulative env steps). */
+  env_steps: number
+  wall_clock: number
 }
 
 /** WS frame: {type:"q_learning", ...} pushed periodically during a tabular Q-learning run.
@@ -324,6 +332,9 @@ export interface QLearningMetrics {
   ep_len_mean: number | null
   timesteps: number
   elapsed: number
+  /** Canonical comparison axes (X1); here env_steps == timesteps (cumulative env steps). */
+  env_steps: number
+  wall_clock: number
 }
 
 /** The learned action-value table for the heatmap — row-major [n_states][n_actions]. */
@@ -365,6 +376,9 @@ export interface MultiAgentMetrics {
   timesteps: number
   total_timesteps: number
   elapsed: number
+  /** Canonical comparison axes (X1); here env_steps == timesteps (cumulative env steps across species). */
+  env_steps: number
+  wall_clock: number
 }
 
 // --- High scores (C2) ------------------------------------------------------

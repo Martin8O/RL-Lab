@@ -148,11 +148,15 @@ def train_az(
 
     if resume_blob is not None:
         model, games_done = az_net.build_model_from_blob(resume_blob, game, device=device)
+        # Cumulative self-play plies at the checkpoint (the canonical env-steps axis, X1) — kept across
+        # resume so env_steps stays cumulative like PPO's num_timesteps. Absent in pre-X1 blobs → 0.
+        plies_done = int(az_net.load_az_model(resume_blob, device="cpu").get("plies_played", 0))
     else:
         model = az_net.AZModel(
             game, channels=hp.channels, blocks=hp.blocks, device=device, norm=hp.norm
         )
         games_done = 0
+        plies_done = 0
     model.net.eval()
     optimizer = torch.optim.Adam(model.net.parameters(), lr=hp.learning_rate, weight_decay=1e-4)
 
@@ -202,6 +206,10 @@ def train_az(
     last_eval: list[float | None] = [None]
     eval_window: deque[float] = deque(maxlen=_EVAL_SMOOTH_WINDOW)  # recent raw evals → the smoothed display
     live_games = [games_base]  # cumulative games produced by the actor — bumped per game, read by the ticker
+    # Cumulative self-play plies (moves) — the canonical env-steps axis (X1). AZ's ``timesteps`` is games
+    # (its progress unit), so ``env_steps`` tracks plies instead, making AZ directly comparable to the board
+    # MaskablePPO trainer (which counts moves). Bumped per finished game by len(game_examples) == its plies.
+    live_plies = [plies_done]
     last_loss: list[float | None] = [None]
     stop_event = threading.Event()  # retires the actor + ticker on every exit path
     stop_ticker = threading.Event()
@@ -222,6 +230,7 @@ def train_az(
                 "n_actions": model.n_actions, "num_players": model.num_players,
                 "channels": model.channels, "blocks": model.blocks, "norm": model.norm,
                 "games_played": live_games[0],
+                "plies_played": live_plies[0],  # cumulative env-steps axis (X1) — restored on resume
             },
             buf,
         )
@@ -260,6 +269,7 @@ def train_az(
             with buffer_lock:
                 buffer.extend(game_examples)
             live_games[0] += 1
+            live_plies[0] += len(game_examples)  # each example is one ply → the env-steps axis (X1)
             if pending_sync[0]:  # the learner trained → adopt the new net for the next games
                 with sync_lock:
                     sd, pending_sync[0] = shared_sd[0], False
@@ -316,6 +326,9 @@ def train_az(
                 iteration=iteration[0],
                 timesteps=live_games[0],  # progress unit = self-play games played (the actor's live count)
                 total_timesteps=total_target,
+                # env_steps ≠ timesteps for AZ: cumulative self-play plies (moves), the canonical
+                # env-interactions axis (X1) — comparable to the board MaskablePPO trainer's move count.
+                env_steps=live_plies[0],
                 ep_rew_mean=last_eval[0],  # eval-vs-reference-MCTS ∈ [−1, 1]
                 ep_len_mean=None,
                 loss=last_loss[0],
@@ -361,7 +374,8 @@ def train_az(
                 gumbel_considered=hp.gumbel_considered, ply_cap=ply_cap,
             ),
             base_seed=config.seed + 99_991, initial_state_dict=az_parallel.cpu_state_dict(model.net),
-            buffer=buffer, buffer_lock=buffer_lock, live_games=live_games, control=control,
+            buffer=buffer, buffer_lock=buffer_lock, live_games=live_games, live_plies=live_plies,
+            control=control,
         )
         parallel_actor.start()
         actor_alive = parallel_actor.is_alive

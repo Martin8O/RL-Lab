@@ -63,6 +63,28 @@ def final_score(config: TrainConfig, metrics: list[dict[str, Any]]) -> float | N
     return _frame_score(config.algo, metrics[-1]) if metrics else None
 
 
+def backfill_axes(metrics: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Normalize legacy metric frames on read to carry the canonical comparison axes (X1).
+
+    Runs recorded before the ``env_steps`` / ``wall_clock`` contract (see ``schemas.training``) have
+    neither field. Backfill them best-effort **on load** (never mutating the archive on disk):
+
+    * ``env_steps`` ← the frame's ``timesteps`` (env steps for every trainer except AlphaZero; for a
+      *legacy* AlphaZero frame ``timesteps`` is games, so this is a coarse games-count fallback — real
+      plies were not recorded pre-X1, so it is the honest best-effort. New AZ runs write true plies).
+    * ``wall_clock`` ← the frame's ``elapsed``.
+
+    Idempotent: frames already carrying the fields (any run recorded post-X1) pass through unchanged.
+    Returns the same list of (mutated-copy) dicts so callers can hand them straight to :class:`RunDetail`.
+    """
+    for f in metrics:
+        if "env_steps" not in f:
+            f["env_steps"] = int(f.get("timesteps", 0) or 0)
+        if "wall_clock" not in f:
+            f["wall_clock"] = float(f.get("elapsed", 0.0) or 0.0)
+    return metrics
+
+
 def should_archive(state: str, final: float | None, solved_score: float) -> bool:
     """Keep a run only if it finished/stopped *and* reached ≥10% of the solved score.
 
@@ -231,7 +253,9 @@ class RunStore:
                 metrics = json.loads((run / "metrics.json").read_text(encoding="utf-8"))
             except (OSError, ValueError):
                 return None
-            return RunDetail(meta=meta, config=config, metrics=metrics)
+            # Guarantee the canonical comparison axes on every frame the analysis suite reads (X1),
+            # backfilling legacy runs on load without touching the archive on disk.
+            return RunDetail(meta=meta, config=config, metrics=backfill_axes(metrics))
 
     def delete(self, rid: str) -> bool:
         """Remove a run; returns ``True`` if it existed."""

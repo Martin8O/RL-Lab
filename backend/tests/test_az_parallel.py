@@ -74,7 +74,8 @@ def test_parallel_actor_two_workers_smoke() -> None:
             gumbel=True, gumbel_considered=8, ply_cap=None,
         ),
         base_seed=0, initial_state_dict=az_parallel.cpu_state_dict(model.net),
-        buffer=buffer, buffer_lock=threading.Lock(), live_games=[0], control=TrainControl(),
+        buffer=buffer, buffer_lock=threading.Lock(), live_games=[0], live_plies=[0],
+        control=TrainControl(),
     )
     actor.start()
     try:
@@ -82,6 +83,7 @@ def test_parallel_actor_two_workers_smoke() -> None:
         while actor._live_games[0] < 1 and time.monotonic() < deadline:
             time.sleep(0.2)
         assert actor._live_games[0] >= 1, "no self-play game arrived from the worker processes"
+        assert actor._live_plies[0] >= actor._live_games[0]  # ≥1 ply per game — the env-steps axis (X1)
     finally:
         actor.stop()
 
