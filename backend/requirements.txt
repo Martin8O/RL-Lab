@@ -155,3 +155,10 @@ attrs==26.1.0
 ml_collections==1.1.0
 open_spiel==1.6.15
 sb3-contrib==2.8.0
+
+# --- Analysis export stack (X5, DataLab Wave 1 — CSV/XLSX/repro-card/LaTeX export registry, ADR-084) ---
+# The publication XLSX (Summary + per-game native charts + Config + Methods) is written with openpyxl —
+# pure-Python, zero native deps, so it installs cleanly on every machine (its only dep is et-xmlfile).
+# CSV/LaTeX/repro-card use the stdlib. Export is server-side (the frontend store is a capped ring buffer).
+et-xmlfile==2.0.0
+openpyxl==3.1.5
