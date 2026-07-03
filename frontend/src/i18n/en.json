@@ -1,5 +1,10 @@
 {
   "app": { "title": "RL Lab", "subtitle": "Reinforcement Learning" },
+  "nav": {
+    "switch_aria": "Switch view",
+    "dashboard": "RL Lab — training dashboard",
+    "datalab": "Data Lab — experiment analysis"
+  },
   "status": {
     "connecting": "Connecting…",
     "online": "Backend online",
@@ -353,5 +358,31 @@
     "no_overlay": "Selected runs have no data for this tab",
     "solved": "Steps / generations to reach 100% (solved)",
     "confirm_delete": "Delete run \"{{label}}\"?"
+  },
+  "analysis": {
+    "title": "Data Lab",
+    "subtitle": "Experiment analysis",
+    "open": "Open Data Lab — compare runs, aggregate seeds, export",
+    "sources": "Runs",
+    "no_runs": "No finished runs yet — train a run to analyze it here",
+    "selected_count": "{{n}}/{{max}} selected",
+    "mode": "Compare mode",
+    "mode_game": "Per-game",
+    "mode_algo": "Per-algorithm",
+    "axis": "X axis",
+    "axis_steps": "Env steps",
+    "axis_time": "Wall-clock",
+    "axis_steps_full": "X: cumulative environment steps (sample efficiency)",
+    "axis_time_full": "X: wall-clock time elapsed",
+    "log_y": "Log Y",
+    "collapse_seeds": "Collapse seeds → band",
+    "seeds": "Seeds:",
+    "mean_band": "Mean ± 95% CI",
+    "mean": "mean",
+    "empty_hint": "Pick runs on the left to overlay their learning curves. Select several seeds of one game + algorithm to collapse them into a mean ± CI band.",
+    "mixed_games_hint": "Per-game mode shows raw reward — not comparable across different games. Switch to Per-algorithm for a normalized (skill-%) comparison.",
+    "chart_aria": "Comparison chart of the selected runs",
+    "zoom_reset": "⤢ zoomed — double-click to reset",
+    "wave3_note": "Aggregate (rliable) stats, a ranked summary table, and export land in the next step (X6b)."
   }
 }

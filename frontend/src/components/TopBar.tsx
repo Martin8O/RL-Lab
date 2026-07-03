@@ -2,6 +2,8 @@ import { useTranslation } from 'react-i18next'
 import { useAppStore } from '../store/useAppStore'
 import type { BackendStatus } from '../store/useAppStore'
 import ParamInfo from './ParamInfo'
+import ModeSwitch from './ModeSwitch'
+import LangThemeToggle from './LangThemeToggle'
 
 const DOT_COLOR: Record<BackendStatus, string> = {
   online:     'var(--success)',
@@ -58,50 +60,9 @@ function Chip({ label, value, title, accent, infoId, infoLabel }: {
   )
 }
 
-function IconBtn({ onClick, label, children, text }: {
-  onClick: () => void; label: string; children?: React.ReactNode; text?: string
-}) {
-  return (
-    <button
-      onClick={onClick}
-      aria-label={label}
-      title={label}
-      style={{
-        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-        height: 34, minWidth: 34, padding: text ? '0 11px' : 0,
-        background: 'transparent', border: '1px solid transparent',
-        borderRadius: 'var(--radius-md)', color: 'var(--text-muted)',
-        fontSize: 'var(--fs-label)', fontWeight: 'var(--fw-semibold)',
-        letterSpacing: 'var(--ls-wide)', cursor: 'pointer',
-        transition: 'var(--t-colors)',
-      }}
-      onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--surface-2)'; e.currentTarget.style.color = 'var(--text-default)' }}
-      onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-muted)' }}
-    >
-      {text ?? children}
-    </button>
-  )
-}
-
-const SunIcon = (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
-    <circle cx="12" cy="12" r="4.2" stroke="currentColor" strokeWidth="2" />
-    <path d="M12 2.5v2.2M12 19.3v2.2M21.5 12h-2.2M4.7 12H2.5M18.4 5.6l-1.6 1.6M7.2 16.8l-1.6 1.6M18.4 18.4l-1.6-1.6M7.2 7.2L5.6 5.6"
-      stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-  </svg>
-)
-const MoonIcon = (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
-    <path d="M20 14.5A8 8 0 019.5 4 8 8 0 1020 14.5z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
-  </svg>
-)
-
 export default function TopBar() {
   const { t }  = useTranslation()
   const locale  = useAppStore((s) => s.locale)
-  const theme   = useAppStore((s) => s.theme)
-  const setLocale = useAppStore((s) => s.setLocale)
-  const setTheme  = useAppStore((s) => s.setTheme)
 
   const algo            = useAppStore((s) => s.algo)
   const metricsHistory  = useAppStore((s) => s.metricsHistory)
@@ -138,44 +99,8 @@ export default function TopBar() {
       display: 'flex', alignItems: 'center', gap: 'var(--space-4)', padding: '0 var(--space-5)',
       background: 'var(--surface-1)', borderBottom: '2px solid var(--border-default)',
     }}>
-      {/* Brand */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 11 }}>
-        <div style={{
-          width: 30, height: 30, borderRadius: 'var(--radius-md)', overflow: 'hidden',
-          boxShadow: 'var(--shadow-sm)', flexShrink: 0,
-        }}>
-          {/* RL Lab mark: the agent↔environment loop (white arcs + amber arrowheads) with the
-              reward star — a flat, glow-free version of the GitHub hero, legible at 30px. */}
-          <svg width="30" height="30" viewBox="0 0 64 64" fill="none" aria-hidden>
-            <defs>
-              <linearGradient id="rlMark" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0" stopColor="#322A63" />
-                <stop offset="1" stopColor="#16122C" />
-              </linearGradient>
-            </defs>
-            <rect width="64" height="64" fill="url(#rlMark)" />
-            <path d="M20.3 24.4 A14 14 0 0 1 43.7 24.4" stroke="#fff" strokeWidth="3.2" strokeLinecap="round" />
-            <path d="M43.7 39.6 A14 14 0 0 1 20.3 39.6" stroke="#fff" strokeWidth="3.2" strokeLinecap="round" />
-            <path d="M44.6 27.5 L46 23.7 L41.3 25.1 Z" fill="#F0A93A" />
-            <path d="M19.4 36.5 L18 40.3 L22.7 38.9 Z" fill="#F0A93A" />
-            <circle cx="32" cy="32" r="3.6" fill="#F0A93A" />
-            <circle cx="30.95" cy="30.83" r="1.3" fill="#FFE0A6" />
-            <path d="M46.9 15.1 L48 18 L51 19.2 L48 20.3 L46.9 23.25 L45.7 20.3 L42.8 19.2 L45.7 18 Z" fill="#FAC775" />
-          </svg>
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.1 }}>
-          <span style={{ fontSize: 15, fontWeight: 'var(--fw-semibold)', color: 'var(--text-strong)', letterSpacing: 'var(--ls-tight)' }}>
-            {t('app.title')}
-          </span>
-          <span style={{
-            fontSize: 'var(--fs-micro)', fontWeight: 'var(--fw-semibold)',
-            letterSpacing: 'var(--ls-eyebrow)', textTransform: 'uppercase', color: 'var(--text-faint)',
-            whiteSpace: 'nowrap',
-          }}>
-            {t('app.subtitle')}
-          </span>
-        </div>
-      </div>
+      {/* View switcher: RL Lab (dashboard) ⇆ DataLab (analysis surface). */}
+      <ModeSwitch />
 
       <div style={{ width: 1, height: 26, background: 'var(--border-default)' }} />
 
@@ -199,10 +124,7 @@ export default function TopBar() {
 
       <div style={{ width: 1, height: 26, background: 'var(--border-default)' }} />
 
-      <IconBtn onClick={() => setLocale(locale === 'en' ? 'cz' : 'en')} label={t('topbar.toggle_language')} text={locale === 'en' ? 'CZ' : 'EN'} />
-      <IconBtn onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} label={t('topbar.toggle_theme')}>
-        {theme === 'dark' ? MoonIcon : SunIcon}
-      </IconBtn>
+      <LangThemeToggle />
     </header>
   )
 }

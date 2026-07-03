@@ -1,5 +1,10 @@
 {
   "app": { "title": "RL Lab", "subtitle": "Posilované učení" },
+  "nav": {
+    "switch_aria": "Přepnout zobrazení",
+    "dashboard": "RL Lab — trénovací nástěnka",
+    "datalab": "Data Lab — analýza experimentů"
+  },
   "status": {
     "connecting": "Připojování…",
     "online": "Backend online",
@@ -353,5 +358,31 @@
     "no_overlay": "Vybrané běhy nemají data pro tuto záložku",
     "solved": "Kroky / generace k dosažení 100 % (vyřešeno)",
     "confirm_delete": "Smazat běh „{{label}}“?"
+  },
+  "analysis": {
+    "title": "Data Lab",
+    "subtitle": "Analýza experimentů",
+    "open": "Otevřít Data Lab — porovnat běhy, agregovat seedy, exportovat",
+    "sources": "Běhy",
+    "no_runs": "Zatím žádné dokončené běhy — natrénuj běh, ať ho tu můžeš analyzovat",
+    "selected_count": "{{n}}/{{max}} vybráno",
+    "mode": "Režim porovnání",
+    "mode_game": "Podle hry",
+    "mode_algo": "Podle algoritmu",
+    "axis": "Osa X",
+    "axis_steps": "Kroky prostředí",
+    "axis_time": "Reálný čas",
+    "axis_steps_full": "X: kumulativní kroky prostředí (vzorková efektivita)",
+    "axis_time_full": "X: uplynulý reálný čas",
+    "log_y": "Log Y",
+    "collapse_seeds": "Sloučit seedy → pás",
+    "seeds": "Seedy:",
+    "mean_band": "Průměr ± 95% CI",
+    "mean": "průměr",
+    "empty_hint": "Vlevo vyber běhy a překryj jejich učicí křivky. Vyber více seedů jedné hry + algoritmu a sluč je do pásu průměr ± CI.",
+    "mixed_games_hint": "Režim podle hry ukazuje surovou odměnu — mezi různými hrami není porovnatelná. Přepni na Podle algoritmu pro normalizované (skill-%) porovnání.",
+    "chart_aria": "Srovnávací graf vybraných běhů",
+    "zoom_reset": "⤢ přiblíženo — dvojklikem resetuj",
+    "wave3_note": "Agregované (rliable) statistiky, seřazená tabulka a export přijdou v dalším kroku (X6b)."
   }
 }

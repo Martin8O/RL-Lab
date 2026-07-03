@@ -329,6 +329,7 @@ interface AppState {
   sweep:           SweepStatus | null    // X3: live seed-sweep progress (null outside a sweep)
   highScores:      Record<string, HighScore>  // all-time best per env id
   checkpointsNonce: number                     // bumped on save/delete so other pickers (AI-play) re-fetch
+  analysisOpen:    boolean               // X6: the fullscreen DataLab surface is open (over the dashboard)
 
   // ─ play vs AI (E2) ─────────────────────────────────────────
   playState:        PlayState            // idle until a session starts
@@ -382,6 +383,7 @@ interface AppState {
   setHighScore:       (hs: HighScore)                   => void
   setHighScores:      (list: HighScore[])               => void
   bumpCheckpoints:    ()                                => void
+  setAnalysisOpen:    (v: boolean)                      => void
   clearMetrics:       ()                                => void
 
   // play vs AI (E2)
@@ -447,6 +449,7 @@ export const useAppStore = create<AppState>()(
       sweep:           null,
       highScores:      {},
       checkpointsNonce: 0,
+      analysisOpen:    false,
 
       playState:        'idle',
       playScore:        0,
@@ -659,6 +662,10 @@ export const useAppStore = create<AppState>()(
       // A new checkpoint was saved/deleted somewhere — bump so components that fetch the list on their
       // own (the AI-play picker in PlayControls) re-fetch without a page reload.
       bumpCheckpoints: () => set((s) => ({ checkpointsNonce: s.checkpointsNonce + 1 })),
+
+      // X6: open/close the fullscreen DataLab surface. Ephemeral (not persisted) — the dashboard stays
+      // mounted underneath so a live run keeps streaming while the overlay is up.
+      setAnalysisOpen: (analysisOpen) => set({ analysisOpen }),
 
       clearMetrics: () => set({ ...EMPTY_RUN_RESULTS }),
 

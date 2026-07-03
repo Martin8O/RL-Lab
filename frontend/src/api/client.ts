@@ -1,9 +1,11 @@
 import { useEffect } from 'react'
 import { useAppStore } from '../store/useAppStore'
 import type {
+  AggregateResponse,
   CheckpointMeta,
   EnvSkill,
   EnvSpec,
+  ExperimentInfo,
   HighScore,
   PlayConfig,
   PlayFrame,
@@ -364,6 +366,39 @@ export async function fetchRun(id: string): Promise<RunDetail> {
 export async function deleteRun(id: string): Promise<void> {
   const res = await fetch(`${API_BASE}/api/runs/${encodeURIComponent(id)}`, { method: 'DELETE' })
   if (!res.ok && res.status !== 404) throw new Error(`HTTP ${res.status}`)
+}
+
+// ── Analysis / DataLab (Phase X) ─────────────────────────────────────────────
+
+/** Every experiment (a seed sweep = one experiment) auto-grouped from the run history (X4). */
+export async function fetchExperiments(): Promise<ExperimentInfo[]> {
+  const res = await fetch(`${API_BASE}/api/analysis/experiments`)
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  return res.json() as Promise<ExperimentInfo[]>
+}
+
+/** The across-seed aggregate (mean ± std / CI band + summary) for a set of runs, rebinned onto a common
+ *  axis grid (X4). Select by an explicit `runIds` list (the seeds the user multi-selected) or an
+ *  `experimentId`; an optional `seeds` subset includes/excludes individual seeds so the band recomputes
+ *  for exactly those runs. `metric` picks raw reward or normalized skill-%. */
+export async function fetchAggregate(params: {
+  runIds?: string[]
+  experimentId?: string | null
+  axis?: 'env_steps' | 'wall_clock'
+  metric?: 'reward' | 'skill_pct'
+  seeds?: number[]
+  points?: number
+}): Promise<AggregateResponse> {
+  const q = new URLSearchParams()
+  for (const id of params.runIds ?? []) q.append('run_ids', id)
+  if (params.experimentId) q.set('experiment_id', params.experimentId)
+  if (params.axis) q.set('axis', params.axis)
+  if (params.metric) q.set('metric', params.metric)
+  for (const s of params.seeds ?? []) q.append('seeds', String(s))
+  if (params.points) q.set('points', String(params.points))
+  const res = await fetch(`${API_BASE}/api/analysis/aggregate?${q.toString()}`)
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  return res.json() as Promise<AggregateResponse>
 }
 
 // ── Preview control (B4) ──────────────────────────────────────────────────────

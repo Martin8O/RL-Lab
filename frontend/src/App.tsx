@@ -16,6 +16,7 @@ import EnvPreview from './components/EnvPreview'
 import RewardChart from './components/RewardChart'
 import BottomPanels from './components/BottomPanels'
 import PlayScoreGate from './components/PlayScoreGate'
+import AnalysisSurface from './components/analysis/AnalysisSurface'
 
 export default function App() {
   const { locale, theme, backendStatus, setEnvs, setSelectedEnvId, setHighScores } = useAppStore()
@@ -87,6 +88,8 @@ export default function App() {
       </div>
       {/* Invisible: watches play results, auto-records AI scores, prompts a human for a name. */}
       <PlayScoreGate />
+      {/* X6: fullscreen DataLab research surface — a portal over the dashboard (self-gates on analysisOpen). */}
+      <AnalysisSurface />
     </div>
   )
 }
