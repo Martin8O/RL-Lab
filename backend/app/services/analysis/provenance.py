@@ -32,7 +32,7 @@ from app.core.paths import resource_root
 from app.schemas.training import TrainConfig
 
 # The public repository the BibTeX + reproduce command point at.
-_PROJECT_URL = "https://github.com/mmsvoboda/RL-Lab"
+_PROJECT_URL = "https://github.com/Martin8O/RL-Lab"
 _PROJECT_TITLE = "RL Lab — an all-in-one reinforcement-learning dashboard"
 
 

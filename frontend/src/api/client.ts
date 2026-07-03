@@ -16,8 +16,10 @@ import type {
   PreviewConfig,
   PreviewFrame,
   PreviewState,
+  RliableResult,
   RunDetail,
   RunMeta,
+  RunSummary,
   SystemInfo,
   TrainConfig,
   TrainStatus,
@@ -399,6 +401,41 @@ export async function fetchAggregate(params: {
   const res = await fetch(`${API_BASE}/api/analysis/aggregate?${q.toString()}`)
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
   return res.json() as Promise<AggregateResponse>
+}
+
+/** The X2 summary statistics for a set of runs (one object per found run) — the numbers the DataLab
+ *  ranking table (Zone 4) shows. Computed server-side from full on-disk history; unknown ids skipped. */
+export async function fetchSummary(runIds: string[]): Promise<RunSummary[]> {
+  const q = new URLSearchParams()
+  for (const id of runIds) q.append('run_ids', id)
+  const res = await fetch(`${API_BASE}/api/analysis/summary?${q.toString()}`)
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  return res.json() as Promise<RunSummary[]>
+}
+
+/** The rliable analysis (Agarwal et al.) over a run selection (X4): per-algorithm IQM / mean / median /
+ *  optimality-gap with stratified-bootstrap 95 % CIs, a performance profile, and — for ≥2 algorithms
+ *  sharing tasks — probability of improvement. The DataLab aggregate panel (Zone 3) renders this. */
+export async function fetchRliable(runIds: string[]): Promise<RliableResult> {
+  const q = new URLSearchParams()
+  for (const id of runIds) q.append('run_ids', id)
+  const res = await fetch(`${API_BASE}/api/analysis/rliable?${q.toString()}`)
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  return res.json() as Promise<RliableResult>
+}
+
+/** A browser-navigable download URL for one of the X5 export formats over the current run selection.
+ *  `pivot` (game = raw reward / algo = normalized skill-%) applies to the CSV + XLSX formats; the
+ *  repro-card and LaTeX table ignore it. Used by the export zone's download links (Zone 5). */
+export function analysisExportUrl(
+  fmt: 'csv' | 'xlsx' | 'repro' | 'tex',
+  runIds: string[],
+  pivot: 'game' | 'algo' = 'game',
+): string {
+  const q = new URLSearchParams()
+  for (const id of runIds) q.append('run_ids', id)
+  if (fmt === 'csv' || fmt === 'xlsx') q.set('pivot', pivot)
+  return `${API_BASE}/api/analysis/export.${fmt}?${q.toString()}`
 }
 
 // ── Preview control (B4) ──────────────────────────────────────────────────────

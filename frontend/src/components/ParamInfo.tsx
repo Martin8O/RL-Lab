@@ -151,7 +151,7 @@ function InfoModal({ paramId, label, onClose }: { paramId: string; label: string
   )
 }
 
-const bodyText: CSSProperties = { margin: 0, fontSize: 13, lineHeight: 1.5, color: 'var(--text)' }
+const bodyText: CSSProperties = { margin: 0, fontSize: 13, lineHeight: 1.5, color: 'var(--text)', textAlign: 'justify' }
 
 // Lightweight renderer for the info content: each line (split on "\n") becomes its own block, and
 // **term** spans render bold — so a multi-concept popup reads as a scannable bolded list instead of

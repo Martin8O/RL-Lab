@@ -157,6 +157,91 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
         + 'a jsou aspoň dva; přepínače seedů umožní vyřadit odlehlý běh.',
     },
   },
+  analysis_table: {
+    general: {
+      en: 'The **numbers a paper reports**, one row per selected run — a learning curve shows *how*, this '
+        + 'table gives the single scalars you rank on. Click any column header to sort by it.\n'
+        + '**Final %:** skill at the end of the run (0% = idle floor, 100% = solved).\n'
+        + '**AUC:** area under the normalized-skill curve — the *mean* skill across the whole run, so it '
+        + 'rewards learning both **fast and high** in one number. The natural overall ranking key.\n'
+        + '**Solved @:** how many environment steps it took to first reach the solved score ("—" = never).\n'
+        + '**Peak %:** the best skill the run ever reached.\n'
+        + '**Collapse %:** how many skill points it gave back from that peak (0 = it never regressed — a '
+        + 'high value flags an unstable run that peaked then fell).\n'
+        + '**Steps/s:** training throughput on this machine.\n'
+        + 'When seeds are collapsed into a band, the top row shows the mean ± standard deviation across '
+        + 'them — the honest summary of a multi-seed experiment.',
+      cz: '**Čísla, která uvádí odborný článek**, jeden řádek na vybraný běh — křivka ukazuje *jak*, tato '
+        + 'tabulka dává jednotlivá čísla, podle kterých řadíš. Klikni na záhlaví sloupce a seřaď podle něj.\n'
+        + '**Konečné %:** dovednost na konci běhu (0 % = nečinné dno, 100 % = vyřešeno).\n'
+        + '**AUC:** plocha pod normalizovanou křivkou dovednosti — *průměrná* dovednost za celý běh, takže '
+        + 'odměňuje učení **rychlé i vysoké** jedním číslem. Přirozený hlavní klíč pro řazení.\n'
+        + '**Vyřešeno @:** kolik kroků prostředí trvalo poprvé dosáhnout skóre „vyřešeno“ („—“ = nikdy).\n'
+        + '**Vrchol %:** nejlepší dovednost, jaké běh kdy dosáhl.\n'
+        + '**Propad %:** kolik bodů dovednosti od toho vrcholu ztratil (0 = neregresoval — vysoká hodnota '
+        + 'značí nestabilní běh, který vyvrcholil a pak spadl).\n'
+        + '**Kroky/s:** propustnost tréninku na tomto stroji.\n'
+        + 'Když jsou seedy sloučené do pásu, horní řádek ukazuje průměr ± směrodatnou odchylku přes ně — '
+        + 'poctivý souhrn experimentu s více seedy.',
+    },
+  },
+  analysis_rliable: {
+    general: {
+      en: 'A **statistically honest summary** of how the selected algorithms compare, following the *rliable* '
+        + 'method (Agarwal et al., 2021). With only a handful of seeds, a plain average is easy to mislead '
+        + 'with — these estimators are the robust, publishable alternative. Every run is first rescaled to a '
+        + '0–1 score (its final skill % ÷ 100).\n'
+        + '**IQM (interquartile mean):** the average of the middle 50% of scores — it ignores one lucky or '
+        + 'disastrous seed, so it is the recommended headline metric. **Mean / Median** are shown alongside '
+        + 'for context. **Opt. gap (optimality gap):** how far short of a perfect 1.0 the method falls '
+        + '(*lower is better*).\n'
+        + 'Each estimate carries a **95% confidence interval** (the bar) from a *stratified bootstrap* — '
+        + 'the range the true value plausibly lies in. Few seeds → a wide bar, and that width is the point: '
+        + 'it tells you not to over-read a small difference.\n'
+        + '**Performance profile:** the fraction of runs (y) scoring above each threshold τ (x). A curve '
+        + 'entirely above another means that method is better *at every bar* — a much stronger claim than a '
+        + 'single average. **Probability of improvement:** P(A > B) across shared games — 0.5 is a coin '
+        + 'flip, above 0.5 favours A.',
+      cz: '**Statisticky poctivý souhrn** toho, jak si vybrané algoritmy stojí, podle metody *rliable* '
+        + '(Agarwal a kol., 2021). S pár seedy se prostým průměrem snadno splete — tyto odhady jsou robustní, '
+        + 'publikovatelná alternativa. Každý běh se nejdřív přeškáluje na skóre 0–1 (jeho konečná dovednost % '
+        + '÷ 100).\n'
+        + '**IQM (mezikvartilový průměr):** průměr prostředních 50 % skóre — ignoruje jeden šťastný či '
+        + 'katastrofální seed, takže je to doporučená hlavní metrika. **Průměr / Medián** jsou vedle pro '
+        + 'kontext. **Opt. mezera (optimality gap):** o kolik metoda zaostává za dokonalou 1,0 (*méně je '
+        + 'lépe*).\n'
+        + 'Každý odhad nese **95% interval spolehlivosti** (pruh) ze *stratifikovaného bootstrapu* — rozsah, '
+        + 'v němž skutečná hodnota věrohodně leží. Málo seedů → široký pruh, a ta šířka je smyslem: říká ti, '
+        + 'ať nepřeceňuješ malý rozdíl.\n'
+        + '**Výkonnostní profil:** podíl běhů (y) se skóre nad každým prahem τ (x). Křivka celá nad druhou '
+        + 'znamená, že ta metoda je lepší *na každé úrovni* — mnohem silnější tvrzení než jeden průměr. '
+        + '**Pravděpodobnost zlepšení:** P(A > B) přes sdílené hry — 0,5 je náhoda, nad 0,5 svědčí pro A.',
+    },
+  },
+  analysis_export: {
+    general: {
+      en: 'Download the current run selection as a **citable dataset** — computed server-side from the full '
+        + 'on-disk history, so exports are full-resolution, not the trimmed live view.\n'
+        + '**CSV (tidy):** one row per (run, point, metric) — the universal format for pandas / R / Excel.\n'
+        + '**Excel (.xlsx):** a publication workbook — a summary-stats sheet, a per-game/algorithm sheet '
+        + 'with a native chart, plus config + methods.\n'
+        + '**Repro card:** a Markdown card with a config hash, a BibTeX entry and the exact command to '
+        + 'reproduce the run.\n'
+        + '**LaTeX table:** a paste-ready booktabs results table.\n'
+        + 'CSV and Excel follow the **compare mode** — per-game gives raw reward, per-algorithm gives the '
+        + 'normalized skill-%. (TensorBoard event files and a vector figure arrive in a later step.)',
+      cz: 'Stáhni aktuální výběr běhů jako **citovatelný dataset** — počítá se na serveru z celé historie na '
+        + 'disku, takže exporty jsou v plném rozlišení, ne oříznutý živý pohled.\n'
+        + '**CSV (tidy):** řádek na (běh, bod, metrika) — univerzální formát pro pandas / R / Excel.\n'
+        + '**Excel (.xlsx):** publikační sešit — list souhrnných statistik, list na hru/algoritmus s '
+        + 'nativním grafem, plus konfigurace + metody.\n'
+        + '**Repro karta:** Markdown karta s hashem konfigurace, záznamem BibTeX a přesným příkazem k '
+        + 'reprodukci běhu.\n'
+        + '**LaTeX tabulka:** hotová booktabs tabulka výsledků.\n'
+        + 'CSV a Excel se řídí **režimem porovnání** — podle hry dá surovou odměnu, podle algoritmu '
+        + 'normalizované skill-%. (Soubory událostí TensorBoard a vektorový obrázek přijdou později.)',
+    },
+  },
   // CPU/GPU training badge (parked C2 diagnostic, 2026-06-18): explains the gate-vs-device nuance the
   // GPU-utilization probe surfaced — a "GPU game" with an idle GPU panel is not a bug.
   training_device: {

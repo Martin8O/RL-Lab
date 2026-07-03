@@ -9,12 +9,15 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import { useAppStore } from '../../store/useAppStore'
-import { fetchRuns, fetchRun, fetchAggregate } from '../../api/client'
-import type { AggregateResponse, RunDetail, RunMeta } from '../../api/types'
+import { fetchRuns, fetchRun, fetchAggregate, fetchSummary, fetchRliable } from '../../api/client'
+import type { Algo, AggregateResponse, RliableResult, RunDetail, RunMeta, RunSummary } from '../../api/types'
 import { formatCount } from '../../format'
 import { algoLabel, fmtTick } from './chartMath'
 import { runToPoints, type Axis, type Metric } from './runProjection'
 import AnalysisChart, { type ChartBand, type ChartSeries } from './AnalysisChart'
+import AnalysisTable from './AnalysisTable'
+import RliablePanel from './RliablePanel'
+import ExportZone from './ExportZone'
 import SourcePicker from './SourcePicker'
 import ModeSwitch from '../ModeSwitch'
 import LangThemeToggle from '../LangThemeToggle'
@@ -86,6 +89,11 @@ export default function AnalysisSurface() {
   const [band, setBand] = useState<AggregateResponse | null>(null)
   const [bandKey, setBandKey] = useState('') // the signature `band` was fetched for (staleness guard)
 
+  // Zone 3/4 data (X6b): the X2 summary rows (ranking table) + the rliable aggregate for the selection.
+  const [summaries, setSummaries] = useState<RunSummary[]>([])
+  const [rliable, setRliable] = useState<RliableResult | null>(null)
+  const [statsKey, setStatsKey] = useState('') // the activeIds signature the two above were fetched for
+
   const metric: Metric = mode === 'game' ? 'reward' : 'skill_pct'
   const colorOf = useCallback((id: string) => {
     const i = selected.indexOf(id)
@@ -133,7 +141,25 @@ export default function AnalysisSurface() {
     )
   }, [])
 
+  // Clear the whole selection + its view state (legend toggles, excluded seeds) in one click.
+  const clearAll = useCallback(() => {
+    setSelected([])
+    setHidden(new Set())
+    setExcludedSeeds(new Set())
+  }, [])
+
   const envById = useCallback((id: string) => envs.find((e) => e.id === id), [envs])
+
+  // One run's display label, shared by the chart series, legend, hover readout and summary table so they
+  // read identically. Per-algorithm mode always names the game (the pivot spans games); per-game mode
+  // shows just "algo · seed" — UNLESS the selection mixes games (`withGame`), where the game name is
+  // added so the hover/legend stays unambiguous. `withGame` is passed in (not closed over) so this
+  // callback can be defined before `mixedGames` without a temporal-dead-zone reference.
+  const runLabel = useCallback((envId: string, algo: Algo, seed: number, withGame: boolean): string => {
+    const gname = envById(envId)?.display_name[locale] ?? envId
+    if (mode === 'algo') return `${gname} · ${algoLabel(t, algo)}`
+    return withGame ? `${gname} · ${algoLabel(t, algo)} · s${seed}` : `${algoLabel(t, algo)} · s${seed}`
+  }, [envById, locale, mode, t])
 
   // The selected runs that have loaded their detail, in selection order.
   const loaded = useMemo(
@@ -144,6 +170,13 @@ export default function AnalysisSurface() {
     () => [...new Set(loaded.map((d) => d.config.env_id))],
     [loaded],
   )
+  // The selection spans more than one game (only meaningful in per-game mode, where reward scales differ).
+  const mixedGames = mode === 'game' && selectedEnvIds.length > 1
+  // Row label for the summary table, from the summary's own env/algo/seed (needs no loaded RunDetail).
+  const labelOfRun = useCallback((rid: string): string => {
+    const s = summaries.find((x) => x.run_id === rid)
+    return s ? runLabel(s.env_id, s.algo, s.seed, mixedGames) : rid
+  }, [summaries, runLabel, mixedGames])
   // A collapsible seed set = all selected runs share one (env, algo) and there are ≥2 of them.
   const sameGroup = useMemo(() => {
     const keys = new Set(loaded.map((d) => `${d.config.env_id}·${d.config.algo}`))
@@ -165,6 +198,10 @@ export default function AnalysisSurface() {
     }),
     [selected, details, excludedSeeds],
   )
+  // The runs the analysis zones (table / rliable / export) reflect: when a seed set is collapsed into a
+  // band, a dropped seed leaves the whole analysis (chart, stats, export) — otherwise every selected run
+  // counts. Keeps the three zones coherent with what the chart shows.
+  const activeIds = useMemo(() => (bandActive ? includedIds : selected), [bandActive, includedIds, selected])
   // Signature of the band the current controls WANT ('' when none applies — not collapsed, or fewer
   // than two seeds left). The chart only shows a fetched band whose signature still matches this, so a
   // stale band never lingers after a param change — no synchronous state-clear in the effect needed.
@@ -181,6 +218,25 @@ export default function AnalysisSurface() {
       .catch(() => {})
     return () => { cancelled = true }
   }, [bandKeyWanted, includedIds, axis, metric])
+
+  // Fetch the summary rows + rliable aggregate for the active selection (X6b). Both are cheap server-side
+  // reductions over on-disk history; the cancelled guard keeps a slow response for a stale selection from
+  // clobbering the current one (axis/mode don't affect these — they read the run's own recorded curve).
+  const activeKey = useMemo(() => activeIds.join(','), [activeIds])
+  useEffect(() => {
+    if (activeIds.length === 0) return // empty selection → the zones derive their empty state from activeKey
+    let cancelled = false
+    void Promise.all([fetchSummary(activeIds), fetchRliable(activeIds)])
+      .then(([s, r]) => { if (!cancelled) { setSummaries(s); setRliable(r); setStatsKey(activeKey) } })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [activeIds, activeKey])
+  // Derive the display state (no setState in the effect): the fetched data is "ready" only while its key
+  // still matches the live selection — so a just-changed selection shows a loading state, not stale rows.
+  const statsReady = activeIds.length > 0 && statsKey === activeKey
+  const statsLoading = activeIds.length > 0 && !statsReady
+  const shownSummaries = statsReady ? summaries : []
+  const shownRliable = statsReady ? rliable : null
 
   // ── build chart inputs ───────────────────────────────────────────────────────
   const chartBand: ChartBand | null = useMemo(() => {
@@ -201,20 +257,16 @@ export default function AnalysisSurface() {
       const env = envById(d.config.env_id)
       const points = runToPoints(d, axis, metric, env)
       if (points.length === 0) continue
-      const gname = env?.display_name[locale] ?? d.config.env_id
-      const label = mode === 'game'
-        ? `${algoLabel(t, d.config.algo)} · s${d.config.seed}`
-        : `${gname} · ${algoLabel(t, d.config.algo)}`
+      const label = runLabel(d.config.env_id, d.config.algo, d.config.seed, mixedGames)
       out.push({ id, label, color: colorOf(id) ?? 'var(--accent)', points })
     }
     return out
-  }, [showingBand, selected, hidden, details, envById, axis, metric, mode, locale, t, colorOf])
+  }, [showingBand, selected, hidden, details, envById, axis, metric, runLabel, mixedGames, colorOf])
 
   const singleEnv = selectedEnvIds.length === 1 ? envById(selectedEnvIds[0]) : undefined
   const goal = mode === 'algo'
     ? { value: 100, label: t('chart.goal') }
     : singleEnv ? { value: singleEnv.solved_score, label: t('chart.goal') } : null
-  const mixedGames = mode === 'game' && selectedEnvIds.length > 1
   // Log-Y only makes sense for strictly-positive data.
   const allPositive = useMemo(() => {
     if (showingBand) return (chartBand?.lo ?? []).every((v) => v > 0)
@@ -234,11 +286,7 @@ export default function AnalysisSurface() {
     ? [{ id: '_band', label: t('analysis.mean_band'), color: 'var(--viz-1)', hideable: false }]
     : selected.map((id) => {
         const d = details[id]
-        const env = d ? envById(d.config.env_id) : undefined
-        const gname = env?.display_name[locale] ?? d?.config.env_id ?? id
-        const label = d
-          ? (mode === 'game' ? `${algoLabel(t, d.config.algo)} · s${d.config.seed}` : `${gname} · ${algoLabel(t, d.config.algo)}`)
-          : id
+        const label = d ? runLabel(d.config.env_id, d.config.algo, d.config.seed, mixedGames) : id
         return { id, label, color: colorOf(id) ?? 'var(--accent)', hideable: true }
       })
 
@@ -305,7 +353,7 @@ export default function AnalysisSurface() {
             <span style={{ fontSize: 'var(--fs-meta)', color: 'var(--text-muted)' }}>
               {t('analysis.selected_count', { n: selected.length, max: MAX_SELECT })}
               {selected.length > 0 && (
-                <button onClick={() => { setSelected([]); setHidden(new Set()); setExcludedSeeds(new Set()) }}
+                <button onClick={clearAll}
                   style={{ marginLeft: 8, background: 'none', border: 'none', color: 'var(--accent)', cursor: 'pointer', fontSize: 'var(--fs-meta)' }}>
                   {t('runs.clear')}
                 </button>
@@ -420,14 +468,71 @@ export default function AnalysisSurface() {
                   </button>
                 )
               })}
+              {/* clear the whole selection without un-clicking each run in the picker */}
+              {selected.length > 0 && (
+                <button onClick={clearAll} aria-label={t('analysis.clear_all')} title={t('analysis.clear_all')}
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 10px',
+                    background: 'transparent', border: '1px solid var(--border-default)',
+                    borderRadius: 'var(--radius-pill)', cursor: 'pointer', color: 'var(--text-muted)',
+                    fontSize: 'var(--fs-label)', transition: 'var(--t-colors)',
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--danger)'; e.currentTarget.style.borderColor = 'var(--danger)' }}
+                  onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text-muted)'; e.currentTarget.style.borderColor = 'var(--border-default)' }}>
+                  ✕ {t('analysis.clear_all')}
+                </button>
+              )}
             </div>
           )}
 
-          {/* X6b marker — the surface is intentionally partial for now */}
-          <div style={{ marginTop: 10, fontSize: 'var(--fs-meta)', color: 'var(--text-faint)' }}>
-            {t('analysis.wave3_note')}
-          </div>
+          {/* Zone 4 — sortable summary table (X2 stats per selected run) */}
+          {selected.length > 0 && (
+            <div style={{ marginTop: 12, flexShrink: 0, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 5 }}>
+                <span style={{ fontSize: 'var(--fs-heading)', fontWeight: 'var(--fw-semibold)', color: 'var(--text-strong)' }}>
+                  {t('analysis.table_title')}
+                </span>
+                <ParamInfo paramId="analysis_table" label={t('analysis.table_title')} />
+              </div>
+              <div style={{ maxHeight: 232, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+                <AnalysisTable
+                  summaries={shownSummaries}
+                  labelOf={labelOfRun}
+                  colorOf={colorOf}
+                  aggregate={showingBand ? band?.summary ?? null : null}
+                  seedCount={includedIds.length}
+                />
+              </div>
+            </div>
+          )}
         </main>
+
+        {/* right: aggregate (rliable) + export */}
+        <aside style={{
+          width: 344, flexShrink: 0, display: 'flex', flexDirection: 'column', minHeight: 0,
+          borderLeft: '2px solid var(--border-default)', background: 'var(--surface-1)',
+        }}>
+          {/* Zone 3 — rliable aggregate panel */}
+          <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '12px 12px 10px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ fontSize: 'var(--fs-heading)', fontWeight: 'var(--fw-semibold)', color: 'var(--text-strong)' }}>
+                {t('analysis.rliable_title')}
+              </span>
+              <ParamInfo paramId="analysis_rliable" label={t('analysis.rliable_title')} />
+            </div>
+            <RliablePanel result={shownRliable} loading={statsLoading} />
+          </div>
+          {/* Zone 5 — export */}
+          <div style={{ flexShrink: 0, borderTop: '2px solid var(--border-default)', padding: '10px 12px 12px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+              <span style={{ fontSize: 'var(--fs-heading)', fontWeight: 'var(--fw-semibold)', color: 'var(--text-strong)' }}>
+                {t('analysis.export_title')}
+              </span>
+              <ParamInfo paramId="analysis_export" label={t('analysis.export_title')} />
+            </div>
+            <ExportZone runIds={activeIds} pivot={mode} />
+          </div>
+        </aside>
       </div>
     </div>,
     document.body,
