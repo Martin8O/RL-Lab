@@ -8,11 +8,13 @@ can broadcast them. No ML imports here — the trainer (and torch) is imported l
 
 import asyncio
 import threading
+import uuid
 from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import UTC, datetime
 
 from app.core.logging import get_logger
-from app.envs.registry import get_env
+from app.envs.registry import EnvSpec, get_env
 from app.schemas.checkpoints import CheckpointMeta
 from app.schemas.training import (
     EvolutionMetrics,
@@ -20,6 +22,8 @@ from app.schemas.training import (
     MultiAgentMetrics,
     QLearningMetrics,
     QTableFrame,
+    SweepRequest,
+    SweepStatus,
     TrainConfig,
     TrainingMetrics,
     TrainingProgress,
@@ -43,6 +47,34 @@ logger = get_logger(__name__)
 _METRICS_LOG_CAP = 10_000
 # Cadence of the algorithm-independent hardware-telemetry frame (the HW panel), in seconds.
 _HW_STATS_INTERVAL = 1.0
+# Upper bound on the seeds one sweep may queue (X3) — a guard against a runaway request; a thesis
+# sweep is 3–10 seeds, publication 5–10, so 50 is comfortably above any real use.
+_MAX_SWEEP_SEEDS = 50
+
+
+def _new_experiment_id() -> str:
+    """Mint a unique, sortable experiment id shared by every run of one seed-sweep (X3)."""
+    return datetime.now(UTC).strftime("exp-%Y%m%d-%H%M%S-") + uuid.uuid4().hex[:6]
+
+
+@dataclass
+class _Sweep:
+    """In-flight seed-sweep bookkeeping (X3), owned by the manager under its lock.
+
+    ``remaining_seeds`` is the queue *after* the running seed; ``index`` is the 1-based position of the
+    running seed within ``seeds`` (the full immutable plan). ``cancelled`` is set by a Stop during the
+    sweep so the worker thread drops the queue instead of advancing to the next seed.
+    """
+
+    experiment_id: str
+    experiment_label: str | None
+    base_config: TrainConfig
+    gym_id: str
+    seeds: list[int]
+    remaining_seeds: list[int]
+    index: int
+    running_seed: int
+    cancelled: bool = False
 
 
 class AlreadyRunningError(RuntimeError):
@@ -103,6 +135,9 @@ class TrainingManager:
         # When the active run started (ISO-8601 UTC) — stamped onto its run-history record
         # when it reaches a terminal state.
         self._run_started_at: str | None = None
+        # Active seed-sweep (X3), or None for a single run. Installed atomically by _launch and drained
+        # one seed at a time by the worker thread's _advance_sweep on each natural finish.
+        self._sweep: _Sweep | None = None
 
     # -- wiring -----------------------------------------------------------------
 
@@ -112,7 +147,9 @@ class TrainingManager:
 
     # -- lifecycle --------------------------------------------------------------
 
-    def start(self, config: TrainConfig) -> TrainStatus:
+    def _validate_start(self, config: TrainConfig) -> tuple[EnvSpec, str]:
+        """Reject an unknown/unsupported/ungated config before a run (or sweep) launches; return the
+        env spec + its gym id. Shared by :meth:`start` and :meth:`start_sweep`."""
         spec = get_env(config.env_id)
         if spec is None:
             raise InvalidConfigError(f"Unknown environment '{config.env_id}'")
@@ -140,10 +177,91 @@ class TrainingManager:
                 f"Training '{config.env_id}' needs a CUDA GPU, which isn't available on this "
                 f"machine. You can still play it by hand now; GPU training runs on a CUDA desktop."
             )
-        return self._launch(config, spec.gym_id, resume=None)
+        return spec, spec.gym_id
+
+    def start(self, config: TrainConfig) -> TrainStatus:
+        _, gym_id = self._validate_start(config)
+        return self._launch(config, gym_id, resume=None)
+
+    # -- seed sweep (X3) --------------------------------------------------------
+
+    def start_sweep(self, request: SweepRequest) -> TrainStatus:
+        """Queue one config across N seeds (X3), then launch the first. The remaining seeds drain
+        sequentially (one run at a time — no parallel training) as each finishes, all sharing one
+        ``experiment_id``. Rejects the same bad configs as :meth:`start`, plus an empty/oversized sweep."""
+        _, gym_id = self._validate_start(request.config)
+        seeds = self._resolve_seeds(request)
+        experiment_id = _new_experiment_id()
+        label = request.config.experiment_label
+        first, rest = seeds[0], seeds[1:]
+        sweep = _Sweep(
+            experiment_id=experiment_id,
+            experiment_label=label,
+            base_config=request.config,
+            gym_id=gym_id,
+            seeds=seeds,
+            remaining_seeds=rest,
+            index=1,
+            running_seed=first,
+        )
+        first_config = request.config.model_copy(
+            update={"seed": first, "experiment_id": experiment_id, "experiment_label": label}
+        )
+        return self._launch(first_config, gym_id, resume=None, sweep=sweep)
+
+    def _resolve_seeds(self, request: SweepRequest) -> list[int]:
+        """Turn a sweep request into a concrete, deduped, capped seed list. An explicit ``seeds`` list
+        wins; otherwise ``seed_count`` consecutive seeds from ``config.seed`` (s, s+1, … s+N−1)."""
+        if request.seeds:
+            seeds = list(dict.fromkeys(int(s) for s in request.seeds))  # dedupe, preserve order
+        elif request.seed_count and request.seed_count > 0:
+            base = request.config.seed
+            seeds = [base + i for i in range(request.seed_count)]
+        else:
+            raise InvalidConfigError(
+                "A seed sweep needs an explicit seed list or a positive seed_count"
+            )
+        if not seeds:
+            raise InvalidConfigError("A seed sweep needs at least one seed")
+        if len(seeds) > _MAX_SWEEP_SEEDS:
+            raise InvalidConfigError(f"A seed sweep is capped at {_MAX_SWEEP_SEEDS} seeds")
+        return seeds
+
+    def _advance_sweep(self) -> None:
+        """After a run reaches a terminal state, launch the next queued seed (X3) — or drop the sweep.
+
+        Runs on the finishing worker thread (after archive + status broadcast). Advances **only** on a
+        natural ``finished``; a Stop (which marks the sweep ``cancelled``), an error, or an empty queue
+        ends the sweep. Starting the next seed spins a fresh worker thread and returns; this thread exits."""
+        with self._lock:
+            sweep = self._sweep
+            if sweep is None:
+                return
+            if self._state != "finished" or sweep.cancelled or not sweep.remaining_seeds:
+                self._sweep = None
+                sweep = None
+            else:
+                next_seed = sweep.remaining_seeds.pop(0)
+                sweep.index += 1
+                sweep.running_seed = next_seed
+        if sweep is None:
+            self._broadcast_status()  # a completed / cancelled sweep clears from the UI
+            return
+        config = sweep.base_config.model_copy(
+            update={
+                "seed": sweep.running_seed,
+                "experiment_id": sweep.experiment_id,
+                "experiment_label": sweep.experiment_label,
+            }
+        )
+        self._launch(config, sweep.gym_id, resume=None, sweep=sweep)
 
     def _launch(
-        self, config: TrainConfig, gym_id: str, resume: bytes | None
+        self,
+        config: TrainConfig,
+        gym_id: str,
+        resume: bytes | None,
+        sweep: "_Sweep | None" = None,
     ) -> TrainStatus:
         """Spin up a worker thread for a fresh or resumed run (shared by start + load)."""
         with self._lock:
@@ -161,6 +279,10 @@ class TrainingManager:
             self._snapshot = None  # don't let a previous run's model be saved as this one's
             self._metrics_log = []
             self._run_started_at = datetime.now(UTC).isoformat()
+            # Install/clear the sweep atomically with the launch: a sweep launch (start_sweep / advance)
+            # passes the sweep object; a plain start / load passes None, ending any prior sweep. A launch
+            # rejected below (AlreadyRunning) never reaches here, so a running sweep is left untouched.
+            self._sweep = sweep
             self._state = "running"
             # Snapshot the freshly-launched state *under the lock*, before the worker thread can
             # emit its first frame. Reading status() after thread.start() would race a fast run
@@ -298,6 +420,11 @@ class TrainingManager:
 
     def stop(self) -> TrainStatus:
         with self._lock:
+            # Stop during a sweep cancels the whole sweep (X3): mark it so the finishing worker thread
+            # drops the queued seeds instead of advancing. Set even on the terminal-state early-return
+            # below, to catch a Stop clicked in the brief window a run reads "finished" mid-sweep.
+            if self._sweep is not None:
+                self._sweep.cancelled = True
             if self._state not in ("running", "paused") or self._control is None:
                 return self._status_locked()
             self._control.request_stop()
@@ -499,6 +626,7 @@ class TrainingManager:
                 hw_stop.set()  # retire *this run's* HW-telemetry ticker promptly (own event, no race)
         self._persist_run()  # archive the finished run for history / comparison (D2)
         self._broadcast_status()
+        self._advance_sweep()  # X3: launch the next queued seed, or clear a finished/cancelled sweep
 
     def _persist_run(self) -> None:
         """Record a completed run (config + metric frames) for later comparison.
@@ -640,6 +768,18 @@ class TrainingManager:
             last_q_learning=self._last_q_learning,
             last_qtable=self._last_qtable,
             last_ma_metrics=self._last_ma_metrics,
+            sweep=(
+                SweepStatus(
+                    experiment_id=self._sweep.experiment_id,
+                    experiment_label=self._sweep.experiment_label,
+                    total=len(self._sweep.seeds),
+                    index=self._sweep.index,
+                    running_seed=self._sweep.running_seed,
+                    seeds=self._sweep.seeds,
+                )
+                if self._sweep is not None
+                else None
+            ),
             error=self._error,
         )
 

@@ -6,7 +6,7 @@ import asyncio
 
 from fastapi import APIRouter, HTTPException
 
-from app.schemas.training import TrainConfig, TrainStatus
+from app.schemas.training import SweepRequest, TrainConfig, TrainStatus
 from app.services.training_manager import (
     AlreadyRunningError,
     InvalidConfigError,
@@ -22,6 +22,19 @@ async def start_training(config: TrainConfig | None = None) -> TrainStatus:
     training_manager.bind_loop(asyncio.get_running_loop())
     try:
         return training_manager.start(config or TrainConfig())
+    except AlreadyRunningError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except InvalidConfigError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/sweep", response_model=TrainStatus)
+async def start_sweep(request: SweepRequest) -> TrainStatus:
+    """Launch a seed-sweep (X3): one config queued across N seeds, run back-to-back, each archived with
+    a shared experiment_id + its own seed. Returns the status of the first (now running) seed."""
+    training_manager.bind_loop(asyncio.get_running_loop())
+    try:
+        return training_manager.start_sweep(request)
     except AlreadyRunningError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     except InvalidConfigError as exc:

@@ -204,6 +204,8 @@ class RunStore:
             generation=summary["generation"],
             total_generations=summary["total_generations"],
             frames=len(metrics),
+            experiment_id=config.experiment_id,
+            experiment_label=config.experiment_label,
         )
         with self._lock:
             run = self._run_dir(rid)

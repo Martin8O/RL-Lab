@@ -3,7 +3,7 @@
 // from the store and sends PPO hyperparams or the evolution block accordingly.
 
 import { useAppStore } from '../store/useAppStore'
-import { pauseTraining, resumeTraining, startTraining, stopTraining } from './client'
+import { pauseTraining, resumeTraining, startSweep, startTraining, stopTraining } from './client'
 import type { TrainConfig } from './types'
 
 /** Build the TrainConfig from the store's current settings (the sidebar). Shared by Start and by
@@ -35,6 +35,8 @@ export function buildTrainConfig(): TrainConfig | null {
 
 export interface RunControls {
   handleRun: () => Promise<void>
+  /** X3: launch a seed-sweep — the current config across `sweepCount` seeds, queued back-to-back. */
+  handleRunSweep: () => Promise<void>
   handlePause: () => Promise<void>
   handleResume: () => Promise<void>
   handleStop: () => Promise<void>
@@ -111,9 +113,26 @@ export function useRunControls(): RunControls {
     }
   }
 
+  // Seed sweep (X3): same config as handleRun, but POST /sweep with the store's seed count. The backend
+  // queues N runs (seeds config.seed … +N−1) and runs them back-to-back; the WS status carries which
+  // seed of N is live. Reuses handleRun's clear + config build so a sweep starts from a clean chart.
+  async function handleRunSweep() {
+    if (!canRun) return
+    clearMetrics()
+    try {
+      const config = buildTrainConfig()
+      if (!config) return
+      const count = Math.max(1, Math.round(useAppStore.getState().sweepCount))
+      const status = await startSweep(config, count)
+      setTrainState(status.state)
+    } catch (err) {
+      console.error('Failed to start seed sweep:', err)
+    }
+  }
+
   async function handlePause()  { try { setTrainState((await pauseTraining()).state)  } catch { /* ignore */ } }
   async function handleResume() { try { setTrainState((await resumeTraining()).state) } catch { /* ignore */ } }
   async function handleStop()   { try { setTrainState((await stopTraining()).state)   } catch { /* ignore */ } }
 
-  return { handleRun, handlePause, handleResume, handleStop, isRunning, isPaused, isStopping, isActive, canRun, trainGated, trainGatedReason }
+  return { handleRun, handleRunSweep, handlePause, handleResume, handleStop, isRunning, isPaused, isStopping, isActive, canRun, trainGated, trainGatedReason }
 }

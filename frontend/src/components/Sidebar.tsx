@@ -394,8 +394,11 @@ export default function Sidebar() {
   const setSeed         = useAppStore((s) => s.setSeed)
   const totalTimesteps  = useAppStore((s) => s.totalTimesteps)
   const setTotalTimesteps = useAppStore((s) => s.setTotalTimesteps)
+  const sweepCount      = useAppStore((s) => s.sweepCount)
+  const setSweepCount   = useAppStore((s) => s.setSweepCount)
+  const sweep           = useAppStore((s) => s.sweep)
 
-  const { handleRun, handlePause, handleResume, handleStop, isRunning, isPaused, isStopping, isActive, canRun, trainGated, trainGatedReason } =
+  const { handleRun, handleRunSweep, handlePause, handleResume, handleStop, isRunning, isPaused, isStopping, isActive, canRun, trainGated, trainGatedReason } =
     useRunControls()
 
   const selectedEnv = envs.find((e) => e.id === selectedEnvId)
@@ -1040,6 +1043,19 @@ export default function Sidebar() {
         </div>
       )}
 
+      {/* Seed-sweep progress (X3): while a sweep drains its queue, show which seed of N is live so the
+          user knows a batch is running (Stop below cancels the whole sweep). */}
+      {sweep && isActive && (
+        <div style={{
+          padding: '0 var(--space-5)', flexShrink: 0,
+          fontSize: 'var(--fs-meta)', lineHeight: 1.45, color: 'var(--text-muted)',
+          display: 'flex', alignItems: 'center', gap: 6,
+        }}>
+          <span aria-hidden style={{ color: 'var(--accent)' }}>⚂</span>
+          <span>{t('sidebar.sweep_progress', { index: sweep.index, total: sweep.total, seed: sweep.running_seed })}</span>
+        </div>
+      )}
+
       {/* Run controls — outer div is always the flex row so flex:1 works in every branch */}
       <div style={{
         padding: 'var(--space-4) var(--space-5)', borderTop: '1px solid var(--border-default)',
@@ -1050,17 +1066,55 @@ export default function Sidebar() {
         ) : isRunning ? (
           <>
             <button onClick={handlePause} style={runBtn('pause')}>{PauseGlyph} {t('sidebar.pause')}</button>
-            <button onClick={handleStop} style={runBtn('stop')}>{StopGlyph} {t('sidebar.stop')}</button>
+            <button onClick={handleStop} style={runBtn('stop')}>{StopGlyph} {t(sweep ? 'sidebar.cancel_sweep' : 'sidebar.stop')}</button>
           </>
         ) : isPaused ? (
           <>
             <button onClick={handleResume} style={runBtn('resume')}>{PlayGlyph} {t('sidebar.resume')}</button>
-            <button onClick={handleStop} style={runBtn('stop')}>{StopGlyph} {t('sidebar.stop')}</button>
+            <button onClick={handleStop} style={runBtn('stop')}>{StopGlyph} {t(sweep ? 'sidebar.cancel_sweep' : 'sidebar.stop')}</button>
           </>
         ) : (
-          <button onClick={handleRun} disabled={!canRun} style={canRun ? runBtn('primary', true) : runBtn('disabled', true)}>
-            {PlayGlyph} {t('sidebar.run')}
-          </button>
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+            <button onClick={handleRun} disabled={!canRun} style={canRun ? runBtn('primary', true) : runBtn('disabled', true)}>
+              {PlayGlyph} {t('sidebar.run')}
+            </button>
+            {/* Seed sweep (X3): run the current config across N seeds (seed … seed+N−1), queued
+                sequentially, for multi-seed analysis (X4). The seed input above is the first seed. */}
+            <div style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'center' }}>
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 6, height: 'var(--control-md)',
+                padding: '0 10px', background: 'var(--surface-inset)',
+                border: '1px solid var(--border-default)', borderRadius: 'var(--radius-md)',
+                opacity: canRun ? 1 : 0.5,
+              }}>
+                <span style={{ ...fieldLabel, gap: 4 }}>
+                  {t('sidebar.sweep_seeds')}
+                  <ParamInfo paramId="sweep_count" label={t('sidebar.sweep_seeds')} />
+                </span>
+                <input
+                  type="number"
+                  aria-label={t('sidebar.sweep_seeds')}
+                  min={1} max={20}
+                  value={sweepCount}
+                  disabled={!canRun}
+                  onChange={(e) => setSweepCount(Math.min(20, Math.max(1, parseInt(e.target.value, 10) || 1)))}
+                  style={{
+                    width: 34, textAlign: 'right', background: 'transparent', border: 'none', outline: 'none',
+                    color: 'var(--text-strong)', fontFamily: 'var(--font-mono)',
+                    fontFeatureSettings: 'var(--ff-tabular)', fontSize: 'var(--fs-label)',
+                  }}
+                />
+              </div>
+              <button
+                onClick={handleRunSweep}
+                disabled={!canRun}
+                title={t('sidebar.run_sweep_hint')}
+                style={canRun ? runBtn('primary') : runBtn('disabled')}
+              >
+                {t('sidebar.run_sweep', { count: sweepCount })}
+              </button>
+            </div>
+          </div>
         )}
       </div>
 

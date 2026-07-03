@@ -162,6 +162,9 @@ function syncStoreFromStatus(status: TrainStatus): void {
   if (status.last_q_learning) st.seedQLearning(status.last_q_learning, status.last_qtable)
   // Same reconcile for competitive self-play (simple_tag): repopulate the two-line ecosystem chart.
   if (status.last_ma_metrics) st.seedMa(status.last_ma_metrics)
+  // Seed-sweep progress (X3): reconcile the "seed 2 of 5" caption on reconnect (or clear it if the
+  // reconnect finds no active sweep).
+  st.setSweep(status.sweep ?? null)
 }
 
 /** React hook: opens the /ws connection and dispatches incoming frames. */
@@ -179,6 +182,8 @@ export function useTrainingWs(): void {
         } else if (frame.type === 'status') {
           const prev = useAppStore.getState().trainState
           useAppStore.getState().setTrainState(frame.state)
+          // Track the live seed-sweep (X3) so the sidebar caption + Stop-cancels-sweep reflect it.
+          useAppStore.getState().setSweep(frame.sweep ?? null)
           // Clear chart + stale HW telemetry when a brand-new run starts (timesteps reset to 0)
           if (
             frame.state === 'running' &&
@@ -277,6 +282,11 @@ export const startTraining  = (config: TrainConfig) => trainPost('start', config
 export const stopTraining   = ()                     => trainPost('stop')
 export const pauseTraining  = ()                     => trainPost('pause')
 export const resumeTraining = ()                     => trainPost('resume')
+
+/** Launch a seed-sweep (X3): train `config` across `seedCount` consecutive seeds (from config.seed),
+ *  queued and run back-to-back, all sharing one experiment_id. Returns the first seed's run status. */
+export const startSweep = (config: TrainConfig, seedCount: number) =>
+  trainPost('sweep', { config, seed_count: seedCount })
 
 /** Authoritative run snapshot — fetched on WS (re)connect to reconcile the controls. */
 export async function fetchTrainStatus(): Promise<TrainStatus> {

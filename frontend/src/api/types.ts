@@ -232,6 +232,21 @@ export interface TrainConfig {
   td3?: TD3Hyperparams | null
   /** Present only for Deep Q-Network runs (algo "dqn", S5c); null/omitted otherwise. */
   dqn?: DQNHyperparams | null
+  /** Seed-sweep grouping (X3): runs launched by one sweep share this experiment_id (minted server-side);
+   *  null/omitted for a plain single run. Each queued run still records its own seed + full config. */
+  experiment_id?: string | null
+  experiment_label?: string | null
+}
+
+/** Live state of an active seed-sweep (X3), carried on TrainStatus; null outside a sweep. `index` is the
+ *  1-based position of the running seed within `seeds` ("seed 2 of 5"). Mirrors schemas/training.py. */
+export interface SweepStatus {
+  experiment_id: string
+  experiment_label: string | null
+  total: number
+  index: number
+  running_seed: number
+  seeds: number[]
 }
 
 /** WS frame: {type:"metrics", ...} pushed once per PPO rollout.
@@ -448,6 +463,10 @@ export interface RunMeta {
   generation: number | null
   total_generations: number | null
   frames: number
+  /** Seed-sweep grouping (X3): runs from one sweep share this id (so X4 can aggregate the N seeds);
+   *  null for a plain single run. */
+  experiment_id?: string | null
+  experiment_label?: string | null
 }
 
 /** A run read back in full for the chart overlay: listing row + reproducible config +
@@ -513,6 +532,8 @@ export interface TrainStatus {
   /** Latest competitive self-play frame (simple_tag), retained so a late-joining client repopulates
    *  the two-line ecosystem chart on reconnect. null for every single-policy run. */
   last_ma_metrics: MultiAgentMetrics | null
+  /** Live seed-sweep state (X3): set while a sweep drains its queue, null for a single run / once done. */
+  sweep?: SweepStatus | null
   error: string | null
 }
 

@@ -851,6 +851,32 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
     },
   },
 
+  sweep_count: {
+    general: {
+      en: '**Seed sweep** — run this *same* configuration several times, changing only the random '
+        + 'seed each time (the seed above, then +1, +2, …).\n'
+        + 'A single run can get lucky or unlucky, so one curve never tells you how good a setup *really* '
+        + 'is. Training the same setup across a few seeds shows the true picture: how high it usually '
+        + 'gets, and how much run-to-run variance there is.\n'
+        + 'The runs are **queued** and trained one after another (never in parallel — that would share '
+        + 'the GPU/CPU and slow everything down), all tagged as one **experiment** so they can be '
+        + 'aggregated and compared later. Press **Cancel** to stop the current seed and drop the rest.',
+      cz: '**Série semen** — spustí *stejnou* konfiguraci několikrát a mění jen náhodné semeno (semeno '
+        + 'výše, pak +1, +2, …).\n'
+        + 'Jeden běh může mít štěstí nebo smůlu, takže jedna křivka nikdy neřekne, jak je nastavení '
+        + '*doopravdy* dobré. Trénink stejného nastavení přes několik semen ukáže skutečný obrázek: kam '
+        + 'se to obvykle dostane a jak velký je rozptyl mezi běhy.\n'
+        + 'Běhy se **zařadí do fronty** a trénují jeden po druhém (nikdy paralelně — to by sdílelo '
+        + 'GPU/CPU a vše zpomalilo), všechny označené jako jeden **experiment**, aby se daly později '
+        + 'souhrnně porovnat. Tlačítkem **Zrušit** zastavíte aktuální semeno a zbytek zahodíte.',
+    },
+    recommended: {
+      en: '3 seeds for a quick thesis-grade check; 5–10 for a publication-grade comparison.',
+      cz: '3 semena pro rychlé ověření na úrovni bakalářky; 5–10 pro porovnání na úrovni publikace.',
+    },
+    range: '1 – 20',
+  },
+
   total_steps: {
     general: {
       en: '**Training budget** — how many environment steps the agent gets to learn from before stopping.\nMore steps mean more practice and usually a better policy, up to the point where it has mastered the task.\n**SAC** and **TD3** are off-policy and far more sample-efficient than PPO, so their recommended budget is much smaller (they reuse past experience from a replay buffer) — the ★ here already reflects that when either is selected.',

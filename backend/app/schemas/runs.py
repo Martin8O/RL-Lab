@@ -41,6 +41,11 @@ class RunMeta(BaseModel):
     generation: int | None = None
     total_generations: int | None = None
     frames: int = 0  # number of recorded metric frames (overlay resolution)
+    # Seed-sweep grouping (X3): runs from one sweep share this id, so the analysis suite (X4) can
+    # aggregate the N seeds of an experiment. None for a plain single run. ``experiment_label`` is an
+    # optional human name for the sweep.
+    experiment_id: str | None = None
+    experiment_label: str | None = None
 
 
 class RunDetail(BaseModel):

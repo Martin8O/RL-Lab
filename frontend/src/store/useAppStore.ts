@@ -20,6 +20,7 @@ import type {
   QLearningMetrics,
   QTableFrame,
   HwStats,
+  SweepStatus,
   SACHyperparams,
   TD3Hyperparams,
   DQNHyperparams,
@@ -296,6 +297,7 @@ interface AppState {
   dqnParams:       DQNHyperparams        // S5c: Deep Q-Network (off-policy value-based, discrete actions)
   seed:            number
   totalTimesteps:  number
+  sweepCount:      number     // X3: how many seeds a "Run N seeds" sweep launches (★ 3)
   emaAlpha:        number     // 1 = raw; 0.05 = heavy smoothing
   chartWindow:     number     // 0 = all; N = last N rollouts
   activeTab:       ChartTab
@@ -324,6 +326,7 @@ interface AppState {
   lastQTable:      QTableFrame | null    // latest Q-table snapshot — feeds the heatmap panel
   maHistory:       MultiAgentMetrics[]   // G7b-2: per-round ecosystem frames — the two-line chart
   lastMa:          MultiAgentMetrics | null
+  sweep:           SweepStatus | null    // X3: live seed-sweep progress (null outside a sweep)
   highScores:      Record<string, HighScore>  // all-time best per env id
   checkpointsNonce: number                     // bumped on save/delete so other pickers (AI-play) re-fetch
 
@@ -358,6 +361,8 @@ interface AppState {
   setDqnParams:       (s: Partial<DQNHyperparams>)      => void
   setSeed:            (s: number)                       => void
   setTotalTimesteps:  (n: number)                       => void
+  setSweepCount:      (n: number)                       => void
+  setSweep:           (s: SweepStatus | null)           => void
   setEmaAlpha:        (a: number)                       => void
   setChartWindow:     (w: number)                       => void
   setActiveTab:       (t: ChartTab)                     => void
@@ -411,6 +416,7 @@ export const useAppStore = create<AppState>()(
       dqnParams:       DEFAULT_DQN_PARAMS,
       seed:            42,
       totalTimesteps:  50_000,
+      sweepCount:      3,
       emaAlpha:        0.3,
       chartWindow:     0,
       activeTab:       'reward',
@@ -438,6 +444,7 @@ export const useAppStore = create<AppState>()(
       lastQTable:      null,
       maHistory:       [],
       lastMa:          null,
+      sweep:           null,
       highScores:      {},
       checkpointsNonce: 0,
 
@@ -521,6 +528,8 @@ export const useAppStore = create<AppState>()(
       setDqnParams:      (sp)             => set((s) => ({ dqnParams: { ...s.dqnParams, ...sp } })),
       setSeed:           (seed)           => set({ seed }),
       setTotalTimesteps: (n)              => set({ totalTimesteps: n }),
+      setSweepCount:     (n)              => set({ sweepCount: n }),
+      setSweep:          (sweep)          => set({ sweep }),
       setEmaAlpha:       (emaAlpha)       => set({ emaAlpha }),
       setChartWindow:    (chartWindow)    => set({ chartWindow }),
       setActiveTab:      (activeTab)      => set({ activeTab }),
@@ -707,6 +716,7 @@ export const useAppStore = create<AppState>()(
         dqnParams:       s.dqnParams,
         seed:            s.seed,
         totalTimesteps:  s.totalTimesteps,
+        sweepCount:      s.sweepCount,
         emaAlpha:        s.emaAlpha,
         chartWindow:     s.chartWindow,
         activeTab:       s.activeTab,

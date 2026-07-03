@@ -269,6 +269,42 @@ class TrainConfig(BaseModel):
     # Present only for Deep Q-Network runs (algo=="dqn", S5c); None otherwise. Like SAC/TD3, DQN reuses
     # the env-step total_timesteps budget (and the off-policy offpolicy_total_timesteps ★ on the registry).
     dqn: DQNHyperparams | None = None
+    # Seed-sweep grouping (X3): runs launched by one seed-sweep share this ``experiment_id`` (minted
+    # server-side; None for a plain single run). ``experiment_label`` is an optional human name. Each
+    # queued run still records its own ``seed`` + full config — the sweep is just orchestration, so the
+    # reproducibility contract is untouched. Written into the run's meta.json for later aggregation (X4).
+    experiment_id: str | None = None
+    experiment_label: str | None = None
+
+
+class SweepRequest(BaseModel):
+    """Request to launch a seed-sweep (X3): one config trained across N seeds, queued sequentially.
+
+    Provide **either** an explicit ``seeds`` list, **or** ``seed_count`` consecutive seeds starting at
+    ``config.seed`` (s, s+1, … s+N−1). ``seeds`` wins when both are given. The manager mints one
+    ``experiment_id``, then drains the queue one run at a time (reusing the single-run path), each run
+    carrying its own seed + the shared experiment id.
+    """
+
+    config: TrainConfig
+    seeds: list[int] | None = None
+    seed_count: int | None = None
+
+
+class SweepStatus(BaseModel):
+    """Live state of an active seed-sweep (X3), carried on :class:`TrainStatus`; None outside a sweep.
+
+    ``index`` is the 1-based position of the currently-running seed in ``seeds`` (so "seed 2 of 5"),
+    ``running_seed`` the seed the active run trains. Cleared once the last seed finishes or the sweep
+    is cancelled.
+    """
+
+    experiment_id: str
+    experiment_label: str | None = None
+    total: int  # number of seeds queued in this sweep
+    index: int  # 1-based position of the seed currently running
+    running_seed: int  # the seed the active run is training
+    seeds: list[int]  # the full seed plan (so the UI can show what's queued)
 
 
 class _CanonicalAxes(BaseModel):
@@ -528,4 +564,7 @@ class TrainStatus(BaseModel):
     # after one finishes) repopulates the two-line ecosystem chart without waiting for the next round.
     # None for every single-policy run (PPO / neuroevolution / Q-learning).
     last_ma_metrics: MultiAgentMetrics | None = None
+    # Live seed-sweep state (X3): set while a sweep is draining its queue (which seed of N is running),
+    # None for a single run or once the sweep completes/cancels. Additive — the WS union is unchanged.
+    sweep: SweepStatus | None = None
     error: str | None = None
