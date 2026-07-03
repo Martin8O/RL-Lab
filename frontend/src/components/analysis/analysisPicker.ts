@@ -12,6 +12,11 @@ import { solvedPct } from '../checkpointBrowser'
 
 export type RunSort = 'newest' | 'oldest' | 'best' | 'game'
 export type RunGroup = 'none' | 'category' | 'game' | 'algo'
+// Curation view (X7): whether runs the user marked `excluded` (curated out of analysis) show. 'hide' is
+// the default so an excluded run leaves the overlay/export by default; 'only' surfaces the excluded set
+// for review/restore. This is what makes exclude "honoured by the Data Lab" — a hidden run can't be
+// selected, so it can't reach the chart or an export.
+export type RunExcludedView = 'hide' | 'show' | 'only'
 
 export interface RunFilters {
   search: string
@@ -20,6 +25,7 @@ export interface RunFilters {
   minPct: number // hide runs whose best skill-% is below this (0 = show all, incl. 0%-skill runs)
   sort: RunSort
   group: RunGroup
+  excluded: RunExcludedView
 }
 
 export const DEFAULT_RUN_FILTERS: RunFilters = {
@@ -29,6 +35,7 @@ export const DEFAULT_RUN_FILTERS: RunFilters = {
   minPct: 0,
   sort: 'newest',
   group: 'none',
+  excluded: 'hide',
 }
 
 /** One rendered group of runs. `key` is '' for the ungrouped (group === 'none') single bucket; for a
@@ -36,6 +43,14 @@ export const DEFAULT_RUN_FILTERS: RunFilters = {
 export interface RunGroupResult {
   key: string
   items: RunMeta[]
+}
+
+/** A stable experiment id derived from a human name (X7), so tagging two runs with the same name groups
+ *  them under one id. Empty name → null (ungrouped). The `manual:` prefix distinguishes a hand-made group
+ *  from an X3 sweep id or an `auto:` config-hash group. */
+export function experimentIdFromLabel(label: string): string | null {
+  const slug = label.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
+  return slug ? `manual:${slug}` : null
 }
 
 function envOf(run: RunMeta, envs: EnvSpec[]): EnvSpec | undefined {
@@ -137,6 +152,9 @@ export function organizeRuns(
 ): RunGroupResult[] {
   const filtered = runs.filter(
     (r) =>
+      // Excluded-view gate first: 'hide' drops curated-out runs, 'only' keeps just them, 'show' keeps all.
+      (filters.excluded === 'show' ||
+        (filters.excluded === 'only' ? r.excluded === true : r.excluded !== true)) &&
       matchesSearch(r, envs, locale, filters.search) &&
       (filters.category === '' || (envOf(r, envs)?.family ?? r.env_id) === filters.category) &&
       (filters.algo === '' || r.algo === filters.algo) &&

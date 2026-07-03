@@ -142,3 +142,86 @@ def test_low_skill_run_is_still_archived() -> None:
 def test_get_and_delete_unknown_run_is_404() -> None:
     assert client.get("/api/runs/does-not-exist").status_code == 404
     assert client.delete("/api/runs/does-not-exist").status_code == 404
+
+
+# -- X7 curation: label / note / experiment tag / exclude / bulk delete ------
+
+
+def test_update_meta_is_partial_and_sidecar_only(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    cfg = TrainConfig(env_id="cartpole", algo="ppo", seed=7)
+    meta = store.save(cfg, _PPO_FRAMES, state="finished", started_at="2026-06-12T10:00:00+00:00")
+    original_label = meta.label
+
+    # A partial patch touches only the given field; the rest of the meta is preserved.
+    updated = store.update_meta(meta.id, {"note": "my best run"})
+    assert updated is not None and updated.note == "my best run"
+    assert updated.label == original_label and updated.excluded is False
+
+    # Immutable artifacts are never rewritten — config + metrics still read back intact.
+    detail = store.get(meta.id)
+    assert detail is not None and detail.config.seed == 7 and len(detail.metrics) == 3
+
+    # Setting the label + exclude persists across a fresh read from disk.
+    store.update_meta(meta.id, {"label": "Baseline", "excluded": True})
+    reread = next(m for m in store.list() if m.id == meta.id)
+    assert reread.label == "Baseline" and reread.excluded is True and reread.note == "my best run"
+
+    # An unknown id is a no-op returning None (never raises / creates a dir).
+    assert store.update_meta("does-not-exist", {"note": "x"}) is None
+    assert store.update_meta("../escape", {"note": "x"}) is None
+
+
+def test_delete_many_counts_only_existing(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    cfg = TrainConfig(env_id="cartpole", algo="ppo")
+    a = store.save(cfg, _PPO_FRAMES, state="finished", started_at="2026-06-12T10:00:00+00:00")
+    b = store.save(cfg, _PPO_FRAMES, state="finished", started_at="2026-06-12T10:05:00+00:00")
+    assert store.delete_many([a.id, b.id, "ghost"]) == 2  # 'ghost' didn't exist
+    assert store.get(a.id) is None and store.get(b.id) is None
+
+
+def test_patch_route_edits_curation_fields(tmp_path: Path, monkeypatch) -> None:
+    from app.api import runs as runs_api
+
+    store = _store(tmp_path)
+    monkeypatch.setattr(runs_api, "run_store", store)
+    cfg = TrainConfig(env_id="cartpole", algo="ppo", seed=5)
+    rid = store.save(cfg, _PPO_FRAMES, state="finished", started_at="2026-06-12T10:00:00+00:00").id
+
+    resp = client.patch(f"/api/runs/{rid}", json={"note": "annotated", "excluded": True})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["note"] == "annotated" and body["excluded"] is True and body["seed"] == 5
+    assert client.patch("/api/runs/nope", json={"note": "x"}).status_code == 404
+
+
+def test_group_and_bulk_delete_routes(tmp_path: Path, monkeypatch) -> None:
+    from app.api import runs as runs_api
+
+    store = _store(tmp_path)
+    monkeypatch.setattr(runs_api, "run_store", store)
+    cfg = TrainConfig(env_id="cartpole", algo="ppo")
+    ids = [
+        store.save(cfg, _PPO_FRAMES, state="finished", started_at=f"2026-06-12T10:0{i}:00+00:00").id
+        for i in range(3)
+    ]
+
+    # Group two of them under one named experiment.
+    resp = client.post(
+        "/api/runs/group",
+        json={"run_ids": ids[:2], "experiment_id": "manual:my-study", "experiment_label": "My study"},
+    )
+    assert resp.status_code == 200
+    grouped = resp.json()
+    assert {r["experiment_id"] for r in grouped} == {"manual:my-study"}
+    assert all(r["experiment_label"] == "My study" for r in grouped)
+
+    # Ungroup (clear the tag) is the same route with a null id.
+    cleared = client.post("/api/runs/group", json={"run_ids": [ids[0]], "experiment_id": None}).json()
+    assert cleared[0]["experiment_id"] is None
+
+    # Bulk delete reports how many existed.
+    resp = client.post("/api/runs/delete", json={"run_ids": [*ids, "ghost"]})
+    assert resp.status_code == 200 and resp.json()["deleted"] == 3
+    assert store.list() == []

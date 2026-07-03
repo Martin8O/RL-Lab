@@ -9,7 +9,10 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import { useAppStore } from '../../store/useAppStore'
-import { fetchRuns, fetchRun, fetchAggregate, fetchSummary, fetchRliable } from '../../api/client'
+import {
+  fetchRuns, fetchRun, fetchAggregate, fetchSummary, fetchRliable, groupRuns, deleteRuns,
+} from '../../api/client'
+import { experimentIdFromLabel } from './analysisPicker'
 import type { Algo, AggregateResponse, RliableResult, RunDetail, RunMeta, RunSummary } from '../../api/types'
 import { formatCount } from '../../format'
 import { algoLabel, fmtTick } from './chartMath'
@@ -34,6 +37,17 @@ function fmtElapsed(s: number): string {
   if (s < 60) return `${Math.round(s)}s`
   if (s < 3600) return `${Math.floor(s / 60)}m${Math.round(s % 60)}s`
   return `${Math.floor(s / 3600)}h${Math.round((s % 3600) / 60)}m`
+}
+
+// Compact selection-curation button (X7) — filled when it's the active/primary action.
+function curateBtn(active: boolean): React.CSSProperties {
+  return {
+    height: 28, padding: '0 10px', cursor: 'pointer', whiteSpace: 'nowrap',
+    borderRadius: 'var(--radius-sm)', fontSize: 'var(--fs-meta)', fontWeight: 'var(--fw-medium)',
+    border: `1px solid ${active ? 'var(--accent)' : 'var(--border-default)'}`,
+    background: active ? 'var(--accent)' : 'transparent',
+    color: active ? 'var(--text-on-accent)' : 'var(--text-muted)',
+  }
 }
 
 function Segmented<T extends string>({ value, options, onChange, ariaLabel }: {
@@ -147,6 +161,42 @@ export default function AnalysisSurface() {
     setHidden(new Set())
     setExcludedSeeds(new Set())
   }, [])
+
+  // ── X7 curation of the current selection ────────────────────────────────────
+  const [groupOpen, setGroupOpen] = useState(false)
+  const [groupName, setGroupName] = useState('')
+  const [confirmDeleteSel, setConfirmDeleteSel] = useState(false)
+
+  // A single run was edited (label/note/tag/exclude) — refetch so the picker + zones reflect it. If it was
+  // excluded, drop it from the selection so it also leaves the chart/table/export (exclude "honoured").
+  const handleRunChanged = useCallback((updated: RunMeta) => {
+    if (updated.excluded) setSelected((prev) => prev.filter((x) => x !== updated.id))
+    loadRuns()
+  }, [loadRuns])
+
+  const handleRunDeleted = useCallback((id: string) => {
+    setSelected((prev) => prev.filter((x) => x !== id))
+    loadRuns()
+  }, [loadRuns])
+
+  // Tag every selected run into one named experiment (or ungroup when the name is blank).
+  const applyGroup = useCallback(() => {
+    const name = groupName.trim()
+    void groupRuns([...selected], experimentIdFromLabel(name), name || null).then(() => {
+      setGroupOpen(false)
+      setGroupName('')
+      loadRuns()
+    })
+  }, [groupName, selected, loadRuns])
+
+  // Bulk-delete the whole selection (with confirm), then clear the now-dangling selection state.
+  const deleteSelected = useCallback(() => {
+    void deleteRuns([...selected]).then(() => {
+      clearAll()
+      setConfirmDeleteSel(false)
+      loadRuns()
+    })
+  }, [selected, clearAll, loadRuns])
 
   const envById = useCallback((id: string) => envs.find((e) => e.id === id), [envs])
 
@@ -360,9 +410,48 @@ export default function AnalysisSurface() {
               )}
             </span>
           </div>
+          {/* X7 — curate the current selection: group into a named experiment, or bulk-delete. */}
+          {selected.length > 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 8 }}>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                <button onClick={() => { setGroupOpen((o) => !o); setConfirmDeleteSel(false) }}
+                  aria-expanded={groupOpen} style={curateBtn(groupOpen)}>
+                  {t('analysis.group_selected')}
+                </button>
+                {confirmDeleteSel ? (
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: 'var(--fs-meta)', color: 'var(--danger)' }}>
+                      {t('analysis.delete_selected_confirm', { n: selected.length })}
+                    </span>
+                    <button onClick={deleteSelected} style={{ ...curateBtn(false), color: '#fff', background: 'var(--danger)', borderColor: 'var(--danger)' }}>
+                      {t('analysis.manage_confirm_yes')}
+                    </button>
+                    <button onClick={() => setConfirmDeleteSel(false)} style={curateBtn(false)}>
+                      {t('analysis.manage_confirm_no')}
+                    </button>
+                  </span>
+                ) : (
+                  <button onClick={() => { setConfirmDeleteSel(true); setGroupOpen(false) }}
+                    style={{ ...curateBtn(false), color: 'var(--danger)' }}>
+                    {t('analysis.delete_selected')}
+                  </button>
+                )}
+              </div>
+              {groupOpen && (
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <input value={groupName} onChange={(e) => setGroupName(e.target.value)}
+                    placeholder={t('analysis.group_placeholder')} aria-label={t('analysis.group_placeholder')}
+                    onKeyDown={(e) => { if (e.key === 'Enter') applyGroup() }}
+                    style={{ flex: 1, minWidth: 0, height: 28, padding: '0 8px', background: 'var(--surface-inset)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-sm)', color: 'var(--text-default)', fontSize: 'var(--fs-label)' }} />
+                  <button onClick={applyGroup} style={{ ...curateBtn(true) }}>{t('analysis.group_apply')}</button>
+                </div>
+              )}
+            </div>
+          )}
           <div style={{ flex: 1, minHeight: 0 }}>
             <SourcePicker runs={runs} envs={envs} locale={locale} selectedIds={new Set(selected)}
-              colorFor={colorOf} onToggle={toggle} />
+              colorFor={colorOf} onToggle={toggle}
+              onRunsChanged={handleRunChanged} onRunDeleted={handleRunDeleted} />
           </div>
         </aside>
 

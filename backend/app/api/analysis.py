@@ -123,6 +123,25 @@ async def export_latex(
     return _export_response("latex", run_ids, "game")
 
 
+@router.get("/export.svg")
+async def export_figure(
+    run_ids: Annotated[list[str] | None, Query()] = None,
+    pivot: Literal["game", "algo"] = "game",
+) -> Response:
+    """A standalone vector figure (SVG) of the selected runs — raw reward (``pivot=game``) or normalized
+    skill-% (``pivot=algo``) vs env_steps, ready to drop into a paper or slides."""
+    return _export_response("figure", run_ids, pivot)
+
+
+@router.get("/export.zip")
+async def export_tensorboard(
+    run_ids: Annotated[list[str] | None, Query()] = None,
+) -> Response:
+    """A ZIP of TensorBoard event files (one log dir per run) — unzip and point ``tensorboard --logdir``
+    at it to browse the curves interactively."""
+    return _export_response("tensorboard", run_ids, "game")
+
+
 @router.get("/export.npz")
 async def export_scorematrix(
     run_ids: Annotated[list[str] | None, Query()] = None,

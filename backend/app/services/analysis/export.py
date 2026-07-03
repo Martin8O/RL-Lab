@@ -452,6 +452,202 @@ def build_latex(runs: list[LoadedRun], pivot: Pivot = "game") -> bytes:
 
 
 # ---------------------------------------------------------------------------
+# Vector figure (SVG) — a standalone, publication-ready comparison chart
+# ---------------------------------------------------------------------------
+
+# A self-contained SVG can't reach the app's CSS theme tokens, so the figure carries its own palette
+# (the light-mode run-compare hues, for a white-background figure) + neutral ink. Order = selection order.
+_FIG_COLORS = ["#c2820a", "#0284c7", "#e11d48", "#059669", "#7c3aed", "#4d7c0f", "#8b3fd6", "#1499c7"]
+_FIG_AXIS = "#334155"
+_FIG_GRID = "#e2e8f0"
+_FIG_INK = "#0f172a"
+_FIG_MUTED = "#64748b"
+_FIG_GOAL = "#c2820a"
+
+
+def _xml_escape(s: str) -> str:
+    return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
+def _fmt_count(v: float) -> str:
+    """Compact SI-ish tick label (1.2M / 500k / 320) for the env-step axis."""
+    a = abs(v)
+    if a >= 1e6:
+        return f"{v / 1e6:.1f}M".replace(".0M", "M")
+    if a >= 1e3:
+        return f"{v / 1e3:.0f}k"
+    return f"{v:.0f}"
+
+
+def _figure_series(runs: list[LoadedRun], pivot: Pivot) -> list[tuple[str, list[tuple[float, float]]]]:
+    """Each run's LTTB-downsampled ``(env_steps, metric)`` curve for the chosen pivot, dropping frames with
+    no plottable y — the exact data the on-screen chart draws, re-derived server-side over full history."""
+    out: list[tuple[str, list[tuple[float, float]]]] = []
+    for run in runs:
+        xs = [int(f.get("env_steps", f.get("timesteps", 0)) or 0) for f in run.frames]
+        ys = [_curve_metric(run, f, pivot) for f in run.frames]
+        pts = [(float(x), float(y)) for x, y in downsample(xs, ys, 400) if y is not None]
+        out.append((run.meta.label, pts))
+    return out
+
+
+def build_figure(runs: list[LoadedRun], pivot: Pivot = "game") -> bytes:
+    """A standalone SVG line chart of the selected runs — a vector figure to drop straight into a paper or
+    slides. Honours the pivot: ``"game"`` plots raw reward, ``"algo"`` the normalized skill-% (0–100). The
+    x-axis is ``env_steps`` (the fair, hardware-independent axis). Curves are LTTB-downsampled; each run
+    gets a legend entry. A goal line marks the solved score (skill 100 %, or a single game's solved reward).
+    """
+    W, H = 760, 460
+    ml, mr, mt, mb = 66, 196, 46, 54  # legend lives in the right margin
+    pw, ph = W - ml - mr, H - mt - mb
+    is_skill = pivot == "algo"
+
+    series = _figure_series(runs, pivot)
+    plotted = [(label, pts) for label, pts in series if pts]
+
+    if not plotted:
+        empty = (
+            f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {W} {H}" font-family="sans-serif">'
+            f'<rect width="{W}" height="{H}" fill="#ffffff"/>'
+            f'<text x="{W / 2}" y="{H / 2}" text-anchor="middle" fill="{_FIG_MUTED}" font-size="15">'
+            "No plottable data in the selected runs</text></svg>"
+        )
+        return empty.encode("utf-8")
+
+    xmax = max((x for _, pts in plotted for x, _ in pts), default=1.0) or 1.0
+    ys_all = [y for _, pts in plotted for _, y in pts]
+    ymin_data, ymax_data = min(ys_all), max(ys_all)
+
+    # Goal line + y-range: skill is a fixed 0–100 track; raw reward auto-fits, folding in a single game's
+    # solved score so the target is visible on the same axis.
+    single_env = len({r.config.env_id for r in runs}) == 1
+    goal: float | None = 100.0 if is_skill else (runs[0].solved_score if (single_env and runs) else None)
+    if is_skill:
+        ymin, ymax = 0.0, max(100.0, ymax_data)
+    else:
+        lo, hi = ymin_data, ymax_data
+        if goal is not None:
+            lo, hi = min(lo, goal), max(hi, goal)
+        pad = (hi - lo) * 0.06 or 1.0
+        ymin, ymax = lo - pad, hi + pad
+    yspan = ymax - ymin or 1.0
+
+    def to_x(x: float) -> float:
+        return ml + (x / xmax) * pw
+
+    def to_y(y: float) -> float:
+        return mt + (1 - (y - ymin) / yspan) * ph
+
+    parts: list[str] = [
+        f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {W} {H}" '
+        f'font-family="Helvetica, Arial, sans-serif">',
+        f'<rect width="{W}" height="{H}" fill="#ffffff"/>',
+    ]
+
+    title = "Normalized skill (%) vs environment steps" if is_skill else "Reward vs environment steps"
+    parts.append(
+        f'<text x="{ml}" y="26" fill="{_FIG_INK}" font-size="16" font-weight="700">{_xml_escape(title)}</text>'
+    )
+
+    # Gridlines + ticks (5 each, linear).
+    for i in range(5):
+        gy = mt + (i / 4) * ph
+        yval = ymax - (i / 4) * yspan
+        parts.append(f'<line x1="{ml}" y1="{gy:.1f}" x2="{ml + pw}" y2="{gy:.1f}" stroke="{_FIG_GRID}" stroke-width="1"/>')
+        ylab = f"{yval:.0f}%" if is_skill else _fmt_count(yval) if abs(yval) >= 100 else f"{yval:.1f}"
+        parts.append(
+            f'<text x="{ml - 8}" y="{gy + 4:.1f}" text-anchor="end" fill="{_FIG_MUTED}" font-size="11">{ylab}</text>'
+        )
+    for i in range(5):
+        gx = ml + (i / 4) * pw
+        xval = (i / 4) * xmax
+        parts.append(
+            f'<text x="{gx:.1f}" y="{mt + ph + 20:.1f}" text-anchor="middle" fill="{_FIG_MUTED}" '
+            f'font-size="11">{_fmt_count(xval)}</text>'
+        )
+
+    # Goal line.
+    if goal is not None and ymin <= goal <= ymax:
+        gy = to_y(goal)
+        parts.append(
+            f'<line x1="{ml}" y1="{gy:.1f}" x2="{ml + pw}" y2="{gy:.1f}" stroke="{_FIG_GOAL}" '
+            f'stroke-width="1.3" stroke-dasharray="5 4" opacity="0.85"/>'
+        )
+        parts.append(
+            f'<text x="{ml + pw - 4}" y="{gy - 5:.1f}" text-anchor="end" fill="{_FIG_GOAL}" '
+            f'font-size="10.5" font-weight="600">solved</text>'
+        )
+
+    # Axes.
+    parts.append(f'<line x1="{ml}" y1="{mt}" x2="{ml}" y2="{mt + ph}" stroke="{_FIG_AXIS}" stroke-width="1.4"/>')
+    parts.append(
+        f'<line x1="{ml}" y1="{mt + ph}" x2="{ml + pw}" y2="{mt + ph}" stroke="{_FIG_AXIS}" stroke-width="1.4"/>'
+    )
+    parts.append(
+        f'<text x="{ml + pw / 2:.1f}" y="{H - 12}" text-anchor="middle" fill="{_FIG_AXIS}" '
+        f'font-size="12">environment steps</text>'
+    )
+    ylabel = "skill %" if is_skill else "reward"
+    parts.append(
+        f'<text transform="translate(18,{mt + ph / 2:.1f}) rotate(-90)" text-anchor="middle" '
+        f'fill="{_FIG_AXIS}" font-size="12">{ylabel}</text>'
+    )
+
+    # One polyline per run + a legend entry.
+    for k, (label, pts) in enumerate(plotted):
+        color = _FIG_COLORS[k % len(_FIG_COLORS)]
+        d = " ".join(f"{'M' if i == 0 else 'L'}{to_x(x):.1f},{to_y(y):.1f}" for i, (x, y) in enumerate(pts))
+        parts.append(f'<path d="{d}" fill="none" stroke="{color}" stroke-width="1.9" stroke-linejoin="round"/>')
+        ly = mt + 6 + k * 20
+        lx = ml + pw + 16
+        parts.append(f'<rect x="{lx}" y="{ly - 8}" width="12" height="12" rx="2" fill="{color}"/>')
+        clipped = label if len(label) <= 22 else label[:21] + "…"
+        parts.append(
+            f'<text x="{lx + 18}" y="{ly + 2}" fill="{_FIG_INK}" font-size="11.5">{_xml_escape(clipped)}</text>'
+        )
+
+    parts.append("</svg>")
+    return "".join(parts).encode("utf-8")
+
+
+# ---------------------------------------------------------------------------
+# TensorBoard event files — one run per log dir, zipped
+# ---------------------------------------------------------------------------
+
+
+def build_tensorboard(runs: list[LoadedRun], pivot: Pivot = "game") -> bytes:
+    """A ZIP of TensorBoard event files, one log directory per run — drop the unzipped folder into
+    ``tensorboard --logdir`` to browse the curves interactively. Each run logs every populated metric
+    (reward, normalized skill %, episode length, loss) as its own scalar tag against ``env_steps`` as the
+    global step. ``pivot`` is accepted for the uniform registry signature but ignored: every metric is
+    logged, so both pivots are already present. An empty selection yields a valid (empty) archive."""
+    import os
+    import tempfile
+    import zipfile
+
+    from torch.utils.tensorboard import SummaryWriter
+
+    buf = io.BytesIO()
+    with tempfile.TemporaryDirectory() as tmp:
+        for run in runs:
+            safe = f"{run.config.env_id}_{run.config.algo}_seed{run.config.seed}_{run.meta.id[:8]}"
+            safe = "".join(c if c.isalnum() or c in "._-" else "_" for c in safe)
+            writer = SummaryWriter(log_dir=os.path.join(tmp, safe))
+            for frame in run.frames:
+                step = int(frame.get("env_steps", frame.get("timesteps", 0)) or 0)
+                for metric, value in _frame_metrics(run, frame):
+                    writer.add_scalar(metric, value, global_step=step)
+            writer.close()
+
+        with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+            for root, _dirs, files in os.walk(tmp):
+                for name in files:
+                    path = os.path.join(root, name)
+                    zf.write(path, os.path.relpath(path, tmp))
+    return buf.getvalue()
+
+
+# ---------------------------------------------------------------------------
 # NPZ score matrix (X4, Wave-2 registry addition) — the exact rliable input
 # ---------------------------------------------------------------------------
 
@@ -510,6 +706,8 @@ REGISTRY: dict[str, ExportFormat] = {
     ),
     "repro": ExportFormat(build_repro_card, "text/markdown", "md"),
     "latex": ExportFormat(build_latex, "text/plain", "tex"),
+    "figure": ExportFormat(build_figure, "image/svg+xml", "svg"),
+    "tensorboard": ExportFormat(build_tensorboard, "application/zip", "zip"),
     "scorematrix": ExportFormat(build_scorematrix, "application/octet-stream", "npz"),
 }
 

@@ -19,6 +19,7 @@ import type {
   RliableResult,
   RunDetail,
   RunMeta,
+  RunMetaPatch,
   RunSummary,
   SystemInfo,
   TrainConfig,
@@ -370,6 +371,44 @@ export async function deleteRun(id: string): Promise<void> {
   if (!res.ok && res.status !== 404) throw new Error(`HTTP ${res.status}`)
 }
 
+/** Edit a run's curation fields (X7) — label / note / experiment tag / excluded. Sends only the fields
+ *  present in `patch` (a partial update); returns the updated meta. Sidecar-only on the server. */
+export async function patchRun(id: string, patch: RunMetaPatch): Promise<RunMeta> {
+  const res = await fetch(`${API_BASE}/api/runs/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(patch),
+  })
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  return res.json() as Promise<RunMeta>
+}
+
+/** Tag a set of runs into one named experiment (X7), or ungroup them with `experimentId = null`. */
+export async function groupRuns(
+  runIds: string[],
+  experimentId: string | null,
+  experimentLabel: string | null,
+): Promise<RunMeta[]> {
+  const res = await fetch(`${API_BASE}/api/runs/group`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ run_ids: runIds, experiment_id: experimentId, experiment_label: experimentLabel }),
+  })
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  return res.json() as Promise<RunMeta[]>
+}
+
+/** Delete several runs at once (X7); resolves with the count that existed. */
+export async function deleteRuns(runIds: string[]): Promise<number> {
+  const res = await fetch(`${API_BASE}/api/runs/delete`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ run_ids: runIds }),
+  })
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  return (await res.json() as { deleted: number }).deleted
+}
+
 // ── Analysis / DataLab (Phase X) ─────────────────────────────────────────────
 
 /** Every experiment (a seed sweep = one experiment) auto-grouped from the run history (X4). */
@@ -425,16 +464,20 @@ export async function fetchRliable(runIds: string[]): Promise<RliableResult> {
 }
 
 /** A browser-navigable download URL for one of the X5 export formats over the current run selection.
- *  `pivot` (game = raw reward / algo = normalized skill-%) applies to the CSV + XLSX formats; the
- *  repro-card and LaTeX table ignore it. Used by the export zone's download links (Zone 5). */
+ *  `pivot` (game = raw reward / algo = normalized skill-%) applies to the pivot-aware formats (CSV, XLSX,
+ *  the SVG figure); the repro-card, LaTeX table and TensorBoard zip ignore it. Used by the export zone's
+ *  download links (Zone 5). The value is the URL suffix, which is the file extension per route. */
+export type ExportFmt = 'csv' | 'xlsx' | 'repro' | 'tex' | 'svg' | 'zip'
+const PIVOT_AWARE: ReadonlySet<ExportFmt> = new Set<ExportFmt>(['csv', 'xlsx', 'svg'])
+
 export function analysisExportUrl(
-  fmt: 'csv' | 'xlsx' | 'repro' | 'tex',
+  fmt: ExportFmt,
   runIds: string[],
   pivot: 'game' | 'algo' = 'game',
 ): string {
   const q = new URLSearchParams()
   for (const id of runIds) q.append('run_ids', id)
-  if (fmt === 'csv' || fmt === 'xlsx') q.set('pivot', pivot)
+  if (PIVOT_AWARE.has(fmt)) q.set('pivot', pivot)
   return `${API_BASE}/api/analysis/export.${fmt}?${q.toString()}`
 }
 

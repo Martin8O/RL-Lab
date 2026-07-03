@@ -467,6 +467,20 @@ export interface RunMeta {
    *  null for a plain single run. */
   experiment_id?: string | null
   experiment_label?: string | null
+  /** Curation (X7): a free-text note, and `excluded` = curated out of analysis (hidden from the Data Lab
+   *  picker by default) without deleting the run. Editable via PATCH /api/runs/{id}. */
+  note?: string | null
+  excluded?: boolean
+}
+
+/** The editable subset of RunMeta (X7). A PATCH /api/runs/{id} applies only the fields present, so
+ *  omitting a key leaves it unchanged; every field is optional. Mirrors schemas/runs.py::RunMetaPatch. */
+export interface RunMetaPatch {
+  label?: string
+  note?: string | null
+  experiment_id?: string | null
+  experiment_label?: string | null
+  excluded?: boolean
 }
 
 /** A run read back in full for the chart overlay: listing row + reproducible config +

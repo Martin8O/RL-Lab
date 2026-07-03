@@ -14,10 +14,13 @@ simple — plain JSON files, no DB — and thread-safe (``save`` runs on the tra
 The root dir is an instance attribute (not a module constant) so tests can use a tmp dir.
 """
 
+from __future__ import annotations
+
 import json
 import shutil
 import threading
 import uuid
+from collections.abc import Sequence
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -274,6 +277,30 @@ class RunStore:
             except (OSError, ValueError):
                 return None
 
+    def update_meta(self, rid: str, fields: dict[str, Any]) -> RunMeta | None:
+        """Apply a partial patch to a run's **meta.json sidecar only** (X7 curation), returning the updated
+        :class:`RunMeta` (or ``None`` if the run is missing/unreadable).
+
+        Only the mutable curation fields are writable — the immutable ``config.json`` / ``metrics.json`` are
+        never touched, so the archive's reproducibility is preserved. ``fields`` carries exactly the keys the
+        caller wants changed (the PATCH's ``model_fields_set``), so a present ``note=None`` clears the note
+        while an absent key is left as-is.
+        """
+        if not _is_safe_id(rid):
+            return None
+        editable = {"label", "note", "experiment_id", "experiment_label", "excluded"}
+        patch = {k: v for k, v in fields.items() if k in editable}
+        with self._lock:
+            meta_path = self._run_dir(rid) / "meta.json"
+            try:
+                meta = RunMeta.model_validate_json(meta_path.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                return None
+            updated = meta.model_copy(update=patch)
+            meta_path.write_text(updated.model_dump_json(indent=2), encoding="utf-8")
+        logger.info("Updated run %s meta (%s)", rid, ", ".join(patch) or "no-op")
+        return updated
+
     def delete(self, rid: str) -> bool:
         """Remove a run; returns ``True`` if it existed."""
         if not _is_safe_id(rid):
@@ -285,6 +312,10 @@ class RunStore:
             shutil.rmtree(run, ignore_errors=True)
             logger.info("Deleted run %s", rid)
             return True
+
+    def delete_many(self, rids: Sequence[str]) -> int:
+        """Delete several runs; returns how many actually existed (bulk / whole-experiment delete, X7)."""
+        return sum(1 for rid in rids if self.delete(rid))
 
 
 # Module singleton, pointed at the gitignored data/ dir.

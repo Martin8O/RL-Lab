@@ -10,6 +10,20 @@ import { useTranslation } from 'react-i18next'
 import type { TFunction } from 'i18next'
 import type { MethodRliable, RliableEstimate, RliableResult } from '../../api/types'
 import { algoLabel } from './chartMath'
+import ParamInfo from '../ParamInfo'
+
+/** A sub-section heading with its own ⓘ info popup (X7) — the performance profile and the probability of
+ *  improvement each get a dedicated deep-dive, not just the panel-wide rliable popup. */
+function SubHeading({ title, paramId }: { title: string; paramId: string }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 4 }}>
+      <span style={{ fontSize: 'var(--fs-meta)', fontWeight: 'var(--fw-semibold)', color: 'var(--text-muted)' }}>
+        {title}
+      </span>
+      <ParamInfo paramId={paramId} label={title} />
+    </div>
+  )
+}
 
 // Per-method (algorithm) colours — the run-compare palette, assigned by order.
 const METHOD_COLORS = ['var(--cmp-1)', 'var(--cmp-2)', 'var(--cmp-3)', 'var(--cmp-4)', 'var(--cmp-5)', 'var(--cmp-6)']
@@ -105,7 +119,7 @@ export default function RliablePanel({ result, loading }: { result: RliableResul
   const { t } = useTranslation()
 
   if (!result) {
-    return <p style={{ margin: 0, fontSize: 'var(--fs-meta)', color: 'var(--text-faint)' }}>
+    return <p style={{ margin: 0, fontSize: 'var(--fs-meta)', color: 'var(--text-muted)', lineHeight: 1.5 }}>
       {loading ? t('analysis.rliable_computing') : t('analysis.rliable_pick')}
     </p>
   }
@@ -129,11 +143,9 @@ export default function RliablePanel({ result, loading }: { result: RliableResul
 
       {/* performance profile */}
       <div>
-        <div style={{ fontSize: 'var(--fs-meta)', fontWeight: 'var(--fw-semibold)', color: 'var(--text-muted)', marginBottom: 4 }}>
-          {t('analysis.profile_title')}
-        </div>
+        <SubHeading title={t('analysis.profile_title')} paramId="analysis_profile" />
         <ProfilePlot methods={result.methods} colors={METHOD_COLORS} t={t} />
-        <div style={{ fontSize: 'var(--fs-micro)', color: 'var(--text-faint)', textAlign: 'center', marginTop: 2 }}>
+        <div style={{ fontSize: 'var(--fs-micro)', color: 'var(--text-muted)', textAlign: 'center', marginTop: 2 }}>
           {t('analysis.profile_axes')}
         </div>
       </div>
@@ -141,9 +153,7 @@ export default function RliablePanel({ result, loading }: { result: RliableResul
       {/* probability of improvement */}
       {poi ? (
         <div>
-          <div style={{ fontSize: 'var(--fs-meta)', fontWeight: 'var(--fw-semibold)', color: 'var(--text-muted)', marginBottom: 4 }}>
-            {t('analysis.poi_title')}
-          </div>
+          <SubHeading title={t('analysis.poi_title')} paramId="analysis_poi" />
           <div style={{ position: 'relative', height: 12, marginBottom: 4 }}>
             <div style={{ position: 'absolute', top: 5, left: 0, right: 0, height: 2, background: 'var(--border-default)' }} />
             {/* 0.5 = a coin-flip reference */}
@@ -156,13 +166,16 @@ export default function RliablePanel({ result, loading }: { result: RliableResul
             <span style={{ color: 'var(--text-faint)' }}> [{f2(poi.ci_low)}, {f2(poi.ci_high)}]</span>
           </div>
         </div>
-      ) : result.methods.length >= 2 ? (
-        <p style={{ margin: 0, fontSize: 'var(--fs-micro)', color: 'var(--text-faint)' }}>{t('analysis.poi_no_shared')}</p>
       ) : (
-        <p style={{ margin: 0, fontSize: 'var(--fs-micro)', color: 'var(--text-faint)' }}>{t('analysis.poi_need_two')}</p>
+        <div>
+          <SubHeading title={t('analysis.poi_title')} paramId="analysis_poi" />
+          <p style={{ margin: 0, fontSize: 'var(--fs-micro)', color: 'var(--text-muted)', lineHeight: 1.5 }}>
+            {t(result.methods.length >= 2 ? 'analysis.poi_no_shared' : 'analysis.poi_need_two')}
+          </p>
+        </div>
       )}
 
-      <p style={{ margin: 0, fontSize: 'var(--fs-micro)', color: 'var(--text-faint)', lineHeight: 1.5 }}>
+      <p style={{ margin: 0, fontSize: 'var(--fs-micro)', color: 'var(--text-muted)', lineHeight: 1.5 }}>
         {t('analysis.rliable_norm')}
       </p>
     </div>

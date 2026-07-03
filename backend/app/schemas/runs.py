@@ -46,6 +46,40 @@ class RunMeta(BaseModel):
     # optional human name for the sweep.
     experiment_id: str | None = None
     experiment_label: str | None = None
+    # Curation (X7) — editable sidecar fields the user sets from the Data Lab to organize the archive.
+    # ``note`` is a free-text annotation; ``excluded`` curates a run *out of analysis* without deleting it
+    # (the Data Lab hides excluded runs from the picker by default, so they can't enter an overlay/export).
+    note: str | None = None
+    excluded: bool = False
+
+
+# The mutable subset of RunMeta a user may edit (X7). Every field is optional so a PATCH is a partial
+# update: only the fields actually sent (``model_fields_set``) are applied, so sending ``note: null``
+# clears the note while omitting it leaves it untouched. Immutable provenance (id, config, metrics) is
+# never touched — curation edits only the meta.json sidecar.
+class RunMetaPatch(BaseModel):
+    label: str | None = None
+    note: str | None = None
+    experiment_id: str | None = None
+    experiment_label: str | None = None
+    excluded: bool | None = None
+
+
+class GroupRequest(BaseModel):
+    """Tag a set of runs into one named experiment (X7) — the manual counterpart of an X3 seed sweep's
+    auto-shared ``experiment_id``. Passing ``experiment_id=None`` ungroups the runs (clears the tag)."""
+
+    run_ids: list[str]
+    experiment_id: str | None = None
+    experiment_label: str | None = None
+
+
+class BulkDeleteRequest(BaseModel):
+    run_ids: list[str]
+
+
+class BulkDeleteResult(BaseModel):
+    deleted: int  # how many of the requested runs actually existed and were removed
 
 
 class RunDetail(BaseModel):

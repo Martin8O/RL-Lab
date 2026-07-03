@@ -43,6 +43,8 @@ export default function SourcePicker({
   selectedIds,
   colorFor,
   onToggle,
+  onRunsChanged,
+  onRunDeleted,
 }: {
   runs: RunMeta[]
   envs: EnvSpec[]
@@ -50,6 +52,10 @@ export default function SourcePicker({
   selectedIds: Set<string>
   colorFor: (id: string) => string | null
   onToggle: (id: string) => void
+  /** A curation edit persisted (X7) — refetch the run list so the picker reflects the updated meta. */
+  onRunsChanged?: (updated: RunMeta) => void
+  /** A run was deleted (X7) — refetch + drop it from any selection. */
+  onRunDeleted?: (id: string) => void
 }) {
   const { t } = useTranslation()
   const [filters, setFilters] = useState<RunFilters>(DEFAULT_RUN_FILTERS)
@@ -117,6 +123,12 @@ export default function SourcePicker({
             <option value={75}>≥ 75 %</option>
             <option value={100}>{t('analysis.filter_skill_solved')}</option>
           </select>
+          <select aria-label={t('analysis.filter_excluded')} value={filters.excluded}
+            onChange={(e) => patch({ excluded: e.target.value as RunFilters['excluded'] })} style={selectStyle}>
+            <option value="hide">{t('analysis.excluded_hide')}</option>
+            <option value="show">{t('analysis.excluded_show')}</option>
+            <option value="only">{t('analysis.excluded_only')}</option>
+          </select>
         </div>
       </div>
 
@@ -166,12 +178,23 @@ export default function SourcePicker({
                       background: selected && color ? color : 'transparent',
                       border: `1.5px solid ${selected && color ? color : 'var(--border-strong)'}`,
                     }} />
-                    <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ flex: 1, minWidth: 0, opacity: run.excluded ? 0.55 : 1 }}>
                       <div style={{
                         fontSize: 'var(--fs-label)', fontWeight: 'var(--fw-medium)', color: 'var(--text-strong)',
                         whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                        display: 'flex', alignItems: 'center', gap: 6,
                       }}>
-                        {gameName(run.env_id)}
+                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{gameName(run.env_id)}</span>
+                        {run.excluded && (
+                          <span style={{
+                            flexShrink: 0, fontSize: 'var(--fs-micro)', fontWeight: 'var(--fw-semibold)',
+                            letterSpacing: 'var(--ls-eyebrow)', textTransform: 'uppercase',
+                            color: 'var(--text-muted)', border: '1px solid var(--border-default)',
+                            borderRadius: 'var(--radius-pill)', padding: '0 5px',
+                          }}>
+                            {t('analysis.excluded_badge')}
+                          </span>
+                        )}
                       </div>
                       <div style={{ fontSize: 'var(--fs-meta)', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
                         {algoLabel(t, run.algo)} · {t('sidebar.seed')} {run.seed} · {runBudget(run)}
@@ -211,7 +234,14 @@ export default function SourcePicker({
       </div>
 
       {infoRun && (
-        <RunConfigModal key={infoRun.id} run={infoRun} envName={gameName(infoRun.env_id)} onClose={() => setInfoRun(null)} />
+        <RunConfigModal
+          key={infoRun.id}
+          run={infoRun}
+          envName={gameName(infoRun.env_id)}
+          onClose={() => setInfoRun(null)}
+          onChanged={(u) => onRunsChanged?.(u)}
+          onDeleted={(id) => onRunDeleted?.(id)}
+        />
       )}
     </div>
   )

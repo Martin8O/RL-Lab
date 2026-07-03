@@ -203,6 +203,64 @@ def test_latex_is_booktabs_table(tmp_path: Path, monkeypatch) -> None:
     assert "cartpole" in text  # a data row
 
 
+# -- Vector figure (SVG) ---------------------------------------------------
+
+
+def test_figure_is_valid_svg_with_a_line_per_run(tmp_path: Path, monkeypatch) -> None:
+    store = _make_store(tmp_path, monkeypatch)
+    p_id = _cartpole_ppo(store)
+    e_id = _cartpole_evo(store)
+    content, media, fname = export_engine.export("figure", [p_id, e_id])
+    assert media == "image/svg+xml" and fname.endswith(".svg")
+    svg = content.decode("utf-8")
+    assert svg.startswith("<svg") and svg.rstrip().endswith("</svg>")
+    # One polyline per run.
+    assert svg.count("<path ") == 2
+    assert "environment steps" in svg  # x-axis label
+
+
+def test_figure_algo_pivot_labels_skill_axis(tmp_path: Path, monkeypatch) -> None:
+    store = _make_store(tmp_path, monkeypatch)
+    p_id = _cartpole_ppo(store)
+    content, _, _ = export_engine.export("figure", [p_id], pivot="algo")
+    svg = content.decode("utf-8")
+    assert "skill %" in svg  # normalized pivot → skill axis, not raw reward
+
+
+def test_figure_empty_selection_is_valid_svg() -> None:
+    content, media, _ = export_engine.export("figure", [])
+    assert media == "image/svg+xml"
+    svg = content.decode("utf-8")
+    assert svg.startswith("<svg") and "No plottable data" in svg
+
+
+# -- TensorBoard event files (zip) -----------------------------------------
+
+
+def test_tensorboard_is_zip_of_event_files(tmp_path: Path, monkeypatch) -> None:
+    import zipfile
+
+    store = _make_store(tmp_path, monkeypatch)
+    p_id = _cartpole_ppo(store)
+    e_id = _cartpole_evo(store)
+    content, media, fname = export_engine.export("tensorboard", [p_id, e_id])
+    assert media == "application/zip" and fname.endswith(".zip")
+    zf = zipfile.ZipFile(io.BytesIO(content))
+    names = zf.namelist()
+    # A TensorBoard event file per run, each under its own run-named log dir.
+    assert any("tfevents" in n for n in names)
+    assert any(n.startswith("cartpole_ppo_") for n in names)
+    assert any(n.startswith("cartpole_neuroevolution_") for n in names)
+
+
+def test_tensorboard_empty_selection_is_valid_zip() -> None:
+    import zipfile
+
+    content, media, _ = export_engine.export("tensorboard", [])
+    assert media == "application/zip"
+    assert zipfile.ZipFile(io.BytesIO(content)).namelist() == []  # valid, empty
+
+
 # -- API routes ------------------------------------------------------------
 
 
@@ -214,6 +272,8 @@ def test_export_routes_return_downloads(tmp_path: Path, monkeypatch) -> None:
         ("/api/analysis/export.csv", "text/csv"),
         ("/api/analysis/export.repro", "text/markdown"),
         ("/api/analysis/export.tex", "text/plain"),
+        ("/api/analysis/export.svg", "image/svg+xml"),
+        ("/api/analysis/export.zip", "application/zip"),
     ):
         resp = client.get(path, params={"run_ids": [rid]})
         assert resp.status_code == 200

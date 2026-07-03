@@ -33,13 +33,15 @@ const COLS: Col[] = [
   { key: 'mean_steps_per_sec', labelKey: 'analysis.col_speed', fmt: stepsPerSec },
 ]
 
+// Numeric columns are centred under their header label (X7) — the header and the value share one axis, so
+// the number reads directly beneath its name. The first "Run" column overrides this back to left.
 const thBase: React.CSSProperties = {
-  textAlign: 'right', padding: '5px 10px', fontSize: 'var(--fs-meta)', fontWeight: 'var(--fw-semibold)',
+  textAlign: 'center', padding: '5px 10px', fontSize: 'var(--fs-meta)', fontWeight: 'var(--fw-semibold)',
   color: 'var(--text-muted)', whiteSpace: 'nowrap', userSelect: 'none', cursor: 'pointer',
   borderBottom: '1px solid var(--border-default)', position: 'sticky', top: 0, background: 'var(--surface-1)',
 }
 const tdBase: React.CSSProperties = {
-  textAlign: 'right', padding: '4px 10px', fontSize: 'var(--fs-label)',
+  textAlign: 'center', padding: '4px 10px', fontSize: 'var(--fs-label)',
   fontFamily: 'var(--font-mono)', fontFeatureSettings: 'var(--ff-tabular)',
   color: 'var(--text-default)', whiteSpace: 'nowrap',
 }

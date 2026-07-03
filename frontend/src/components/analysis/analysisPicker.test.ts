@@ -3,6 +3,7 @@ import type { EnvSpec, RunMeta } from '../../api/types'
 import { cartpoleEnv } from '../../test/fixtures'
 import {
   DEFAULT_RUN_FILTERS,
+  experimentIdFromLabel,
   organizeRuns,
   runFacets,
   type RunFilters,
@@ -105,6 +106,33 @@ describe('organizeRuns — sorting', () => {
   it('sorts by game name A–Z', () => {
     // Breakout, CartPole (d newest, then a), Pendulum.
     expect(flat({ sort: 'game' })).toEqual(['b', 'd', 'a', 'c'])
+  })
+})
+
+describe('organizeRuns — excluded curation (X7)', () => {
+  // Mark run 'b' excluded; the default view hides it, 'only' shows just it, 'show' keeps all.
+  const withExcluded: RunMeta[] = RUNS.map((r) => (r.id === 'b' ? { ...r, excluded: true } : r))
+  const view = (excluded: RunFilters['excluded']) =>
+    organizeRuns(withExcluded, ENVS, 'en', { ...DEFAULT_RUN_FILTERS, excluded })[0].items.map((r) => r.id)
+
+  it("hides excluded runs by default so they can't enter an overlay/export", () => {
+    expect(view('hide')).toEqual(['d', 'c', 'a']) // 'b' dropped
+  })
+  it("'show' keeps excluded runs and 'only' surfaces just them", () => {
+    expect(view('show')).toEqual(['d', 'b', 'c', 'a'])
+    expect(view('only')).toEqual(['b'])
+  })
+})
+
+describe('experimentIdFromLabel (X7)', () => {
+  it('slugifies a name so equal names group under one id', () => {
+    expect(experimentIdFromLabel('My Study')).toBe('manual:my-study')
+    expect(experimentIdFromLabel('My Study')).toBe(experimentIdFromLabel('  my   study '))
+    expect(experimentIdFromLabel('PPO vs SAC — run #2')).toBe('manual:ppo-vs-sac-run-2')
+  })
+  it('returns null for a blank name (ungroup)', () => {
+    expect(experimentIdFromLabel('')).toBeNull()
+    expect(experimentIdFromLabel('   ')).toBeNull()
   })
 })
 

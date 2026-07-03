@@ -218,6 +218,68 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
         + '**Pravděpodobnost zlepšení:** P(A > B) přes sdílené hry — 0,5 je náhoda, nad 0,5 svědčí pro A.',
     },
   },
+  analysis_profile: {
+    general: {
+      en: 'The **performance profile** shows a whole *distribution* of results, not a single number — the '
+        + 'honest way to compare methods when a plain average can hide a lot.\n'
+        + '**How to read it:** the horizontal axis is a score threshold **τ** (from 0 = worst to 1 = solved); '
+        + 'the vertical axis is the **fraction of runs that scored above τ**. So a point at (0.6, 0.8) means '
+        + '"80% of this method\'s runs scored better than 0.6". Each algorithm is one line.\n'
+        + '**Why it beats a bar chart:** it uses *every* run at *every* threshold, so one lucky or unlucky '
+        + 'seed can\'t swing it, and nobody gets to cherry-pick the threshold that flatters their method.\n'
+        + '**The key pattern — dominance:** if one curve sits **entirely above** another, that method has more '
+        + 'runs above the bar *at every score* — a far stronger claim than "higher mean". If the curves '
+        + '**cross**, neither method is uniformly better: one wins on easy thresholds, the other on hard ones.',
+      cz: '**Výkonnostní profil** ukazuje celé *rozdělení* výsledků, ne jedno číslo — poctivý způsob, jak '
+        + 'porovnat metody, když prostý průměr může hodně skrýt.\n'
+        + '**Jak ho číst:** vodorovná osa je práh skóre **τ** (od 0 = nejhorší po 1 = vyřešeno); svislá osa je '
+        + '**podíl běhů, které dosáhly skóre nad τ**. Bod v (0,6, 0,8) tedy znamená „80 % běhů této metody '
+        + 'mělo skóre lepší než 0,6“. Každý algoritmus je jedna čára.\n'
+        + '**Proč je lepší než sloupcový graf:** používá *každý* běh na *každém* prahu, takže jeden šťastný '
+        + 'nebo nešťastný seed s ním nezamává a nikdo si nemůže vybrat práh, který jeho metodě lichotí.\n'
+        + '**Klíčový vzor — dominance:** když jedna křivka leží **celá nad** druhou, ta metoda má víc běhů nad '
+        + 'laťkou *na každém skóre* — mnohem silnější tvrzení než „vyšší průměr“. Když se křivky **kříží**, '
+        + 'ani jedna metoda není lepší všude: jedna vítězí na snadných prazích, druhá na těžkých.',
+    },
+    recommended: {
+      en: 'Look for a curve that never dips below the others — that method dominates. Crossing curves mean '
+        + '"it depends"; report both.',
+      cz: 'Hledejte křivku, která nikdy neklesne pod ostatní — ta metoda dominuje. Křížící se křivky znamenají '
+        + '„záleží“; uveďte obě.',
+    },
+  },
+  analysis_poi: {
+    general: {
+      en: 'The **probability of improvement** answers one blunt question: *if I pick a run of A and a run of B '
+        + 'at random, how often does A win?* It is P(A > B) estimated across the games the two share (a '
+        + 'Mann–Whitney comparison).\n'
+        + '**The scale:** **0.5 is a coin flip** — no difference. Above 0.5 favours the first algorithm, below '
+        + '0.5 the second. 0.75 means A beats B three times out of four.\n'
+        + '**Read the interval, not just the number:** the value carries a 95% bootstrap confidence interval. '
+        + 'If that interval **straddles 0.5**, the edge isn\'t statistically clear yet — you likely need more '
+        + 'seeds before claiming a winner.\n'
+        + '**A caveat:** this measures *how often* A wins, not *by how much*. A can win 60% of the time by a '
+        + 'hair, so read it together with the IQM (which shows the size of the gap). Needs at least two '
+        + 'algorithms that were run on a shared game.',
+      cz: '**Pravděpodobnost zlepšení** odpovídá na jednu přímou otázku: *když náhodně vyberu běh A a běh B, '
+        + 'jak často vyhraje A?* Je to P(A > B) odhadnutá přes hry, které oba sdílejí (porovnání '
+        + 'Mann–Whitney).\n'
+        + '**Škála:** **0,5 je hod mincí** — žádný rozdíl. Nad 0,5 svědčí pro první algoritmus, pod 0,5 pro '
+        + 'druhý. 0,75 znamená, že A porazí B ve třech ze čtyř případů.\n'
+        + '**Čtěte interval, ne jen číslo:** hodnota nese 95% bootstrapový interval spolehlivosti. Pokud '
+        + 'interval **přesahuje přes 0,5**, náskok zatím není statisticky jasný — nejspíš potřebujete víc '
+        + 'seedů, než vyhlásíte vítěze.\n'
+        + '**Upozornění:** měří to, *jak často* A vyhrává, ne *o kolik*. A může vyhrávat v 60 % případů o vlásek, '
+        + 'takže to čtěte spolu s IQM (které ukazuje velikost rozdílu). Vyžaduje aspoň dva algoritmy '
+        + 'spuštěné na sdílené hře.',
+    },
+    recommended: {
+      en: 'A confident claim needs the value clearly off 0.5 AND its interval not crossing 0.5. Pair it with '
+        + 'IQM for the size of the difference.',
+      cz: 'Sebevědomé tvrzení potřebuje hodnotu jasně mimo 0,5 A zároveň interval, který 0,5 nepřekračuje. '
+        + 'Doplňte ho o IQM pro velikost rozdílu.',
+    },
+  },
   analysis_export: {
     general: {
       en: 'Download the current run selection as a **citable dataset** — computed server-side from the full '
@@ -228,8 +290,12 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
         + '**Repro card:** a Markdown card with a config hash, a BibTeX entry and the exact command to '
         + 'reproduce the run.\n'
         + '**LaTeX table:** a paste-ready booktabs results table.\n'
-        + 'CSV and Excel follow the **compare mode** — per-game gives raw reward, per-algorithm gives the '
-        + 'normalized skill-%. (TensorBoard event files and a vector figure arrive in a later step.)',
+        + '**Vector figure (SVG):** a standalone line chart of the selected curves — drop it straight into a '
+        + 'paper or slides; scales crisply at any size.\n'
+        + '**TensorBoard:** a .zip of event files, one log folder per run — unzip it and run '
+        + '`tensorboard --logdir` to browse the curves interactively.\n'
+        + 'CSV, Excel and the figure follow the **compare mode** — per-game gives raw reward, per-algorithm '
+        + 'gives the normalized skill-%.',
       cz: 'Stáhni aktuální výběr běhů jako **citovatelný dataset** — počítá se na serveru z celé historie na '
         + 'disku, takže exporty jsou v plném rozlišení, ne oříznutý živý pohled.\n'
         + '**CSV (tidy):** řádek na (běh, bod, metrika) — univerzální formát pro pandas / R / Excel.\n'
@@ -238,8 +304,12 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
         + '**Repro karta:** Markdown karta s hashem konfigurace, záznamem BibTeX a přesným příkazem k '
         + 'reprodukci běhu.\n'
         + '**LaTeX tabulka:** hotová booktabs tabulka výsledků.\n'
-        + 'CSV a Excel se řídí **režimem porovnání** — podle hry dá surovou odměnu, podle algoritmu '
-        + 'normalizované skill-%. (Soubory událostí TensorBoard a vektorový obrázek přijdou později.)',
+        + '**Vektorový obrázek (SVG):** samostatný čárový graf vybraných křivek — vložíte ho rovnou do článku '
+        + 'nebo prezentace; ostrý v jakékoli velikosti.\n'
+        + '**TensorBoard:** .zip se soubory událostí, jedna složka na běh — rozbalte a spusťte '
+        + '`tensorboard --logdir` pro interaktivní prohlížení křivek.\n'
+        + 'CSV, Excel i obrázek se řídí **režimem porovnání** — podle hry dá surovou odměnu, podle algoritmu '
+        + 'normalizované skill-%.',
     },
   },
   // CPU/GPU training badge (parked C2 diagnostic, 2026-06-18): explains the gate-vs-device nuance the
