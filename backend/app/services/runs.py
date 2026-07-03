@@ -259,6 +259,19 @@ class RunStore:
             # backfilling legacy runs on load without touching the archive on disk.
             return RunDetail(meta=meta, config=config, metrics=backfill_axes(metrics))
 
+    def get_config(self, rid: str) -> TrainConfig | None:
+        """Read only a run's ``config.json`` (skipping the heavy ``metrics.json``) — the light path the
+        X4 experiment grouping needs to hash configs across the whole history without loading every curve."""
+        if not _is_safe_id(rid):
+            return None
+        with self._lock:
+            try:
+                return TrainConfig.model_validate_json(
+                    (self._run_dir(rid) / "config.json").read_text(encoding="utf-8")
+                )
+            except (OSError, ValueError):
+                return None
+
     def delete(self, rid: str) -> bool:
         """Remove a run; returns ``True`` if it existed."""
         if not _is_safe_id(rid):

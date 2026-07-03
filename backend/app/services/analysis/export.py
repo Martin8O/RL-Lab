@@ -32,6 +32,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, Literal
 
+import numpy as np
 from openpyxl import Workbook
 from openpyxl.chart import Reference, ScatterChart, Series
 from openpyxl.chart.marker import Marker
@@ -43,6 +44,7 @@ from app.schemas.analysis import RunSummary
 from app.schemas.runs import RunMeta
 from app.schemas.training import TrainConfig
 from app.services.analysis import provenance
+from app.services.analysis import rliable_metrics as rliable
 from app.services.analysis.lttb import downsample
 from app.services.analysis.stats import score_of_frame, skill_pct, summarize
 from app.services.runs import run_store
@@ -450,6 +452,42 @@ def build_latex(runs: list[LoadedRun], pivot: Pivot = "game") -> bytes:
 
 
 # ---------------------------------------------------------------------------
+# NPZ score matrix (X4, Wave-2 registry addition) — the exact rliable input
+# ---------------------------------------------------------------------------
+
+
+def normalized_score(run: LoadedRun) -> float | None:
+    """One run's scalar score for the rliable ``runs × tasks`` matrix: its final skill % (X2) mapped to a
+    0–1 fraction. ``None`` when the run never produced a usable skill number (skipped from the matrix)."""
+    pct = run.summary.final_skill_pct
+    return None if pct is None else pct / 100.0
+
+
+def build_scorematrix(runs: list[LoadedRun], pivot: Pivot = "game") -> bytes:
+    """The normalized ``runs × tasks`` score matrix per algorithm, as an ``.npz`` (X4 rliable input).
+
+    Grouped by algorithm (each a *method*): for algo ``a`` the archive holds ``a__matrix`` (rows = seeds,
+    cols = tasks), ``a__tasks`` (env ids) and ``a__seeds``. Round-trips with a plain ``numpy.load`` — string
+    labels use unicode dtype (no ``allow_pickle`` needed). An empty selection yields a valid empty archive.
+    """
+    by_algo: dict[str, list[LoadedRun]] = {}
+    for run in runs:
+        by_algo.setdefault(run.config.algo, []).append(run)
+
+    arrays: dict[str, Any] = {}
+    for algo, group in by_algo.items():
+        entries = [(r.config.env_id, r.config.seed, normalized_score(r)) for r in group]
+        sm = rliable.build_score_matrix(entries)
+        arrays[f"{algo}__matrix"] = sm.matrix
+        arrays[f"{algo}__tasks"] = np.asarray(sm.tasks)
+        arrays[f"{algo}__seeds"] = np.asarray(sm.seeds, dtype=int)
+
+    buf = io.BytesIO()
+    np.savez(buf, **arrays)
+    return buf.getvalue()
+
+
+# ---------------------------------------------------------------------------
 # The format registry — a format is a thin plugin; adding one is one row here.
 # ---------------------------------------------------------------------------
 
@@ -472,6 +510,7 @@ REGISTRY: dict[str, ExportFormat] = {
     ),
     "repro": ExportFormat(build_repro_card, "text/markdown", "md"),
     "latex": ExportFormat(build_latex, "text/plain", "tex"),
+    "scorematrix": ExportFormat(build_scorematrix, "application/octet-stream", "npz"),
 }
 
 

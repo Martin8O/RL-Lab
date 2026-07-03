@@ -54,6 +54,25 @@ def config_hash(config: TrainConfig) -> str:
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
+# The per-run fields that vary *within* one experiment (a seed sweep) — dropped from the grouping hash.
+_PER_RUN_FIELDS = ("seed", "experiment_id", "experiment_label")
+
+
+def config_group_hash(config: TrainConfig) -> str:
+    """A **seed-independent** sha256 of the config — identifies an *experiment*, not a run (X4).
+
+    Same canonicalization as :func:`config_hash` but with the per-run fields removed (seed + the sweep
+    id/label), so every seed of one sweep — and any two runs that differ *only* by seed — hash to the
+    same value. This is what "the same experiment, aggregated across seeds" means for auto-grouping runs
+    that carry no explicit ``experiment_id``.
+    """
+    canonical = _canonical_config(config)
+    for field in _PER_RUN_FIELDS:
+        canonical.pop(field, None)
+    payload = json.dumps(canonical, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
 def _run_year(created_at: str) -> str:
     """The four-digit year from a run's ISO ``created_at`` (used for the BibTeX ``year``); the run's
     own year, not the export year, so the citation is deterministic + historically correct. Falls back

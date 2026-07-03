@@ -511,6 +511,107 @@ export interface RunSummary {
   collapse_pct: number | null
 }
 
+/** X4 — experiment aggregation across seeds. Mirrors schemas/analysis.py; served by /api/analysis/*. */
+
+/** One experiment = runs sharing (env, algo, hyperparameters) — a seed sweep. GET /api/analysis/experiments. */
+export interface ExperimentInfo {
+  /** Explicit X3 sweep id, or a derived "auto:<env>:<algo>:<hash>" key. */
+  experiment_id: string
+  label: string | null
+  env_id: string
+  algo: Algo
+  /** Seed-independent config hash — what "the same experiment" means. */
+  group_hash: string
+  run_ids: string[]
+  seeds: number[]
+  n_seeds: number
+}
+
+/** One X2 scalar aggregated across seeds: mean ± sample std (ddof=1) + 95% t-CI. std/ci null when n<2. */
+export interface SeedStat {
+  n: number
+  mean: number
+  std: number | null
+  ci_low: number | null
+  ci_high: number | null
+}
+
+/** Across-seed aggregation of the X2 summary scalars — the ± columns X5/X6 read (RunSummary field → stat). */
+export interface AggregatedSummary {
+  n_seeds: number
+  seeds: number[]
+  metrics: Record<string, SeedStat>
+}
+
+/** A band-ready mean learning curve across seeds, rebinned onto a common axis grid (X4).
+ *  std/ci_* are null when only one seed contributes (collapses to a single line); lo/hi = min/max envelope. */
+export interface AggregateBand {
+  axis: string // "env_steps" | "wall_clock"
+  metric: string // "reward" | "skill_pct"
+  n_seeds: number
+  seeds: number[]
+  x: number[]
+  mean: number[]
+  std: number[] | null
+  ci_low: number[] | null
+  ci_high: number[] | null
+  lo: number[]
+  hi: number[]
+}
+
+/** The full aggregate for one experiment: band-ready curve + across-seed summary. GET /api/analysis/aggregate. */
+export interface AggregateResponse {
+  experiment_id: string | null
+  env_id: string
+  algo: Algo
+  band: AggregateBand | null
+  summary: AggregatedSummary
+}
+
+/** A point estimate with its stratified-bootstrap 95% CI (Agarwal et al., 2021). */
+export interface RliableEstimate {
+  value: number
+  ci_low: number
+  ci_high: number
+}
+
+/** Fraction of (run, task) scores above each threshold τ — a run-score performance profile. */
+export interface PerformanceProfile {
+  taus: number[]
+  fractions: number[]
+}
+
+/** The rliable aggregates for one method (algorithm) over its runs × tasks score matrix. */
+export interface MethodRliable {
+  algo: Algo
+  n_runs: number
+  tasks: string[]
+  seeds: number[]
+  matrix: number[][]
+  iqm: RliableEstimate
+  mean: RliableEstimate
+  median: RliableEstimate
+  optimality_gap: RliableEstimate
+  profile: PerformanceProfile
+}
+
+/** P(algo_x > algo_y) averaged over shared tasks (per-task Mann–Whitney) + bootstrap CI. 0.5 = a tie. */
+export interface ProbabilityOfImprovement {
+  algo_x: Algo
+  algo_y: Algo
+  value: number
+  ci_low: number
+  ci_high: number
+}
+
+/** The rliable analysis over a run selection: per-method aggregates + pairwise prob-of-improvement.
+ *  GET /api/analysis/rliable. Mirrors schemas/analysis.py::RliableResult. */
+export interface RliableResult {
+  normalization: string
+  methods: MethodRliable[]
+  prob_of_improvement: ProbabilityOfImprovement | null
+}
+
 /** Lifecycle snapshot: returned by /api/train/* and pushed as {type:"status", ...}. */
 export interface TrainStatus {
   type: 'status'
