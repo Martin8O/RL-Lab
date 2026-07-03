@@ -98,6 +98,65 @@ const MUJOCO_LOSS: Bilingual = {
 }
 
 export const PARAM_INFO: Record<string, ParamInfo> = {
+  // ── Data Lab controls (X6a) — analysis-surface concepts, not training params. Env-agnostic, so no
+  // perEnv notes; ParamInfo simply renders the general (+recommended) sections for these ids. ──────
+  analysis_mode: {
+    general: {
+      en: 'How the overlaid runs are put on a **common vertical scale** so they can share one chart.\n'
+        + '**Per game (raw reward):** the y-axis is the game\'s actual score. Only meaningful when every '
+        + 'selected run is the *same game* — different games have wildly different reward scales.\n'
+        + '**Per algorithm (skill %):** each run is rescaled to 0–100% of *its own* game\'s skill meter '
+        + '(0% = the idle floor, 100% = solved). This normalises across games, so you can honestly '
+        + 'compare, say, PPO on CartPole against PPO on LunarLander on one axis.',
+      cz: 'Jak se překryté běhy dostanou na **společnou svislou škálu**, aby se vešly do jednoho grafu.\n'
+        + '**Podle hry (surová odměna):** osa y je skutečné skóre hry. Dává smysl jen když jsou všechny '
+        + 'vybrané běhy *stejná hra* — různé hry mají úplně jiné škály odměn.\n'
+        + '**Podle algoritmu (dovednost %):** každý běh se přeškáluje na 0–100 % dovednostního metru *své* '
+        + 'hry (0 % = nečinné dno, 100 % = vyřešeno). Tím se srovnají napříč hrami, takže můžete poctivě '
+        + 'porovnat třeba PPO na CartPole proti PPO na LunarLanderu na jedné ose.',
+    },
+    recommended: {
+      en: 'Comparing runs of one game → Per game. Comparing across different games → Per algorithm.',
+      cz: 'Porovnáváte běhy jedné hry → Podle hry. Porovnáváte napříč různými hrami → Podle algoritmu.',
+    },
+  },
+  analysis_axis: {
+    general: {
+      en: 'What the **horizontal axis** measures — two honest but different lenses on "how far did the '
+        + 'run get".\n'
+        + '**Env steps:** progress in environment steps (how much *experience* the agent consumed). This '
+        + 'is the fair, hardware-independent axis — the standard way to compare sample-efficiency.\n'
+        + '**Wall-clock:** progress in real elapsed time. Reflects how fast the run actually was on this '
+        + 'machine — useful for "which finished sooner", but it is sensitive to CPU/GPU, batching and '
+        + 'other load, so it is not a fair sample-efficiency comparison.',
+      cz: 'Co měří **vodorovná osa** — dva poctivé, ale odlišné pohledy na to, „kam až se běh dostal“.\n'
+        + '**Kroky prostředí:** postup v krocích prostředí (kolik *zkušenosti* agent spotřeboval). To je '
+        + 'férová osa nezávislá na hardwaru — standardní způsob, jak porovnat úspornost na data.\n'
+        + '**Reálný čas:** postup v uplynulém čase. Ukazuje, jak rychlý běh na tomto stroji skutečně byl — '
+        + 'hodí se pro „co doběhlo dřív“, ale závisí na CPU/GPU, dávkování a další zátěži, takže to není '
+        + 'férové srovnání úspornosti na data.',
+    },
+    recommended: {
+      en: 'Comparing learning quality → Env steps. Comparing raw speed on this machine → Wall-clock.',
+      cz: 'Porovnáváte kvalitu učení → Kroky prostředí. Porovnáváte čistou rychlost na stroji → Reálný čas.',
+    },
+  },
+  analysis_collapse: {
+    general: {
+      en: 'Merge a set of runs that differ **only by random seed** into a single **mean ± confidence '
+        + 'band** instead of one line each.\n'
+        + 'A single seed can get lucky or unlucky, so one curve tells you little about whether a setting '
+        + 'is really better. Averaging several seeds — the shaded band shows the spread — is the honest '
+        + 'way to report an RL result. Available only when the selected runs share one game **and** '
+        + 'algorithm and there are at least two of them; the seed chips let you drop an outlier.',
+      cz: 'Sloučí sadu běhů, které se liší **jen náhodným seedem**, do jednoho **průměru ± pásma '
+        + 'spolehlivosti** místo samostatné čáry pro každý.\n'
+        + 'Jeden seed může mít štěstí i smůlu, takže jedna křivka moc neřekne, jestli je nastavení '
+        + 'opravdu lepší. Zprůměrování více seedů — stínované pásmo ukazuje rozptyl — je poctivý způsob, '
+        + 'jak výsledek RL prezentovat. Dostupné jen když vybrané běhy sdílejí jednu hru **a** algoritmus '
+        + 'a jsou aspoň dva; přepínače seedů umožní vyřadit odlehlý běh.',
+    },
+  },
   // CPU/GPU training badge (parked C2 diagnostic, 2026-06-18): explains the gate-vs-device nuance the
   // GPU-utilization probe surfaced — a "GPU game" with an idle GPU panel is not a bug.
   training_device: {

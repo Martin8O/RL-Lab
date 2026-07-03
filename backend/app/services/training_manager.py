@@ -36,7 +36,7 @@ from app.services.connection_manager import ConnectionManager, manager
 from app.services.highscores import HighScoreStore, highscores, make_meta
 from app.services.ma_env import is_competitive_ma
 from app.services.preview_streamer import preview_streamer
-from app.services.runs import RunStore, final_score, run_store, should_archive
+from app.services.runs import RunStore, run_store, should_archive
 from app.services.system_info import gpu_available
 from app.services.train_control import TrainControl
 
@@ -644,11 +644,8 @@ class TrainingManager:
             return
         spec = get_env(config.env_id)
         solved_score = spec.solved_score if spec is not None else 0.0
-        final = final_score(config, metrics)
-        if not should_archive(state, final, solved_score):
-            logger.info(
-                "Run not archived (state=%s, final=%s, <10%% of %s)", state, final, solved_score
-            )
+        if not should_archive(state):
+            logger.info("Run not archived (non-terminal state=%s)", state)
             return
         try:
             self._runs.save(

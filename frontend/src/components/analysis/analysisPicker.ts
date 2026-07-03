@@ -17,6 +17,7 @@ export interface RunFilters {
   search: string
   category: string // family id, or '' = all
   algo: string // Algo, or '' = all
+  minPct: number // hide runs whose best skill-% is below this (0 = show all, incl. 0%-skill runs)
   sort: RunSort
   group: RunGroup
 }
@@ -25,6 +26,7 @@ export const DEFAULT_RUN_FILTERS: RunFilters = {
   search: '',
   category: '',
   algo: '',
+  minPct: 0,
   sort: 'newest',
   group: 'none',
 }
@@ -137,7 +139,10 @@ export function organizeRuns(
     (r) =>
       matchesSearch(r, envs, locale, filters.search) &&
       (filters.category === '' || (envOf(r, envs)?.family ?? r.env_id) === filters.category) &&
-      (filters.algo === '' || r.algo === filters.algo),
+      (filters.algo === '' || r.algo === filters.algo) &&
+      // minPct 0 shows everything (incl. runs at the idle floor); a positive floor hides low-skill runs
+      // by the same skill-% the meter/chart use. Unknown-env runs (-Infinity) drop once minPct > 0.
+      (filters.minPct <= 0 || bestPct(r, envs) >= filters.minPct),
   )
   const sorted = sortRuns(filtered, envs, locale, filters.sort)
 

@@ -340,17 +340,21 @@ export default function AnalysisChart({
             const boxW = Math.min(360, Math.max(132, Math.ceil(29 + labelPx + 12 + valPx), Math.ceil(16 + header.length * 6)))
             const flip = hoverX > PAD.l + chartW - boxW - 8
             const bx = flip ? hoverX - boxW - 10 : hoverX + 10
-            const boxH = 16 + rows.length * 14
+            // Header (the x-position, e.g. "248k") gets its own band above a hairline so it never reads
+            // as another legend row crowding the first run — hence the +8 lead before the rows start.
+            const rowTop = 28
+            const boxH = rowTop + rows.length * 14
             return (
               <g pointerEvents="none">
                 <line x1={hoverX} y1={PAD.t} x2={hoverX} y2={PAD.t + chartH} stroke="var(--chart-axis)" strokeWidth={1} strokeDasharray="3 3" opacity={0.7} />
                 <g transform={`translate(${bx}, ${PAD.t + 6})`}>
                   <rect width={boxW} height={boxH} rx={6} fill="var(--surface-2)" stroke="var(--border-strong)" strokeWidth={1} opacity={0.98} />
-                  <text x={8} y={13} fontSize={9.5} fontFamily="var(--font-mono)" fill="var(--text-muted)">
+                  <text x={8} y={14} fontSize={9.5} fontFamily="var(--font-mono)" fill="var(--text-muted)">
                     {header}
                   </text>
+                  <line x1={8} y1={20} x2={boxW - 8} y2={20} stroke="var(--border-default)" strokeWidth={1} opacity={0.8} />
                   {rows.map((r, i) => (
-                    <g key={i} transform={`translate(8, ${20 + i * 14})`}>
+                    <g key={i} transform={`translate(8, ${rowTop + i * 14})`}>
                       <rect width={8} height={8} y={-7} rx={2} fill={r.color} />
                       <text x={13} y={0} fontSize={10} fill="var(--text-default)">{labels[i]}</text>
                       <text x={boxW - 16} y={0} textAnchor="end" fontSize={10} fontFamily="var(--font-mono)"

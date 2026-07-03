@@ -85,17 +85,19 @@ def backfill_axes(metrics: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return metrics
 
 
-def should_archive(state: str, final: float | None, solved_score: float) -> bool:
-    """Keep a run only if it finished/stopped *and* reached ≥10% of the solved score.
+def should_archive(state: str) -> bool:
+    """Archive every run that reached a terminal-success state (``finished`` or ``stopped``).
 
-    Sub-10% runs (random-policy noise, instant stops) just clutter the compare view, so they
-    are dropped. When the env's solved score is unknown (0), keep the run rather than lose it.
+    We deliberately do **not** drop low-skill runs at save-time any more. A skill-based cutoff
+    (previously "≥10% of solved") silently lost runs that showed *real* learning yet never crossed
+    into positive skill — e.g. PPO on Taxi climbing −800 → −200 (it learned to stop illegal moves but
+    never delivered a fare, so it reads 0% on the ``[min_score, solved_score]`` meter). Those curves
+    are exactly what a researcher wants to see, so they must reach the Data Lab. Filtering low-skill
+    runs is now a **Data Lab UI choice** (the min-% source filter), not an irreversible save-time gate.
+
+    ``_persist_run`` still refuses a run with *no* metric frames, so a zero-length run isn't stored.
     """
-    if state not in ("finished", "stopped"):
-        return False
-    if solved_score <= 0:
-        return True
-    return final is not None and final >= 0.1 * solved_score
+    return state in ("finished", "stopped")
 
 
 def _solved_at(config: TrainConfig, metrics: list[dict[str, Any]], solved_score: float) -> float | None:

@@ -18,6 +18,7 @@ import AnalysisChart, { type ChartBand, type ChartSeries } from './AnalysisChart
 import SourcePicker from './SourcePicker'
 import ModeSwitch from '../ModeSwitch'
 import LangThemeToggle from '../LangThemeToggle'
+import ParamInfo from '../ParamInfo'
 
 // Overlay palette (the run-compare hues + two viz colours) — assigned by selection order.
 const COLORS = [
@@ -69,6 +70,7 @@ export default function AnalysisSurface() {
   const envs = useAppStore((s) => s.envs)
   const locale = useAppStore((s) => s.locale)
   const backendStatus = useAppStore((s) => s.backendStatus)
+  const trainState = useAppStore((s) => s.trainState)
 
   const [runs, setRuns] = useState<RunMeta[]>([])
   const [selected, setSelected] = useState<string[]>([]) // ordered → stable colours
@@ -90,11 +92,24 @@ export default function AnalysisSurface() {
     return i >= 0 ? COLORS[i % COLORS.length] : null
   }, [selected])
 
+  const loadRuns = useCallback(() => {
+    if (backendStatus !== 'online') return
+    void fetchRuns().then(setRuns).catch(() => {})
+  }, [backendStatus])
+
   // Load the run history when the surface opens (and on reconnect while open).
   useEffect(() => {
-    if (!open || backendStatus !== 'online') return
-    void fetchRuns().then(setRuns).catch(() => {})
-  }, [open, backendStatus])
+    if (!open) return
+    loadRuns()
+  }, [open, loadRuns])
+
+  // A run persists to history the instant before it broadcasts a terminal state, so refetch whenever
+  // training settles (X3: each seed of a sweep lands 'finished' in turn, then the last one clears the
+  // sweep) — otherwise a list fetched mid-sweep is missing every seed that finished after it opened.
+  useEffect(() => {
+    if (!open) return
+    if (trainState === 'finished' || trainState === 'stopped') loadRuns()
+  }, [open, trainState, loadRuns])
 
   // Fetch (and cache) the full metrics of each newly-selected run for client-side projection.
   useEffect(() => {
@@ -248,14 +263,20 @@ export default function AnalysisSurface() {
           {t('analysis.subtitle')}
         </span>
         <div style={{ flex: 1 }} />
-        <Segmented ariaLabel={t('analysis.mode')} value={mode} onChange={setMode} options={[
-          { id: 'game', label: t('analysis.mode_game') },
-          { id: 'algo', label: t('analysis.mode_algo') },
-        ]} />
-        <Segmented ariaLabel={t('analysis.axis')} value={axis} onChange={setAxis} options={[
-          { id: 'env_steps', label: t('analysis.axis_steps') },
-          { id: 'wall_clock', label: t('analysis.axis_time') },
-        ]} />
+        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+          <Segmented ariaLabel={t('analysis.mode')} value={mode} onChange={setMode} options={[
+            { id: 'game', label: t('analysis.mode_game') },
+            { id: 'algo', label: t('analysis.mode_algo') },
+          ]} />
+          <ParamInfo paramId="analysis_mode" label={t('analysis.mode')} />
+        </div>
+        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+          <Segmented ariaLabel={t('analysis.axis')} value={axis} onChange={setAxis} options={[
+            { id: 'env_steps', label: t('analysis.axis_steps') },
+            { id: 'wall_clock', label: t('analysis.axis_time') },
+          ]} />
+          <ParamInfo paramId="analysis_axis" label={t('analysis.axis')} />
+        </div>
         <div style={{ width: 1, height: 26, background: 'var(--border-default)' }} />
         <LangThemeToggle />
       </header>
@@ -268,8 +289,18 @@ export default function AnalysisSurface() {
           padding: '12px 12px 8px', borderRight: '2px solid var(--border-default)', background: 'var(--surface-1)',
         }}>
           <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 8 }}>
-            <span style={{ fontSize: 'var(--fs-heading)', fontWeight: 'var(--fw-semibold)', color: 'var(--text-strong)' }}>
-              {t('analysis.sources')}
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ fontSize: 'var(--fs-heading)', fontWeight: 'var(--fw-semibold)', color: 'var(--text-strong)' }}>
+                {t('analysis.sources')}
+              </span>
+              <button onClick={loadRuns} aria-label={t('analysis.refresh')} title={t('analysis.refresh')}
+                style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 22, height: 22, padding: 0, border: 'none', background: 'transparent', color: 'var(--text-faint)', cursor: 'pointer', borderRadius: 'var(--radius-sm)' }}
+                onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--accent)')}
+                onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-faint)')}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden role="img">
+                  <path d="M20 11a8 8 0 1 0-.5 3.5M20 5v6h-6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </button>
             </span>
             <span style={{ fontSize: 'var(--fs-meta)', color: 'var(--text-muted)' }}>
               {t('analysis.selected_count', { n: selected.length, max: MAX_SELECT })}
@@ -303,11 +334,14 @@ export default function AnalysisSurface() {
               {t('analysis.log_y')}
             </label>
             {canCollapse && (
-              <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 'var(--fs-label)', color: 'var(--text-default)', cursor: 'pointer' }}>
-                <input type="checkbox" checked={collapse} onChange={(e) => setCollapse(e.target.checked)}
-                  aria-label={t('analysis.collapse_seeds')} />
-                {t('analysis.collapse_seeds')}
-              </label>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 'var(--fs-label)', color: 'var(--text-default)', cursor: 'pointer' }}>
+                  <input type="checkbox" checked={collapse} onChange={(e) => setCollapse(e.target.checked)}
+                    aria-label={t('analysis.collapse_seeds')} />
+                  {t('analysis.collapse_seeds')}
+                </label>
+                <ParamInfo paramId="analysis_collapse" label={t('analysis.collapse_seeds')} />
+              </span>
             )}
             {/* seed include/exclude chips (band only) */}
             {bandActive && seedsInSelection.length > 0 && (

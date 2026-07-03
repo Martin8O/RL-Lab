@@ -11,6 +11,7 @@ import { categoryLabel } from '../../content/envCategories'
 import { solvedPct } from '../checkpointBrowser'
 import { formatCount } from '../../format'
 import { algoLabel } from './chartMath'
+import RunConfigModal from './RunConfigModal'
 import {
   DEFAULT_RUN_FILTERS,
   organizeRuns,
@@ -53,6 +54,7 @@ export default function SourcePicker({
   const { t } = useTranslation()
   const [filters, setFilters] = useState<RunFilters>(DEFAULT_RUN_FILTERS)
   const patch = (p: Partial<RunFilters>) => setFilters((f) => ({ ...f, ...p }))
+  const [infoRun, setInfoRun] = useState<RunMeta | null>(null) // the run whose config modal is open
 
   const facets = useMemo(() => runFacets(runs, envs), [runs, envs])
   const groups = useMemo(() => organizeRuns(runs, envs, locale, filters), [runs, envs, locale, filters])
@@ -107,6 +109,14 @@ export default function SourcePicker({
             <option value="game">{t('saveload.group_game')}</option>
             <option value="algo">{t('saveload.group_algo')}</option>
           </select>
+          <select aria-label={t('analysis.filter_min_skill')} value={filters.minPct}
+            onChange={(e) => patch({ minPct: Number(e.target.value) })} style={selectStyle}>
+            <option value={0}>{t('analysis.filter_skill_all')}</option>
+            <option value={25}>≥ 25 %</option>
+            <option value={50}>≥ 50 %</option>
+            <option value={75}>≥ 75 %</option>
+            <option value={100}>{t('analysis.filter_skill_solved')}</option>
+          </select>
         </div>
       </div>
 
@@ -135,48 +145,74 @@ export default function SourcePicker({
               const selected = selectedIds.has(run.id)
               const color = colorFor(run.id)
               return (
-                <button
-                  key={run.id}
-                  onClick={() => onToggle(run.id)}
-                  aria-pressed={selected}
-                  aria-label={`${gameName(run.env_id)} · ${algoLabel(t, run.algo)} · ${t('sidebar.seed')} ${run.seed}`}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: 9, width: '100%', textAlign: 'left',
-                    padding: '7px 9px', cursor: 'pointer',
-                    background: selected ? 'var(--accent-surface)' : 'var(--surface-2)',
-                    border: `1px solid ${selected ? 'var(--accent)' : 'var(--border-default)'}`,
-                    borderRadius: 'var(--radius-sm)', transition: 'var(--t-colors)',
-                  }}
-                >
-                  {/* selection swatch: filled with the assigned overlay colour when selected */}
-                  <span style={{
-                    width: 12, height: 12, flexShrink: 0, borderRadius: 3,
-                    background: selected && color ? color : 'transparent',
-                    border: `1.5px solid ${selected && color ? color : 'var(--border-strong)'}`,
-                  }} />
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{
-                      fontSize: 'var(--fs-label)', fontWeight: 'var(--fw-medium)', color: 'var(--text-strong)',
-                      whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                <div key={run.id} style={{
+                  display: 'flex', alignItems: 'stretch', gap: 3,
+                  background: selected ? 'var(--accent-surface)' : 'var(--surface-2)',
+                  border: `1px solid ${selected ? 'var(--accent)' : 'var(--border-default)'}`,
+                  borderRadius: 'var(--radius-sm)', transition: 'var(--t-colors)', overflow: 'hidden',
+                }}>
+                  <button
+                    onClick={() => onToggle(run.id)}
+                    aria-pressed={selected}
+                    aria-label={`${gameName(run.env_id)} · ${algoLabel(t, run.algo)} · ${t('sidebar.seed')} ${run.seed}`}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 9, flex: 1, minWidth: 0, textAlign: 'left',
+                      padding: '7px 9px', cursor: 'pointer', background: 'transparent', border: 'none',
+                    }}
+                  >
+                    {/* selection swatch: filled with the assigned overlay colour when selected */}
+                    <span style={{
+                      width: 12, height: 12, flexShrink: 0, borderRadius: 3,
+                      background: selected && color ? color : 'transparent',
+                      border: `1.5px solid ${selected && color ? color : 'var(--border-strong)'}`,
+                    }} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{
+                        fontSize: 'var(--fs-label)', fontWeight: 'var(--fw-medium)', color: 'var(--text-strong)',
+                        whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                      }}>
+                        {gameName(run.env_id)}
+                      </div>
+                      <div style={{ fontSize: 'var(--fs-meta)', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+                        {algoLabel(t, run.algo)} · {t('sidebar.seed')} {run.seed} · {runBudget(run)}
+                      </div>
+                    </div>
+                    <span style={{
+                      fontSize: 'var(--fs-label)', fontFamily: 'var(--font-mono)',
+                      fontFeatureSettings: 'var(--ff-tabular)', color: 'var(--text-default)', flexShrink: 0,
                     }}>
-                      {gameName(run.env_id)}
-                    </div>
-                    <div style={{ fontSize: 'var(--fs-meta)', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
-                      {algoLabel(t, run.algo)} · {t('sidebar.seed')} {run.seed} · {runBudget(run)}
-                    </div>
-                  </div>
-                  <span style={{
-                    fontSize: 'var(--fs-label)', fontFamily: 'var(--font-mono)',
-                    fontFeatureSettings: 'var(--ff-tabular)', color: 'var(--text-default)', flexShrink: 0,
-                  }}>
-                    {pct != null ? `${pct.toFixed(0)}%` : '—'}
-                  </span>
-                </button>
+                      {pct != null ? `${pct.toFixed(0)}%` : '—'}
+                    </span>
+                  </button>
+                  {/* per-run parameters (full config) — opens the read-only detail modal */}
+                  <button
+                    onClick={() => setInfoRun(run)}
+                    aria-label={t('analysis.run_params_open', { label: gameName(run.env_id) })}
+                    title={t('analysis.run_params')}
+                    style={{
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', width: 28, flexShrink: 0,
+                      background: 'transparent', border: 'none', borderLeft: '1px solid var(--border-default)',
+                      color: 'var(--text-faint)', cursor: 'pointer',
+                    }}
+                    onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--accent)')}
+                    onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-faint)')}
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden role="img">
+                      <circle cx="12" cy="12" r="9.25" stroke="currentColor" strokeWidth="1.7" />
+                      <circle cx="12" cy="7.75" r="1.15" fill="currentColor" />
+                      <path d="M12 11.25v5.25" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" />
+                    </svg>
+                  </button>
+                </div>
               )
             })}
           </div>
         ))}
       </div>
+
+      {infoRun && (
+        <RunConfigModal key={infoRun.id} run={infoRun} envName={gameName(infoRun.env_id)} onClose={() => setInfoRun(null)} />
+      )}
     </div>
   )
 }

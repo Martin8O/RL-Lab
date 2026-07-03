@@ -37,12 +37,13 @@ _EVO_FRAMES = [
 
 
 def test_should_archive_gate() -> None:
-    assert should_archive("finished", 60.0, _SOLVED) is True   # ≥10%
-    assert should_archive("stopped", 50.0, _SOLVED) is True    # exactly 10%
-    assert should_archive("finished", 40.0, _SOLVED) is False  # below 10%
-    assert should_archive("finished", None, _SOLVED) is False  # no score
-    assert should_archive("error", 999.0, _SOLVED) is False    # non-terminal-success state
-    assert should_archive("finished", 1.0, 0.0) is True        # unknown env → keep
+    # Every terminal-success run is kept regardless of score — low-skill filtering is a Data Lab UI
+    # choice now, not a save-time gate (a 0%-skill run that showed real learning must still archive).
+    assert should_archive("finished") is True
+    assert should_archive("stopped") is True
+    assert should_archive("error") is False     # a crashed run isn't a result
+    assert should_archive("running") is False   # not terminal
+    assert should_archive("idle") is False
 
 
 def test_final_score_per_algo() -> None:
@@ -113,11 +114,13 @@ def test_list_newest_first_and_traversal_guard(tmp_path: Path) -> None:
 # -- manager + REST ---------------------------------------------------------
 
 
-def test_sub_threshold_run_is_not_archived() -> None:
-    # A tiny 256-step PPO run never reaches reward 50 (10% of 500), so the archive gate
-    # drops it. Context-managed client runs the app lifespan for live WS broadcasts.
+def test_low_skill_run_is_still_archived() -> None:
+    # Every finished run is archived now, regardless of skill: a tiny 256-step PPO run stays far below
+    # CartPole's solved 500 (0% skill) yet must still reach history — low-skill filtering is a Data Lab
+    # UI choice, not a save-time gate (so a real-but-sub-solved learning curve is never silently lost).
+    # Context-managed client runs the app lifespan for live WS broadcasts.
     with TestClient(app) as c:
-        seed = 4242  # unique so we can look for (the absence of) our run
+        seed = 4242  # unique so we can find exactly our run
         before = {r["id"] for r in c.get("/api/runs").json()}
         started = c.post(
             "/api/train/start",
@@ -132,7 +135,8 @@ def test_sub_threshold_run_is_not_archived() -> None:
 
         runs = c.get("/api/runs").json()
         mine = [r for r in runs if r["seed"] == seed and r["id"] not in before]
-        assert mine == [], "sub-threshold run should not have been archived"
+        assert len(mine) == 1, "a finished run should be archived even below the old skill threshold"
+        c.delete(f"/api/runs/{mine[0]['id']}")  # keep the shared data/ dir clean
 
 
 def test_get_and_delete_unknown_run_is_404() -> None:
