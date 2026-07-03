@@ -458,6 +458,40 @@ export interface RunDetail {
   metrics: (TrainingMetrics | EvolutionMetrics | QLearningMetrics)[]
 }
 
+/** Summary statistics for one finished run (X2), from GET /api/analysis/summary?run_ids=...
+ *  Computed server-side over the run's full on-disk history on the canonical X1 axes (env_steps +
+ *  wall_clock), normalized against the env's [min_score, solved_score]. Fields are null where a
+ *  short / sparse / never-solved run can't produce the number. Mirrors schemas/analysis.py::RunSummary. */
+export interface RunSummary {
+  run_id: string
+  env_id: string
+  algo: Algo
+  seed: number
+  n_frames: number
+  min_score: number
+  solved_score: number
+  /** 1. Final performance: mean reward over the last ~10% of the curve, raw + as 0–100 skill %. */
+  final_reward: number | null
+  final_skill_pct: number | null
+  /** 2. Sample efficiency: where the run first reached solved_score, on both axes (null = never). */
+  solved_env_steps: number | null
+  solved_wall_clock: number | null
+  /** 3. AUC: mean normalized skill (0–1) across the run — trapezoid over env_steps. */
+  auc_normalized: number | null
+  /** 4. Stability: roughness (std) of the late reward; across_seed_std is an X4 hook (null here). */
+  late_reward_std: number | null
+  across_seed_std: number | null
+  /** 5. Throughput: run totals + env_steps per wall_clock second. */
+  final_env_steps: number
+  final_wall_clock: number
+  mean_steps_per_sec: number | null
+  /** 6. Peak vs final: the best point + skill points given back after it (0 = no collapse). */
+  peak_reward: number | null
+  peak_env_steps: number | null
+  peak_skill_pct: number | null
+  collapse_pct: number | null
+}
+
 /** Lifecycle snapshot: returned by /api/train/* and pushed as {type:"status", ...}. */
 export interface TrainStatus {
   type: 'status'

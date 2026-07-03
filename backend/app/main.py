@@ -7,6 +7,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
+from app.api.analysis import router as analysis_router
 from app.api.checkpoints import router as checkpoints_router
 from app.api.envs import router as envs_router
 from app.api.highscores import router as highscores_router
@@ -57,6 +58,7 @@ app.include_router(preview_router)
 app.include_router(highscores_router)
 app.include_router(checkpoints_router)
 app.include_router(runs_router)
+app.include_router(analysis_router)
 app.include_router(play_router)
 app.include_router(play_scores_router)
 app.include_router(skill_router)
