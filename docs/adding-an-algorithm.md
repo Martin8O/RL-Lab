@@ -1,12 +1,12 @@
 # Adding an algorithm
 
-> Living document (Phase F4). The dashboard ships **six** learning methods — PPO (gradient, via
+> Living document (Phase F4). The dashboard ships **seven** learning methods — PPO (gradient, via
 > Stable-Baselines3), a custom **neuroevolution** (population/fitness/mutation), tabular **Q-learning**
 > (value-based, G2b), **AlphaZero-lite** (CNN policy+value + neural-guided MCTS self-play, board games
-> only, G6f/ADR-055), **SAC** (off-policy continuous control, S5a), and **TD3** (off-policy continuous
-> control, S5b/ADR-068) — as **peer trainers** behind one manager (ADR-004/028). A seventh (DQN, A2C…)
-> plugs into the same seam. See also
-> [`architecture.md`](architecture.md) and [`adding-an-environment.md`](adding-an-environment.md).
+> only, G6f/ADR-055), **SAC** (off-policy continuous control, S5a), **TD3** (off-policy continuous
+> control, S5b/ADR-068), and **DQN** (off-policy value-based, discrete + Atari, S5c/ADR-069) — as
+> **peer trainers** behind one manager (ADR-004/028). An eighth (A2C, Rainbow…) plugs into the same seam.
+> See also [`architecture.md`](architecture.md) and [`adding-an-environment.md`](adding-an-environment.md).
 
 ## The peer-trainer contract
 
@@ -19,7 +19,18 @@ if config.algo == "neuroevolution":
 elif config.algo == "q_learning":
     terminal = train_q_learning(config, gym_id, control,
                                 emit_q_learning, emit_qtable, publish_predict, on_snapshot, resume)
-else:
+elif config.algo == "sac":       # off-policy continuous (trainer_sac, lazy torch/SB3 import)
+    terminal = train_sac(config, gym_id, control,
+                         emit_metrics, emit_progress, publish_predict, on_snapshot, resume)
+elif config.algo == "td3":       # off-policy continuous (trainer_td3)
+    terminal = train_td3(config, gym_id, control,
+                         emit_metrics, emit_progress, publish_predict, on_snapshot, resume)
+elif config.algo == "dqn":       # off-policy value-based, discrete + Atari (trainer_dqn)
+    terminal = train_dqn(config, gym_id, control,
+                         emit_metrics, emit_progress, publish_predict, on_snapshot, resume)
+elif config.algo == "alphazero" or is_board_game(env):   # OpenSpiel → trainer_az / trainer_board
+    terminal = train_az(...) if config.algo == "alphazero" else train_board(...)
+else:                            # ppo — incl. multi-agent param-sharing + board MaskablePPO
     terminal = train_ppo(config, gym_id, control,
                          emit_metrics, emit_progress, publish_predict, on_snapshot, resume)
 ```

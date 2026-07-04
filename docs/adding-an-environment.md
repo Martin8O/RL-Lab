@@ -23,7 +23,7 @@ with training the same GPU-gated `CnnPolicy` case — confirming the seams stack
 `make_env` applies `FlatObsWrapper` for `family=="minigrid"`, flattening it to a vector so the same
 `MlpPolicy`/genome train (on CPU) with no engine change, while the colourful grid still renders server-side
 as a JPEG and play is turn-based (G2c). A **MuJoCo robotics** env (Hopper, Walker2d, HalfCheetah, Ant, Reacher,
-Swimmer — vector obs + continuous `Box`, G5a) is **data + content only**: it reuses the continuous-box play path
+Swimmer, Humanoid — vector obs + continuous `Box`, G5a) is **data + content only**: it reuses the continuous-box play path
 (a per-joint vector keymap, like BipedalWalker) and the server-JPEG render path (not in `client_render`) at once,
 with `hw_requirement="gpu"` gating training (a gait needs millions of steps — like BipedalWalker, *not* a
 `CnnPolicy` gate). Two play fields tune the human feel for these fall-fast 125 fps robots: human play is capped at
@@ -67,7 +67,7 @@ register(EnvSpec(
     hyperparams=_standard_hyperparams(),         # shared PPO + neuroevolution surface
     solved_score=200.0,                # 100% on the meter; the run-archive / "solved @" threshold
     min_score=-200.0,                  # 0% on the meter (see "skill floor" in §1 — the idle/timeout baseline)
-    default_total_timesteps=500_000,   # the ★ PPO budget; the sidebar step ladder is ×0.2…×4 of this
+    default_total_timesteps=500_000,   # the ★ PPO budget; the sidebar step ladder is ×0.2…×8 of this
     play_step_scale=1,                 # play episodes run this × longer (so a human has time to play)
     # Optional: make_kwargs={...} for variants sharing one gym_id (FrozenLake map_name/is_slippery);
     # episode_step_limit=N for an env with no native TimeLimit (CliffWalking); turn_based=True for a

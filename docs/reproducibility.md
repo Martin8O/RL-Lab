@@ -23,11 +23,13 @@ finished run can be reproduced from its archived config alone.
 - **Neuroevolution scores are reproducible per child.** Fitness is the **mean undiscounted return** over
   `episodes` evaluation episodes; each Top-K child surfaces the **deterministic env seed** it was scored
   with (instead of a meaningless γ/α), so any child's run can be re-created exactly (ADR-010).
-- **Run archive (ADR-014).** Meaningful finished runs (those that reached ≥10% of the env's
-  `solved_score`) are auto-archived under gitignored `data/runs/<id>/` as `meta` + `config` + `metrics`,
-  and record **`solved_at`** — the x (timesteps for PPO, generation for neuroevolution) where the run
-  first hit 100% of `solved_score`. This is the headline "steps-to-solve" metric and the basis of the
-  compare overlay's "solved @" marker.
+- **Run archive (ADR-014, ADR-088).** **Every** finished or stopped run (with ≥1 metric frame) is
+  auto-archived under gitignored `data/runs/<id>/` as `meta` + `config` + `metrics`. The original
+  ≥10%-of-`solved_score` save-time gate was **removed (ADR-088)** — it silently dropped genuinely
+  interesting low-skill runs — so low-skill filtering is now a **reversible** min-skill filter in the Data
+  Lab picker instead. Each run records **`solved_at`** — the x (timesteps for PPO, generation for
+  neuroevolution) where the run first hit 100% of `solved_score`. This is the headline "steps-to-solve"
+  metric and the basis of the compare overlay's "solved @" marker.
 
 ## The one deliberate exception: human play
 

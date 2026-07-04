@@ -20,12 +20,12 @@ Base URL in dev: `http://127.0.0.1:8000`. CORS allows the Vite origin (`CORS_ORI
 | GET | `/api/system` | `SystemInfo` — `{gpu_available}` (cached `torch.cuda` probe) |
 
 `gpu_available` gates **GPU-only training** together with two `EnvSpec` fields (ADR-043). `hw_requirement`
-(`"cpu"`/`"gpu"`) declares whether a CUDA device is needed; `train_implemented` (default `true`, `false` for
-the **image-obs** envs Atari + CarRacing) declares whether the env's trainer exists yet. The UI disables Run —
-and `POST /api/train/start` rejects with `400` — when an env needs a GPU that's absent **or** its trainer
-isn't built. The two are independent: on a **CUDA machine** the GPU-gated *vector* heavies (BipedalWalker,
-MuJoCo — `MlpPolicy`) un-gate and train, while the *image* envs stay gated (their `CnnPolicy` seam, G4b/
-G3c-train, isn't built) until `train_implemented` flips. Human play of every gated env stays available.
+(`"cpu"`/`"gpu"`) declares whether a CUDA device is needed; `train_implemented` declares whether the env's
+trainer exists — it is now **`true` for every shipped env** (the `CnnPolicy` image trainers for Atari +
+CarRacing landed, G4b / G3c-train). The two are independent: the UI disables Run — and `POST
+/api/train/start` rejects with `400` — when an env needs a GPU that's absent. On a **CUDA machine** every
+family trains, including the GPU heavies (BipedalWalker, the six MuJoCo robots, Atari, and CarRacing). Human
+play of every gated env stays available.
 
 ### Environments
 | Method | Path | Returns |
@@ -37,16 +37,19 @@ G3c-train, isn't built) until `train_implemented` flips. Human play of every gat
 | Method | Path | Body | Returns |
 |---|---|---|---|
 | POST | `/api/train/start` | `TrainConfig` | `TrainStatus` |
+| POST | `/api/train/sweep` | `SweepRequest` (config + `seeds[]` / `seed_count`) | `TrainStatus` (queues N seeds, run back-to-back under one `experiment_id`, ADR-085) |
 | POST | `/api/train/pause` | — | `TrainStatus` |
 | POST | `/api/train/resume` | — | `TrainStatus` |
 | POST | `/api/train/stop` | — | `TrainStatus` |
 | GET | `/api/train/status` | — | `TrainStatus` |
 
-One run is active at a time. `TrainConfig.algo` selects PPO (`hyperparams`), neuroevolution
-(`evolution`), or tabular Q-learning (`q_learning` — α/γ/ε-start/ε-end/ε-decay/episodes; available on
-discrete-obs Toy Text envs); `seed` + the full config are echoed back in `TrainStatus` for
-reproducibility. `TrainStatus` also retains `last_metrics` (PPO), `last_evolution` (neuroevolution),
-and `last_q_learning` + `last_qtable` (Q-learning) so a reconnecting client repopulates panels at once.
+One run is active at a time. `TrainConfig.algo` selects one of **seven** algorithms — PPO (`hyperparams`),
+off-policy **SAC / TD3 / DQN** (`sac` / `td3` / `dqn`), **neuroevolution** (`evolution`), tabular
+**Q-learning** (`q_learning` — α/γ/ε-start/ε-end/ε-decay/episodes; discrete-obs Toy Text), or **AlphaZero**
+(`alphazero`; board games) — each gated per-env by `supported_algos`; `seed` + the full config are echoed
+back in `TrainStatus` for reproducibility. `TrainStatus` also retains `last_metrics` (PPO/SAC/TD3/DQN),
+`last_evolution`, `last_q_learning` + `last_qtable`, and `last_ma_metrics` (multi-agent self-play) so a
+reconnecting client repopulates panels at once.
 
 ### Preview (`/api/preview`)
 | Method | Path | Body | Returns |
@@ -80,11 +83,26 @@ random `seed` (varied scene each game); AI play keeps the configured seed (repro
 | DELETE | `/api/checkpoints/{id}` | — | `204` |
 
 ### Run history (`/api/runs`)
-| Method | Path | Returns |
-|---|---|---|
-| GET | `/api/runs` | `RunMeta[]` (auto-archived finished runs that reached ≥10% of `solved_score`) |
-| GET | `/api/runs/{id}` | `RunDetail` (meta + config + metric series) |
-| DELETE | `/api/runs/{id}` | `204` |
+| Method | Path | Body | Returns |
+|---|---|---|---|
+| GET | `/api/runs` | — | `RunMeta[]` — **every** auto-archived finished/stopped run (ADR-088; low-skill filtering moved to the Data Lab picker, not a save-time gate) |
+| GET | `/api/runs/{id}` | — | `RunDetail` (meta + config + metric series) |
+| PATCH | `/api/runs/{id}` | `RunMetaPatch` | `RunMeta` — edit note / label / experiment / `excluded` (a `meta.json` sidecar; config/metrics untouched, ADR-091) |
+| POST | `/api/runs/group` | `GroupRequest` | `RunMeta[]` — tag runs into a named experiment |
+| POST | `/api/runs/delete` | `BulkDeleteRequest` | `BulkDeleteResult` — bulk delete |
+| DELETE | `/api/runs/{id}` | — | `204` |
+
+### Analysis · Data Lab (`/api/analysis`)
+Server-side experiment analysis over the **full run archive** on disk (the frontend store is a capped ring
+buffer, never the export source). Phase X / ADR-082–092.
+
+| Method | Path | Query | Returns |
+|---|---|---|---|
+| GET | `/api/analysis/summary` | `run_ids` | `RunSummary[]` — per-run scalars (final %, AUC, steps-to-solve, peak %, collapse %) |
+| GET | `/api/analysis/experiments` | — | `ExperimentInfo[]` — runs grouped into experiments |
+| GET | `/api/analysis/aggregate` | `experiment_id` | `AggregateResponse` — rebin-then-average mean ± 95 % CI band across seeds |
+| GET | `/api/analysis/rliable` | `run_ids` / `experiment_id` | `RliableResult` — IQM/mean/median/optimality-gap + bootstrap CIs, performance profiles, probability-of-improvement |
+| GET | `/api/analysis/export.{csv,xlsx,repro,tex,svg,zip,npz}` | `run_ids`, `pivot`, `locale` | a downloadable dataset — tidy CSV · Excel (native charts) · repro card (config-hash + BibTeX) · LaTeX booktabs · SVG figure · TensorBoard log dir · `npz` runs×tasks matrix |
 
 ### Skill & leaderboards
 | Method | Path | Returns |
