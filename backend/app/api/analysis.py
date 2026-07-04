@@ -75,12 +75,16 @@ async def run_summaries(
 
 
 def _export_response(
-    fmt: str, run_ids: list[str] | None, pivot: Literal["game", "algo"]
+    fmt: str,
+    run_ids: list[str] | None,
+    pivot: Literal["game", "algo"],
+    lang: Literal["en", "cz"] = "en",
 ) -> Response:
     """Load the selected runs server-side (full history on disk) and stream the built format as a file
-    download. An empty / all-unknown selection still returns a valid (header-only) artifact, not an error,
-    so the client can hand it straight to the user."""
-    content, media_type, filename = export_engine.export(fmt, run_ids or [], pivot)
+    download. ``lang`` localizes descriptive text (XLSX headings, the SVG figure) to the app's language.
+    An empty / all-unknown selection still returns a valid (header-only) artifact, not an error, so the
+    client can hand it straight to the user."""
+    content, media_type, filename = export_engine.export(fmt, run_ids or [], pivot, lang)
     return Response(
         content=content,
         media_type=media_type,
@@ -101,10 +105,12 @@ async def export_csv(
 async def export_xlsx(
     run_ids: Annotated[list[str] | None, Query()] = None,
     pivot: Literal["game", "algo"] = "game",
+    lang: Literal["en", "cz"] = "en",
 ) -> Response:
     """Publication XLSX — ``Summary`` + a per-game (``pivot=game``, raw reward) or per-algorithm
-    (``pivot=algo``, normalized skill-%) sheet each with a native chart + ``Config`` + ``Methods``."""
-    return _export_response("xlsx", run_ids, pivot)
+    (``pivot=algo``, normalized skill-%) sheet each with a native chart + ``Config`` + ``Methods``.
+    Sheet tabs + headings are in ``lang`` (the app's language); data columns stay English."""
+    return _export_response("xlsx", run_ids, pivot, lang)
 
 
 @router.get("/export.repro")
@@ -127,10 +133,11 @@ async def export_latex(
 async def export_figure(
     run_ids: Annotated[list[str] | None, Query()] = None,
     pivot: Literal["game", "algo"] = "game",
+    lang: Literal["en", "cz"] = "en",
 ) -> Response:
     """A standalone vector figure (SVG) of the selected runs — raw reward (``pivot=game``) or normalized
-    skill-% (``pivot=algo``) vs env_steps, ready to drop into a paper or slides."""
-    return _export_response("figure", run_ids, pivot)
+    skill-% (``pivot=algo``) vs env_steps, ready to drop into a paper or slides. Title/axes in ``lang``."""
+    return _export_response("figure", run_ids, pivot, lang)
 
 
 @router.get("/export.zip")

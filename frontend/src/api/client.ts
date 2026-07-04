@@ -474,10 +474,13 @@ export function analysisExportUrl(
   fmt: ExportFmt,
   runIds: string[],
   pivot: 'game' | 'algo' = 'game',
+  lang: 'en' | 'cz' = 'en',
 ): string {
   const q = new URLSearchParams()
   for (const id of runIds) q.append('run_ids', id)
   if (PIVOT_AWARE.has(fmt)) q.set('pivot', pivot)
+  // The XLSX + SVG formats localize their descriptive text to the app language; harmless elsewhere.
+  q.set('lang', lang)
   return `${API_BASE}/api/analysis/export.${fmt}?${q.toString()}`
 }
 

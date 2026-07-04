@@ -227,6 +227,25 @@ def test_figure_algo_pivot_labels_skill_axis(tmp_path: Path, monkeypatch) -> Non
     assert "skill %" in svg  # normalized pivot → skill axis, not raw reward
 
 
+def test_figure_localizes_to_selected_language(tmp_path: Path, monkeypatch) -> None:
+    store = _make_store(tmp_path, monkeypatch)
+    p_id = _cartpole_ppo(store)
+    svg = export_engine.export("figure", [p_id], "algo", "cz")[0].decode("utf-8")
+    assert "dovednost %" in svg and "kroky prostředí" in svg  # Czech axis labels
+    assert "skill %" not in svg
+
+
+def test_xlsx_localizes_sheet_tabs_and_headings(tmp_path: Path, monkeypatch) -> None:
+    store = _make_store(tmp_path, monkeypatch)
+    p_id = _cartpole_ppo(store)
+    cz = openpyxl.load_workbook(io.BytesIO(export_engine.export("xlsx", [p_id], "game", "cz")[0]))
+    assert "Souhrn" in cz.sheetnames and "Konfigurace" in cz.sheetnames and "Metodika" in cz.sheetnames
+    assert cz["Souhrn"]["A1"].value is not None and "/" not in str(cz["Souhrn"]["A1"].value)  # single-language, not "EN / CZ"
+    # English stays the default.
+    en = openpyxl.load_workbook(io.BytesIO(export_engine.export("xlsx", [p_id])[0]))
+    assert "Summary" in en.sheetnames and "Souhrn" not in en.sheetnames
+
+
 def test_figure_empty_selection_is_valid_svg() -> None:
     content, media, _ = export_engine.export("figure", [])
     assert media == "image/svg+xml"
@@ -247,10 +266,20 @@ def test_tensorboard_is_zip_of_event_files(tmp_path: Path, monkeypatch) -> None:
     assert media == "application/zip" and fname.endswith(".zip")
     zf = zipfile.ZipFile(io.BytesIO(content))
     names = zf.namelist()
-    # A TensorBoard event file per run, each under its own run-named log dir.
+    # A TensorBoard event file per run, each under its own run-named log dir inside one top-level folder.
     assert any("tfevents" in n for n in names)
-    assert any(n.startswith("cartpole_ppo_") for n in names)
-    assert any(n.startswith("cartpole_neuroevolution_") for n in names)
+    assert all(n.startswith("rl-lab-export/") for n in names)
+    assert any("/cartpole_ppo_" in n for n in names)
+    assert any("/cartpole_neuroevolution_" in n for n in names)
+    # The exporting machine's hostname/pid are stripped from event filenames (privacy + determinism).
+    assert all("rllab" in n for n in names if "tfevents" in n)
+
+
+def test_clean_tfevents_name_strips_host_and_pid() -> None:
+    assert export_engine._clean_tfevents_name(
+        "events.out.tfevents.1783107131.Martin.33216.2"
+    ) == "events.out.tfevents.1783107131.rllab.0.2"
+    assert export_engine._clean_tfevents_name("not-an-event.txt") == "not-an-event.txt"
 
 
 def test_tensorboard_empty_selection_is_valid_zip() -> None:

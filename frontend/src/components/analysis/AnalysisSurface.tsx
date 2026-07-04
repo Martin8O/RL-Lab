@@ -33,9 +33,15 @@ const COLORS = [
 ]
 const MAX_SELECT = COLORS.length
 
+// Wall-clock tick label. Fast runs finish in a fraction of a second, so whole-second rounding would
+// collapse the whole axis to "0s" — sub-second values render in ms, and 1–10 s keeps one decimal, so a
+// small time span never loses all its ticks.
 function fmtElapsed(s: number): string {
-  if (s < 60) return `${Math.round(s)}s`
-  if (s < 3600) return `${Math.floor(s / 60)}m${Math.round(s % 60)}s`
+  const a = Math.abs(s)
+  if (a < 1) return `${Math.round(s * 1000)}ms`
+  if (a < 10) return `${Number(s.toFixed(1))}s`
+  if (a < 60) return `${Math.round(s)}s`
+  if (a < 3600) return `${Math.floor(s / 60)}m${Math.round(s % 60)}s`
   return `${Math.floor(s / 3600)}h${Math.round((s % 3600) / 60)}m`
 }
 

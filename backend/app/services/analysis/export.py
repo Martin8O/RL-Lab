@@ -50,6 +50,19 @@ from app.services.analysis.stats import score_of_frame, skill_pct, summarize
 from app.services.runs import run_store
 
 Pivot = Literal["game", "algo"]
+Lang = Literal["en", "cz"]
+
+
+def _pick(lang: Lang, en: str, cz: str) -> str:
+    """The descriptive label in the app's active language. Data-table *column headers* stay English
+    (pandas/R identifiers); only the human-readable **descriptive** text (sheet titles, section labels,
+    chart titles, the figure's title/axes) follows the language the user selected in the app."""
+    return cz if lang == "cz" else en
+
+
+def _env_name(run: LoadedRun, lang: Lang) -> str:
+    return _pick(lang, run.env_name_en, run.env_name_cz)
+
 
 # Target points per curve in the XLSX sheets/charts (CSV stays full-resolution). ~800 keeps the shape
 # visually lossless while staying far under Excel's row cap, so curves are never silently truncated.
@@ -143,10 +156,11 @@ def _frame_metrics(run: LoadedRun, frame: dict[str, Any]) -> list[tuple[str, flo
     return out
 
 
-def build_csv(runs: list[LoadedRun], pivot: Pivot = "game") -> bytes:
-    """Tidy long CSV — one row per ``(run, frame, metric)`` at full resolution. ``pivot`` is accepted for
-    a uniform registry signature but does not change the output: the tidy form carries *both* the raw and
-    the normalized metric, so either pivot is a ``groupby`` in pandas."""
+def build_csv(runs: list[LoadedRun], pivot: Pivot = "game", lang: Lang = "en") -> bytes:
+    """Tidy long CSV — one row per ``(run, frame, metric)`` at full resolution. ``pivot``/``lang`` are
+    accepted for a uniform registry signature but don't change the output: the tidy form carries *both*
+    the raw and the normalized metric (either pivot is a ``groupby`` in pandas), and every column is a
+    canonical English data identifier."""
     buf = io.StringIO()
     writer = csv.writer(buf)
     writer.writerow(_CSV_HEADER)
@@ -183,9 +197,9 @@ _SUMMARY_COLS: list[tuple[str, str]] = [
 ]
 
 
-def _write_summary_sheet(ws: Worksheet, runs: list[LoadedRun]) -> None:
+def _write_summary_sheet(ws: Worksheet, runs: list[LoadedRun], lang: Lang) -> None:
     """``Summary`` — one row per run × the X2 stats (the ± / across-seed columns fill once X4 lands)."""
-    ws["A1"] = "Summary — one row per run (X2 statistics)  /  Souhrn — jeden řádek na běh"
+    ws["A1"] = _pick(lang, "Summary — one row per run (X2 statistics)", "Souhrn — jeden řádek na běh (statistiky X2)")
     ws["A1"].font = _H1
     header_row = 3
     for col, (name, _) in enumerate(_SUMMARY_COLS, start=1):
@@ -205,22 +219,23 @@ def _curve_metric(run: LoadedRun, frame: dict[str, Any], pivot: Pivot) -> float 
     return reward
 
 
-def _write_game_sheet(wb: Workbook, title: str, runs: list[LoadedRun], pivot: Pivot) -> None:
-    """One per-game (or per-algorithm) sheet: a bilingual title + config header, then a downsampled curve
-    table with one ``(x, y)`` column pair per run and a **native Excel scatter-line chart** over them.
+def _write_game_sheet(wb: Workbook, title: str, runs: list[LoadedRun], pivot: Pivot, lang: Lang) -> None:
+    """One per-game (or per-algorithm) sheet: a title + config header (in the selected language), then a
+    downsampled curve table with one ``(x, y)`` column pair per run and a **native Excel scatter-line
+    chart** over them.
 
     A scatter (line) chart — not a plain line chart — because the runs have *different* env-step grids
     (each trainer logs on its own cadence): a scatter series carries its own X column, so curves of
     different length/spacing overlay honestly without resampling onto a shared axis.
     """
     ws = wb.create_sheet(title=title[:31])  # Excel caps sheet names at 31 chars
-    metric_label = "skill %" if pivot == "algo" else "reward"
+    metric_label = _pick(lang, "skill %", "dovednost %") if pivot == "algo" else _pick(lang, "reward", "odměna")
     first = runs[0]
-    ws["A1"] = f"{first.env_name_en}  /  {first.env_name_cz}"
+    ws["A1"] = _env_name(first, lang)
     ws["A1"].font = _H1
 
     # Config header — the compared runs at a glance (label · algo · seed · budget · key hyperparameters).
-    ws["A2"] = "Runs compared  /  Porovnané běhy:"
+    ws["A2"] = _pick(lang, "Runs compared:", "Porovnané běhy:")
     ws["A2"].font = _H2
     row = 3
     for run in runs:
@@ -253,9 +268,10 @@ def _write_game_sheet(wb: Workbook, title: str, runs: list[LoadedRun], pivot: Pi
     if not any(lengths):  # no plottable points across any run — skip the (empty) chart
         return
 
+    x_title = _pick(lang, "environment steps", "kroky prostředí")
     chart = ScatterChart()
-    chart.title = f"{first.env_name_en} — {metric_label} vs env_steps"
-    chart.x_axis.title = "env_steps"
+    chart.title = f"{_env_name(first, lang)} — {metric_label} vs {x_title}"
+    chart.x_axis.title = x_title
     chart.y_axis.title = metric_label
     chart.height = 10
     chart.width = 20
@@ -272,9 +288,9 @@ def _write_game_sheet(wb: Workbook, title: str, runs: list[LoadedRun], pivot: Pi
     ws.add_chart(chart, ws.cell(row=data_header, column=2 * len(runs) + 2).coordinate)
 
 
-def _write_config_sheet(ws: Worksheet, runs: list[LoadedRun]) -> None:
+def _write_config_sheet(ws: Worksheet, runs: list[LoadedRun], lang: Lang) -> None:
     """``Config`` — one row per run with the standard fields + the union of active hyperparameters."""
-    ws["A1"] = "Config — full hyperparameters per run  /  Konfigurace — plné hyperparametry"
+    ws["A1"] = _pick(lang, "Config — full hyperparameters per run", "Konfigurace — plné hyperparametry na běh")
     ws["A1"].font = _H1
     # Union of every run's active-hyperparameter keys (a run gets a blank where its algo lacks a key).
     hp_keys: list[str] = []
@@ -295,9 +311,10 @@ def _write_config_sheet(ws: Worksheet, runs: list[LoadedRun]) -> None:
             ws.cell(row=r, column=col, value=hp.get(k))
 
 
-def _write_methods_sheet(ws: Worksheet, runs: list[LoadedRun]) -> None:
-    """``Methods`` — the environment + per-run provenance + the reproducibility card. Bilingual labels."""
-    ws["A1"] = "Methods & reproducibility  /  Metodika a reprodukovatelnost"
+def _write_methods_sheet(ws: Worksheet, runs: list[LoadedRun], lang: Lang) -> None:
+    """``Methods`` — the environment + per-run provenance + the reproducibility card, labels in the
+    selected language."""
+    ws["A1"] = _pick(lang, "Methods & reproducibility", "Metodika a reprodukovatelnost")
     ws["A1"].font = _H1
     facts = provenance.methods_facts()
     row = 3
@@ -308,28 +325,28 @@ def _write_methods_sheet(ws: Worksheet, runs: list[LoadedRun]) -> None:
         ws.cell(row=row, column=2, value=value)
         row += 1
 
-    kv("Software / Software", "")
+    kv(_pick(lang, "Software", "Software"), "")
     for name in ("python", "torch", "stable_baselines3", "gymnasium", "numpy"):
         kv(f"  {name}", facts[name])
-    kv("Hardware / Hardware", "")
+    kv(_pick(lang, "Hardware", "Hardware"), "")
     kv("  platform", facts["platform"])
     kv("  gpu", facts["gpu"])
     kv("  git_commit", facts["git_commit"])
     row += 1
 
-    kv("Comparison axes / Srovnávací osy", "")
-    kv("  env_steps", "cumulative environment interactions / kumulativní interakce s prostředím")
-    kv("  wall_clock", "elapsed seconds / uplynulé sekundy")
+    kv(_pick(lang, "Comparison axes", "Srovnávací osy"), "")
+    kv("  env_steps", _pick(lang, "cumulative environment interactions", "kumulativní interakce s prostředím"))
+    kv("  wall_clock", _pick(lang, "elapsed seconds", "uplynulé sekundy"))
     row += 1
 
-    ws.cell(row=row, column=1, value="Per-run / Podle běhu").font = _H2
+    ws.cell(row=row, column=1, value=_pick(lang, "Per-run", "Podle běhu")).font = _H2
     row += 1
     for run in runs:
         kv(f"  {run.meta.label}",
            f"env=[{run.min_score}, {run.solved_score}] · seed={run.config.seed}")
     row += 1
 
-    ws.cell(row=row, column=1, value="Reproducibility card / Karta reprodukovatelnosti").font = _H1
+    ws.cell(row=row, column=1, value=_pick(lang, "Reproducibility card", "Karta reprodukovatelnosti")).font = _H1
     row += 2
     for run in runs:
         card = _repro_card_text(run)
@@ -339,13 +356,14 @@ def _write_methods_sheet(ws: Worksheet, runs: list[LoadedRun]) -> None:
         row += 1
 
 
-def build_xlsx(runs: list[LoadedRun], pivot: Pivot = "game") -> bytes:
+def build_xlsx(runs: list[LoadedRun], pivot: Pivot = "game", lang: Lang = "en") -> bytes:
     """The publication workbook: ``Summary`` + a per-game sheet for every game with ≥1 run + ``Config`` +
     ``Methods``. ``pivot="game"`` → per-game sheets of raw reward; ``pivot="algo"`` → per-algorithm sheets
-    of normalized skill-%. Curves are LTTB-downsampled; a native Excel chart overlays them."""
+    of normalized skill-%. Sheet tabs + descriptive headings follow ``lang`` (the app's language); data
+    column headers stay English. Curves are LTTB-downsampled; a native Excel chart overlays them."""
     wb = Workbook()
-    _write_summary_sheet(wb.active, runs)
-    wb.active.title = "Summary"
+    _write_summary_sheet(wb.active, runs, lang)
+    wb.active.title = _pick(lang, "Summary", "Souhrn")
 
     # The "complete workbook": group by game (default) or by algorithm, a sheet per non-empty group.
     groups: dict[str, list[LoadedRun]] = {}
@@ -359,17 +377,17 @@ def build_xlsx(runs: list[LoadedRun], pivot: Pivot = "game") -> bytes:
     used: set[str] = set()
     for key in order:
         # Distinct, ≤31-char sheet title (Excel limit); disambiguate a collision with a numeric suffix.
-        base = (groups[key][0].env_name_en if pivot == "game" else key)[:28]
+        base = (_env_name(groups[key][0], lang) if pivot == "game" else key)[:28]
         title = base
         n = 1
         while title[:31] in used:
             n += 1
             title = f"{base}~{n}"
         used.add(title[:31])
-        _write_game_sheet(wb, title, groups[key], pivot)
+        _write_game_sheet(wb, title, groups[key], pivot, lang)
 
-    _write_config_sheet(wb.create_sheet(title="Config"), runs)
-    _write_methods_sheet(wb.create_sheet(title="Methods"), runs)
+    _write_config_sheet(wb.create_sheet(title=_pick(lang, "Config", "Konfigurace")), runs, lang)
+    _write_methods_sheet(wb.create_sheet(title=_pick(lang, "Methods", "Metodika")), runs, lang)
 
     buf = io.BytesIO()
     wb.save(buf)
@@ -402,9 +420,10 @@ def _repro_card_text(run: LoadedRun) -> str:
     )
 
 
-def build_repro_card(runs: list[LoadedRun], pivot: Pivot = "game") -> bytes:
+def build_repro_card(runs: list[LoadedRun], pivot: Pivot = "game", lang: Lang = "en") -> bytes:
     """A Markdown reproducibility card for each run in the selection (config-hash + BibTeX + reproduce
-    command). ``pivot`` is accepted for the uniform registry signature; the card is pivot-independent."""
+    command). ``pivot``/``lang`` are accepted for the uniform registry signature; the card is a
+    citation artifact and stays in English (BibTeX / shell), pivot-independent."""
     header = "# Reproducibility cards\n\nEach run's citable config-hash, BibTeX entry, and reproduce command.\n"
     body = "\n\n---\n\n".join(_repro_card_text(run) for run in runs)
     return (header + "\n" + body + "\n").encode("utf-8")
@@ -431,8 +450,9 @@ def _latex_cell(value: Any, spec: str) -> str:
     return format(value, spec)
 
 
-def build_latex(runs: list[LoadedRun], pivot: Pivot = "game") -> bytes:
-    """A paste-ready booktabs results table of the X2 summary stats (pure text, no dependency)."""
+def build_latex(runs: list[LoadedRun], pivot: Pivot = "game", lang: Lang = "en") -> bytes:
+    """A paste-ready booktabs results table of the X2 summary stats (pure text, no dependency). ``lang``
+    is accepted for the uniform signature; a LaTeX table stays English (paper-ready)."""
     n = len(_LATEX_COLS)
     lines = [
         "% Requires \\usepackage{booktabs}",
@@ -491,28 +511,39 @@ def _figure_series(runs: list[LoadedRun], pivot: Pivot) -> list[tuple[str, list[
     return out
 
 
-def build_figure(runs: list[LoadedRun], pivot: Pivot = "game") -> bytes:
+def build_figure(runs: list[LoadedRun], pivot: Pivot = "game", lang: Lang = "en") -> bytes:
     """A standalone SVG line chart of the selected runs — a vector figure to drop straight into a paper or
     slides. Honours the pivot: ``"game"`` plots raw reward, ``"algo"`` the normalized skill-% (0–100). The
-    x-axis is ``env_steps`` (the fair, hardware-independent axis). Curves are LTTB-downsampled; each run
-    gets a legend entry. A goal line marks the solved score (skill 100 %, or a single game's solved reward).
+    x-axis is ``env_steps`` (the fair, hardware-independent axis); title/axes/legend follow ``lang``.
+    Curves are LTTB-downsampled; each run gets a legend entry sized so the full label fits (the figure
+    widens for long labels rather than clipping them). A goal line marks the solved score.
     """
-    W, H = 760, 460
-    ml, mr, mt, mb = 66, 196, 46, 54  # legend lives in the right margin
-    pw, ph = W - ml - mr, H - mt - mb
     is_skill = pivot == "algo"
+    ml, mt, mb = 66, 46, 54
+    plot_w, H = 470, 460  # fixed plot area; the figure widens on the right to fit the legend
+    ph = H - mt - mb
 
     series = _figure_series(runs, pivot)
     plotted = [(label, pts) for label, pts in series if pts]
 
     if not plotted:
         empty = (
-            f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {W} {H}" font-family="sans-serif">'
-            f'<rect width="{W}" height="{H}" fill="#ffffff"/>'
-            f'<text x="{W / 2}" y="{H / 2}" text-anchor="middle" fill="{_FIG_MUTED}" font-size="15">'
-            "No plottable data in the selected runs</text></svg>"
+            f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 700 {H}" font-family="sans-serif">'
+            f'<rect width="700" height="{H}" fill="#ffffff"/>'
+            f'<text x="350" y="{H / 2}" text-anchor="middle" fill="{_FIG_MUTED}" font-size="15">'
+            f'{_xml_escape(_pick(lang, "No plottable data in the selected runs", "Ve vybraných bězích nejsou žádná vykreslitelná data"))}'
+            "</text></svg>"
         )
         return empty.encode("utf-8")
+
+    # Size the legend column to the longest label (capped) so labels are never clipped — the figure's
+    # total width grows instead. ~6.3 px/char at the 11.5 px legend font.
+    labels = [label for label, _ in plotted]
+    max_label = min(max(len(x) for x in labels), 48)
+    legend_w = int(max_label * 6.3) + 44
+    legend_x = ml + plot_w + 20
+    W = legend_x + legend_w
+    pw = plot_w
 
     xmax = max((x for _, pts in plotted for x, _ in pts), default=1.0) or 1.0
     ys_all = [y for _, pts in plotted for _, y in pts]
@@ -544,7 +575,11 @@ def build_figure(runs: list[LoadedRun], pivot: Pivot = "game") -> bytes:
         f'<rect width="{W}" height="{H}" fill="#ffffff"/>',
     ]
 
-    title = "Normalized skill (%) vs environment steps" if is_skill else "Reward vs environment steps"
+    title = (
+        _pick(lang, "Normalized skill (%) vs environment steps", "Normalizovaná dovednost (%) vs kroky prostředí")
+        if is_skill
+        else _pick(lang, "Reward vs environment steps", "Odměna vs kroky prostředí")
+    )
     parts.append(
         f'<text x="{ml}" y="26" fill="{_FIG_INK}" font-size="16" font-weight="700">{_xml_escape(title)}</text>'
     )
@@ -575,7 +610,7 @@ def build_figure(runs: list[LoadedRun], pivot: Pivot = "game") -> bytes:
         )
         parts.append(
             f'<text x="{ml + pw - 4}" y="{gy - 5:.1f}" text-anchor="end" fill="{_FIG_GOAL}" '
-            f'font-size="10.5" font-weight="600">solved</text>'
+            f'font-size="10.5" font-weight="600">{_xml_escape(_pick(lang, "solved", "vyřešeno"))}</text>'
         )
 
     # Axes.
@@ -585,25 +620,24 @@ def build_figure(runs: list[LoadedRun], pivot: Pivot = "game") -> bytes:
     )
     parts.append(
         f'<text x="{ml + pw / 2:.1f}" y="{H - 12}" text-anchor="middle" fill="{_FIG_AXIS}" '
-        f'font-size="12">environment steps</text>'
+        f'font-size="12">{_xml_escape(_pick(lang, "environment steps", "kroky prostředí"))}</text>'
     )
-    ylabel = "skill %" if is_skill else "reward"
+    ylabel = _pick(lang, "skill %", "dovednost %") if is_skill else _pick(lang, "reward", "odměna")
     parts.append(
         f'<text transform="translate(18,{mt + ph / 2:.1f}) rotate(-90)" text-anchor="middle" '
-        f'fill="{_FIG_AXIS}" font-size="12">{ylabel}</text>'
+        f'fill="{_FIG_AXIS}" font-size="12">{_xml_escape(ylabel)}</text>'
     )
 
-    # One polyline per run + a legend entry.
+    # One polyline per run + a legend entry (labels fit — the figure was widened to the longest one).
     for k, (label, pts) in enumerate(plotted):
         color = _FIG_COLORS[k % len(_FIG_COLORS)]
         d = " ".join(f"{'M' if i == 0 else 'L'}{to_x(x):.1f},{to_y(y):.1f}" for i, (x, y) in enumerate(pts))
         parts.append(f'<path d="{d}" fill="none" stroke="{color}" stroke-width="1.9" stroke-linejoin="round"/>')
         ly = mt + 6 + k * 20
-        lx = ml + pw + 16
-        parts.append(f'<rect x="{lx}" y="{ly - 8}" width="12" height="12" rx="2" fill="{color}"/>')
-        clipped = label if len(label) <= 22 else label[:21] + "…"
+        parts.append(f'<rect x="{legend_x}" y="{ly - 8}" width="12" height="12" rx="2" fill="{color}"/>')
+        clipped = label if len(label) <= max_label else label[: max_label - 1] + "…"
         parts.append(
-            f'<text x="{lx + 18}" y="{ly + 2}" fill="{_FIG_INK}" font-size="11.5">{_xml_escape(clipped)}</text>'
+            f'<text x="{legend_x + 18}" y="{ly + 2}" fill="{_FIG_INK}" font-size="11.5">{_xml_escape(clipped)}</text>'
         )
 
     parts.append("</svg>")
@@ -615,13 +649,35 @@ def build_figure(runs: list[LoadedRun], pivot: Pivot = "game") -> bytes:
 # ---------------------------------------------------------------------------
 
 
-def build_tensorboard(runs: list[LoadedRun], pivot: Pivot = "game") -> bytes:
-    """A ZIP of TensorBoard event files, one log directory per run — drop the unzipped folder into
-    ``tensorboard --logdir`` to browse the curves interactively. Each run logs every populated metric
-    (reward, normalized skill %, episode length, loss) as its own scalar tag against ``env_steps`` as the
-    global step. ``pivot`` is accepted for the uniform registry signature but ignored: every metric is
-    logged, so both pivots are already present. An empty selection yields a valid (empty) archive."""
+# The zip's single top-level folder (mirrors the ``rl-lab-export.<ext>`` filename of the other formats,
+# so unzipping drops one tidy directory — point ``tensorboard --logdir`` straight at it).
+_TB_ROOT = "rl-lab-export"
+
+
+def _clean_tfevents_name(name: str) -> str:
+    """Strip the machine identity from a TensorBoard event filename. ``SummaryWriter`` names files
+    ``events.out.tfevents.<time>.<host>.<pid>.<n>`` — the ``<host>`` is the exporting machine's hostname
+    (e.g. ``Martin``) and ``<pid>`` its process id, both of which leak the user's environment and vary
+    per machine. We replace them with fixed tokens: TensorBoard discovers event files by the ``tfevents``
+    substring (not the exact name), so the file still loads, but the name no longer identifies anyone."""
+    parts = name.split(".")
+    if len(parts) >= 6 and parts[2] == "tfevents":
+        parts[4] = "rllab"  # <host>
+        parts[5] = "0"  # <pid>
+        return ".".join(parts)
+    return name
+
+
+def build_tensorboard(runs: list[LoadedRun], pivot: Pivot = "game", lang: Lang = "en") -> bytes:
+    """A ZIP of TensorBoard event files under a single ``rl-lab-export/`` folder, one log directory per
+    run — drop the unzipped folder into ``tensorboard --logdir`` to browse the curves interactively. Each
+    run logs every populated metric (reward, normalized skill %, episode length, loss) as its own scalar
+    tag against ``env_steps`` as the global step. Event filenames are stripped of the exporting machine's
+    hostname / pid (see :func:`_clean_tfevents_name`). ``pivot``/``lang`` are accepted for the uniform
+    registry signature but ignored (every metric is logged; the files are binary). Empty selection → a
+    valid (empty) archive."""
     import os
+    import posixpath
     import tempfile
     import zipfile
 
@@ -643,7 +699,10 @@ def build_tensorboard(runs: list[LoadedRun], pivot: Pivot = "game") -> bytes:
             for root, _dirs, files in os.walk(tmp):
                 for name in files:
                     path = os.path.join(root, name)
-                    zf.write(path, os.path.relpath(path, tmp))
+                    rel = os.path.relpath(path, tmp).replace(os.sep, "/")
+                    run_dir, _, base = rel.rpartition("/")
+                    arc = posixpath.join(_TB_ROOT, run_dir, _clean_tfevents_name(base))
+                    zf.write(path, arc)
     return buf.getvalue()
 
 
@@ -659,7 +718,7 @@ def normalized_score(run: LoadedRun) -> float | None:
     return None if pct is None else pct / 100.0
 
 
-def build_scorematrix(runs: list[LoadedRun], pivot: Pivot = "game") -> bytes:
+def build_scorematrix(runs: list[LoadedRun], pivot: Pivot = "game", lang: Lang = "en") -> bytes:
     """The normalized ``runs × tasks`` score matrix per algorithm, as an ``.npz`` (X4 rliable input).
 
     Grouped by algorithm (each a *method*): for algo ``a`` the archive holds ``a__matrix`` (rows = seeds,
@@ -692,7 +751,7 @@ def build_scorematrix(runs: list[LoadedRun], pivot: Pivot = "game") -> bytes:
 class ExportFormat:
     """One registered output format: how to build it, its MIME type, and its file extension."""
 
-    build: Callable[[list[LoadedRun], Pivot], bytes]
+    build: Callable[[list[LoadedRun], Pivot, Lang], bytes]
     media_type: str
     extension: str
 
@@ -712,12 +771,16 @@ REGISTRY: dict[str, ExportFormat] = {
 }
 
 
-def export(fmt: str, run_ids: list[str], pivot: Pivot = "game") -> tuple[bytes, str, str]:
+def export(
+    fmt: str, run_ids: list[str], pivot: Pivot = "game", lang: Lang = "en"
+) -> tuple[bytes, str, str]:
     """Run the pipeline end-to-end for one format: load the runs, dispatch to the plugin, and return
-    ``(content, media_type, filename)``. Raises :class:`KeyError` for an unknown format (the caller maps
-    it to a 404/400) and returns an empty payload for an empty / all-unknown run selection."""
+    ``(content, media_type, filename)``. ``lang`` localizes the descriptive text of the formats that carry
+    any (XLSX headings, the SVG figure's title/axes); data columns stay English. Raises :class:`KeyError`
+    for an unknown format (the caller maps it to a 404/400) and returns an empty payload for an empty /
+    all-unknown run selection."""
     spec = REGISTRY[fmt]
     runs = load_runs(run_ids)
-    content = spec.build(runs, pivot)
+    content = spec.build(runs, pivot, lang)
     filename = f"rl-lab-export.{spec.extension}"
     return content, spec.media_type, filename
