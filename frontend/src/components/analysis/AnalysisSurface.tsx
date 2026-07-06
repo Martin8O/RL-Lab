@@ -24,6 +24,7 @@ import ExportZone from './ExportZone'
 import SourcePicker from './SourcePicker'
 import ModeSwitch from '../ModeSwitch'
 import LangThemeToggle from '../LangThemeToggle'
+import AboutButton from '../AboutButton'
 import ParamInfo from '../ParamInfo'
 
 // Overlay palette (the run-compare hues + two viz colours) — assigned by selection order.
@@ -382,6 +383,7 @@ export default function AnalysisSurface() {
           <ParamInfo paramId="analysis_axis" label={t('analysis.axis')} />
         </div>
         <div style={{ width: 1, height: 26, background: 'var(--border-default)' }} />
+        <AboutButton />
         <LangThemeToggle />
       </header>
 

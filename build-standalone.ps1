@@ -6,8 +6,10 @@
 .DESCRIPTION
     1. Builds the frontend (`npm run build` -> frontend/dist).
     2. Ensures PyInstaller is installed in the project .venv.
-    3. Runs PyInstaller against rl_dashboard.spec (bundles backend + CPU torch + gymnasium +
-       pygame-ce + ale-py + minigrid + the built frontend).
+    3. Runs PyInstaller against rl_dashboard.spec (bundles backend + whatever torch is in the build
+       venv + gymnasium + pygame-ce + ale-py + minigrid + the built frontend). On the cu128 desktop
+       this yields the GPU/universal edition (~4-6 GB): runs everywhere, auto-uses a friend's NVIDIA
+       GPU, falls back to CPU otherwise. Build from a CPU-only venv for a smaller ~1-2 GB CPU edition.
     4. Optionally zips the one-folder output for sharing.
 
     Output: dist\RL-Dashboard\RL-Dashboard.exe  (the whole RL-Dashboard\ folder ships together).

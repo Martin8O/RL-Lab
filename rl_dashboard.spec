@@ -4,10 +4,12 @@
 #   pyinstaller rl_dashboard.spec --noconfirm
 # Output: dist/RL-Dashboard/RL-Dashboard.exe  (one-folder — zip the folder to share).
 #
-# This is the "CPU edition": it bundles CPU torch + gymnasium + pygame-ce + ale-py + minigrid +
-# stable-baselines3 and the built frontend. GPU-only games stay gracefully absent at runtime via
-# the registry's `hw_requirement` gating + `torch.cuda.is_available()` (no CUDA on the target → the
-# CPU catalogue is shown). Expect ~1-2 GB (torch dominates).
+# GPU / universal edition: it bundles whatever torch is in the build venv — on the cu128 desktop that
+# is the CUDA build, so the exe is a *superset* that runs everywhere (CUDA torch falls back to CPU when
+# no NVIDIA GPU/driver is present) and auto-unlocks the GPU-only games on a friend's NVIDIA machine via
+# the registry's `hw_requirement` gating + `torch.cuda.is_available()`. Plus gymnasium + pygame-ce +
+# ale-py + minigrid + stable-baselines3 and the built frontend. Expect ~4-6 GB (the CUDA libs dominate;
+# build from a CPU-only venv instead for a ~1-2 GB CPU edition).
 #
 # One-folder (not one-file) on purpose: a 1-2 GB one-file build re-extracts to a temp dir on every
 # launch (slow startup, AV friction). The folder starts fast and reliably; zip it for transfer.

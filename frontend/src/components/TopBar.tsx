@@ -4,6 +4,7 @@ import type { BackendStatus } from '../store/useAppStore'
 import ParamInfo from './ParamInfo'
 import ModeSwitch from './ModeSwitch'
 import LangThemeToggle from './LangThemeToggle'
+import AboutButton from './AboutButton'
 
 const DOT_COLOR: Record<BackendStatus, string> = {
   online:     'var(--success)',
@@ -124,6 +125,7 @@ export default function TopBar() {
 
       <div style={{ width: 1, height: 26, background: 'var(--border-default)' }} />
 
+      <AboutButton />
       <LangThemeToggle />
     </header>
   )

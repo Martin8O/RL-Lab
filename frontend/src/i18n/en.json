@@ -10,6 +10,17 @@
     "online": "Backend online",
     "offline": "Backend offline"
   },
+  "about": {
+    "button_aria": "About RL Lab",
+    "title": "About RL Lab",
+    "tagline": "Build, train, watch, and test reinforcement-learning agents across many games — all in one dashboard.",
+    "app_body": "Pick an environment, tune parameters with beginner-friendly info popups, and train with PPO, neuroevolution, or Q-learning. Watch agents learn live, compare runs, and play against the trained AI with a skill meter. Bilingual (CZ/EN), dark & light.",
+    "author_title": "Author",
+    "author_body": "Made by Martin Svoboda — a hobby project built while learning toward a career in AI and technology.",
+    "website": "Website",
+    "github": "GitHub",
+    "version": "Version"
+  },
   "topbar": {
     "chips": {
       "gen":  "Gen",

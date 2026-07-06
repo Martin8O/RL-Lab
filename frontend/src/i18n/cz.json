@@ -10,6 +10,17 @@
     "online": "Backend online",
     "offline": "Backend offline"
   },
+  "about": {
+    "button_aria": "O aplikaci RL Lab",
+    "title": "O aplikaci RL Lab",
+    "tagline": "Vytvářej, trénuj, sleduj a testuj agenty posilovaného učení (reinforcement learning) napříč mnoha hrami — vše v jedné nástěnce.",
+    "app_body": "Vyber prostředí, nastav parametry pomocí info popupů pro začátečníky a trénuj pomocí PPO, neuroevoluce nebo Q-learningu. Sleduj, jak se agenti učí naživo, porovnávej běhy a zahraj si proti natrénované AI s měřičem dovednosti. Dvojjazyčně (CZ/EN), tmavý i světlý režim.",
+    "author_title": "Autor",
+    "author_body": "Vytvořil Martin Svoboda — hobby projekt vytvořený při studiu směrem ke kariéře v AI a technologiích.",
+    "website": "Web",
+    "github": "GitHub",
+    "version": "Verze"
+  },
   "topbar": {
     "chips": {
       "gen":  "Gen",
