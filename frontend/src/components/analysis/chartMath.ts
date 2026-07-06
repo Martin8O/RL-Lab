@@ -79,6 +79,7 @@ export function algoLabel(t: (k: string) => string, algo: Algo): string {
     case 'td3': return t('sidebar.algo_td3')
     case 'dqn': return t('sidebar.algo_dqn')
     case 'a2c': return t('sidebar.algo_a2c')
+    case 'qrdqn': return t('sidebar.algo_qrdqn')
     default: return t('sidebar.algo_ppo')
   }
 }

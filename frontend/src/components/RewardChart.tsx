@@ -556,6 +556,7 @@ const ALGO_CHART_TABS: Record<string, ChartTab[]> = {
   td3: ['reward', 'loss'],  // S5b: episode return (Reward) + the twin-critic loss (Loss)
   dqn: ['reward', 'loss'],  // S5c: episode return (Reward) + the Q-net TD/Bellman loss (Loss)
   a2c: ['reward', 'loss'],  // S5d: episode return (Reward) + the actor-critic value loss (Loss)
+  qrdqn: ['reward', 'loss'],  // S5e: episode return (Reward) + the quantile-Huber regression loss (Loss)
 }
 
 function algoLabel(t: (k: string) => string, algo: string): string {

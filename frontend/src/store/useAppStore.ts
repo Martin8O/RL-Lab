@@ -25,6 +25,7 @@ import type {
   TD3Hyperparams,
   DQNHyperparams,
   A2CHyperparams,
+  QRDQNHyperparams,
   SelfPlayHyperparams,
   TrainingMetrics,
   TrainingProgress,
@@ -152,6 +153,20 @@ const DEFAULT_A2C_PARAMS: A2CHyperparams = {
   activation:        'tanh',
 }
 
+// Matches the registry's ★ QR-DQN block (S5e — distributional DQN). These are the generic classic-control
+// defaults; the per-env ★ (the rl-zoo3 recipe + n_quantiles — CartPole uses 10) snap from the registry
+// when QR-DQN becomes active. Same knobs as DQN plus n_quantiles (DQN's single mean Q → a distribution).
+const DEFAULT_QRDQN_PARAMS: QRDQNHyperparams = {
+  learning_rate:          1e-3,
+  gamma:                  0.99,
+  n_quantiles:            25,
+  buffer_size:            100_000,
+  train_freq:             4,
+  target_update_interval: 250,
+  exploration_fraction:   0.2,
+  exploration_final_eps:  0.05,
+}
+
 // The run-result state that must NOT outlive its run: chart history, the latest stats frame, the
 // session-best, and every algorithm's curve. Cleared both between runs (clearMetrics) and when the
 // user switches game — otherwise a finished run's chart/stats/skill linger and get silently rescaled
@@ -178,7 +193,7 @@ const EMPTY_RUN_RESULTS = {
 // totalTimesteps on algo / env switch.
 function budgetFor(spec: EnvSpec | undefined, algo: Algo): number {
   if (!spec) return 50_000
-  if ((algo === 'sac' || algo === 'td3' || algo === 'dqn') && spec.offpolicy_total_timesteps)
+  if ((algo === 'sac' || algo === 'td3' || algo === 'dqn' || algo === 'qrdqn') && spec.offpolicy_total_timesteps)
     return spec.offpolicy_total_timesteps
   return spec.default_total_timesteps || 50_000
 }
@@ -198,6 +213,7 @@ function envDefaults(
     td3Params: TD3Hyperparams
     dqnParams: DQNHyperparams
     a2cParams: A2CHyperparams
+    qrdqnParams: QRDQNHyperparams
     totalTimesteps: number
   },
 ): {
@@ -210,6 +226,7 @@ function envDefaults(
   td3Params: TD3Hyperparams
   dqnParams: DQNHyperparams
   a2cParams: A2CHyperparams
+  qrdqnParams: QRDQNHyperparams
   totalTimesteps: number
 } | null {
   if (!spec) return null
@@ -221,6 +238,7 @@ function envDefaults(
   const td3 = spec.hyperparams?.td3 ?? {}
   const dqn = spec.hyperparams?.dqn ?? {}
   const a2c = spec.hyperparams?.a2c ?? {}
+  const qrdqn = spec.hyperparams?.qrdqn ?? {}
   const num = (key: string, block: Record<string, { recommended: number | string }>, fb: number) =>
     block[key] !== undefined ? Number(block[key].recommended) : fb
   return {
@@ -308,6 +326,19 @@ function envDefaults(
       neurons_per_layer: Math.round(num('neurons_per_layer', a2c, prev.a2cParams.neurons_per_layer)),
       activation:        (a2c.activation?.recommended as 'tanh' | 'relu') ?? prev.a2cParams.activation,
     },
+    // QR-DQN block (S5e — distributional DQN). Same knobs as DQN plus n_quantiles; the per-env recipe
+    // (CartPole's fast target sync + 10 quantiles, Atari's Nature values + 200) snaps from the registry
+    // here. Reuses the off-policy budget, like DQN.
+    qrdqnParams: {
+      learning_rate:          num('learning_rate', qrdqn, prev.qrdqnParams.learning_rate),
+      gamma:                  num('gamma', qrdqn, prev.qrdqnParams.gamma),
+      n_quantiles:            Math.round(num('n_quantiles', qrdqn, prev.qrdqnParams.n_quantiles)),
+      buffer_size:            Math.round(num('buffer_size', qrdqn, prev.qrdqnParams.buffer_size)),
+      train_freq:             Math.round(num('train_freq', qrdqn, prev.qrdqnParams.train_freq)),
+      target_update_interval: Math.round(num('target_update_interval', qrdqn, prev.qrdqnParams.target_update_interval)),
+      exploration_fraction:   num('exploration_fraction', qrdqn, prev.qrdqnParams.exploration_fraction),
+      exploration_final_eps:  num('exploration_final_eps', qrdqn, prev.qrdqnParams.exploration_final_eps),
+    },
     totalTimesteps: spec.default_total_timesteps || prev.totalTimesteps,
   }
 }
@@ -327,6 +358,7 @@ interface AppState {
   td3Params:       TD3Hyperparams        // S5b: Twin Delayed DDPG (off-policy continuous control)
   dqnParams:       DQNHyperparams        // S5c: Deep Q-Network (off-policy value-based, discrete actions)
   a2cParams:       A2CHyperparams        // S5d: Advantage Actor-Critic (on-policy, PPO's predecessor)
+  qrdqnParams:     QRDQNHyperparams      // S5e: Quantile-Regression DQN (distributional value-based)
   seed:            number
   totalTimesteps:  number
   sweepCount:      number     // X3: how many seeds a "Run N seeds" sweep launches (★ 3)
@@ -393,6 +425,7 @@ interface AppState {
   setTd3Params:       (s: Partial<TD3Hyperparams>)      => void
   setDqnParams:       (s: Partial<DQNHyperparams>)      => void
   setA2cParams:       (s: Partial<A2CHyperparams>)      => void
+  setQrdqnParams:     (s: Partial<QRDQNHyperparams>)    => void
   setSeed:            (s: number)                       => void
   setTotalTimesteps:  (n: number)                       => void
   setSweepCount:      (n: number)                       => void
@@ -450,6 +483,7 @@ export const useAppStore = create<AppState>()(
       td3Params:       DEFAULT_TD3_PARAMS,
       dqnParams:       DEFAULT_DQN_PARAMS,
       a2cParams:       DEFAULT_A2C_PARAMS,
+      qrdqnParams:     DEFAULT_QRDQN_PARAMS,
       seed:            42,
       totalTimesteps:  50_000,
       sweepCount:      3,
@@ -553,12 +587,18 @@ export const useAppStore = create<AppState>()(
         // green ★ tick). Mirrors dqnPatch.
         const a2cPatch =
           algo === 'a2c' ? (() => { const d = envDefaults(spec, s); return d ? { a2cParams: d.a2cParams } : {} })() : {}
+        // QR-DQN (S5e) mirrors DQN: its ★ recipe (CartPole's fast target sync + 10 quantiles, Atari's
+        // Nature values + 200) is **per-env**, so snap its sliders to THIS env's ★ when QR-DQN becomes
+        // active — else the generic classic-control defaults would sit off the green ★ tick. Mirrors dqnPatch.
+        const qrdqnPatch =
+          algo === 'qrdqn' ? (() => { const d = envDefaults(spec, s); return d ? { qrdqnParams: d.qrdqnParams } : {} })() : {}
         return {
           algo,
           activeTab: (algo === 'neuroevolution' ? 'fitness' : 'reward') as ChartTab,
           totalTimesteps: spec ? budgetFor(spec, algo) : s.totalTimesteps,
           ...dqnPatch,
           ...a2cPatch,
+          ...qrdqnPatch,
         }
       }),
       setHyperparams:    (h)              => set((s) => ({ hyperparams: { ...s.hyperparams, ...h } })),
@@ -570,6 +610,7 @@ export const useAppStore = create<AppState>()(
       setTd3Params:      (sp)             => set((s) => ({ td3Params: { ...s.td3Params, ...sp } })),
       setDqnParams:      (sp)             => set((s) => ({ dqnParams: { ...s.dqnParams, ...sp } })),
       setA2cParams:      (sp)             => set((s) => ({ a2cParams: { ...s.a2cParams, ...sp } })),
+      setQrdqnParams:    (sp)             => set((s) => ({ qrdqnParams: { ...s.qrdqnParams, ...sp } })),
       setSeed:           (seed)           => set({ seed }),
       setTotalTimesteps: (n)              => set({ totalTimesteps: n }),
       setSweepCount:     (n)              => set({ sweepCount: n }),
@@ -763,6 +804,7 @@ export const useAppStore = create<AppState>()(
         td3Params:       s.td3Params,
         dqnParams:       s.dqnParams,
         a2cParams:       s.a2cParams,
+        qrdqnParams:     s.qrdqnParams,
         seed:            s.seed,
         totalTimesteps:  s.totalTimesteps,
         sweepCount:      s.sweepCount,

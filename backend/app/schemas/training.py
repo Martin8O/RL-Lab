@@ -9,7 +9,7 @@ from typing import Literal
 from pydantic import BaseModel, Field, model_validator
 
 Algo = Literal[
-    "ppo", "neuroevolution", "q_learning", "alphazero", "sac", "td3", "dqn", "a2c"
+    "ppo", "neuroevolution", "q_learning", "alphazero", "sac", "td3", "dqn", "a2c", "qrdqn"
 ]
 TrainState = Literal[
     "idle", "running", "paused", "stopping", "stopped", "finished", "error"
@@ -271,14 +271,52 @@ class A2CHyperparams(BaseModel):
     activation: Literal["tanh", "relu"] = "tanh"
 
 
+class QRDQNHyperparams(BaseModel):
+    """Tunable QR-DQN knobs (the 9th algorithm, S5e — Quantile-Regression DQN, distributional off-policy).
+
+    QR-DQN is **DQN made distributional**. Plain DQN learns a single number per action — the *mean*
+    expected return (Q). QR-DQN instead learns the whole **return distribution**, represented as a set
+    of ``n_quantiles`` values that carve the distribution into equal-probability slices (the median,
+    the quartiles, …); it still *acts* on the mean of those quantiles (``argmax``), so the greedy
+    policy is comparable to DQN's, but the richer learning target (a **quantile-Huber** regression
+    loss instead of a single-scalar TD error) is often a more stable signal. It is one of the
+    ingredients of Rainbow, and the natural **DQN-vs-QR-DQN teaching comparison** — same off-policy
+    value-based machinery, so any difference isolates *distributional* learning.
+
+    Everything else is DQN: the same replay buffer + slow target network, the same **ε-greedy**
+    exploration (anneal ε from 1.0 to ``exploration_final_eps`` over the first ``exploration_fraction``
+    of the budget, then hold), the same per-env rl-zoo3 recipes, gated to the **same discrete-action**
+    envs (classic-control discretes + LunarLander + Atari — its distributional edge historically showed
+    on Atari). Trains on raw obs/rewards (no VecNormalize), so ``ep_rew_mean`` and the
+    ``[min_score, solved_score]`` skill meter read exactly like DQN's / PPO's.
+
+    The one knob DQN doesn't have is **``n_quantiles``** — how many quantiles represent each action's
+    return distribution (more = a finer distribution but a heavier net; SB3's default is 200, the
+    rl-zoo3 classic-control recipes use far fewer). Like DQN, ``batch_size`` / ``learning_starts`` are
+    fixed (advanced, not sliders) and the trainer budget-scales ``learning_starts`` + sets
+    ``gradient_steps`` itself.
+    """
+
+    learning_rate: float = 1e-3  # gradient step for the quantile net (rl-zoo3 classic-control range)
+    gamma: float = 0.99
+    n_quantiles: int = 25  # quantiles per action's return distribution (DQN's single Q → a distribution)
+    buffer_size: int = 100_000  # replay-buffer capacity (smaller than SAC/TD3's 1M — Atari is RAM-heavy)
+    batch_size: int = 128  # minibatch sampled from the buffer per gradient step (fixed, not a slider)
+    learning_starts: int = 1_000  # random warmup steps before the first gradient update (budget-scaled)
+    train_freq: int = 4  # env steps collected between update phases (gradient_steps set by the trainer)
+    target_update_interval: int = 250  # steps between hard copies of the live net into the target net
+    exploration_fraction: float = 0.2  # fraction of the budget to anneal ε over (then hold at the final)
+    exploration_final_eps: float = 0.05  # the ε value held after annealing (residual random exploration)
+
+
 class TrainConfig(BaseModel):
     """Full, reproducible description of a training run (echoed back in status).
 
     ``hyperparams`` configures PPO; ``evolution`` configures neuroevolution; ``q_learning``
     configures tabular Q-learning; ``alphazero`` configures the AlphaZero-lite board trainer;
     ``sac`` configures Soft Actor-Critic; ``td3`` configures Twin Delayed DDPG; ``dqn`` configures
-    Deep Q-Network; ``a2c`` configures Advantage Actor-Critic. Exactly one applies, selected by
-    ``algo``; the others stay None so the recorded config is clean.
+    Deep Q-Network; ``a2c`` configures Advantage Actor-Critic; ``qrdqn`` configures Quantile-Regression
+    DQN. Exactly one applies, selected by ``algo``; the others stay None so the recorded config is clean.
     """
 
     env_id: str = "cartpole"
@@ -307,6 +345,10 @@ class TrainConfig(BaseModel):
     # (like PPO), so it reuses the PPO env-step total_timesteps budget (default_total_timesteps) — NOT the
     # off-policy budget.
     a2c: A2CHyperparams | None = None
+    # Present only for Quantile-Regression DQN runs (algo=="qrdqn", S5e); None otherwise. QR-DQN is the
+    # distributional DQN, so like DQN it reuses the env-step total_timesteps budget (and the off-policy
+    # offpolicy_total_timesteps ★ on the registry).
+    qrdqn: QRDQNHyperparams | None = None
     # Seed-sweep grouping (X3): runs launched by one seed-sweep share this ``experiment_id`` (minted
     # server-side; None for a plain single run). ``experiment_label`` is an optional human name. Each
     # queued run still records its own ``seed`` + full config — the sweep is just orchestration, so the

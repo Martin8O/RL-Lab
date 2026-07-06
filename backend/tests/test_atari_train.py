@@ -28,7 +28,7 @@ def test_pong_registered_and_trainable() -> None:
     assert spec.gym_id == "ALE/Pong-v5"
     assert spec.family == "atari"
     assert spec.obs_type == "image"
-    assert spec.supported_algos == ["ppo", "dqn"]  # pixels → no evolution/Q-learning; dqn = DQN's birthplace (S5c)
+    assert spec.supported_algos == ["ppo", "dqn", "qrdqn"]  # pixels → no evolution/Q-learning; dqn = DQN's birthplace (S5c), qrdqn = distributional DQN (S5e)
     assert spec.hw_requirement == "gpu"  # CnnPolicy needs CUDA; CPU box still gates Run
     assert spec.train_implemented is True  # G4b built the trainer — un-gated on a GPU box
     assert spec.make_kwargs == {"full_action_space": True}  # 18 actions → shared keymap + policy parity

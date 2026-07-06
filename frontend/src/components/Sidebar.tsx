@@ -251,6 +251,7 @@ function ALGO_LABEL(t: (k: string) => string, id: string): string {
     case 'td3':            return t('sidebar.algo_td3')
     case 'dqn':            return t('sidebar.algo_dqn')
     case 'a2c':            return t('sidebar.algo_a2c')
+    case 'qrdqn':          return t('sidebar.algo_qrdqn')
     default:               return id
   }
 }
@@ -394,6 +395,8 @@ export default function Sidebar() {
   const setDqnParams    = useAppStore((s) => s.setDqnParams)
   const a2cParams       = useAppStore((s) => s.a2cParams)
   const setA2cParams    = useAppStore((s) => s.setA2cParams)
+  const qrdqnParams     = useAppStore((s) => s.qrdqnParams)
+  const setQrdqnParams  = useAppStore((s) => s.setQrdqnParams)
   const seed            = useAppStore((s) => s.seed)
   const setSeed         = useAppStore((s) => s.setSeed)
   const totalTimesteps  = useAppStore((s) => s.totalTimesteps)
@@ -419,6 +422,7 @@ export default function Sidebar() {
   const td3Defs = selectedEnv?.hyperparams?.['td3'] ?? {}
   const dqnDefs = selectedEnv?.hyperparams?.['dqn'] ?? {}
   const a2cDefs = selectedEnv?.hyperparams?.['a2c'] ?? {}
+  const qrdqnDefs = selectedEnv?.hyperparams?.['qrdqn'] ?? {}
   const isEvo = algo === 'neuroevolution'
   const isQ   = algo === 'q_learning'
   const isAz  = algo === 'alphazero'
@@ -426,6 +430,7 @@ export default function Sidebar() {
   const isTd3 = algo === 'td3'
   const isDqn = algo === 'dqn'
   const isA2c = algo === 'a2c'
+  const isQrdqn = algo === 'qrdqn'
 
   // Per-env step ladder + the ★ recommended budget; always include the current value so the
   // <select> can render it even after a reload with a value off the ladder. The off-policy algos (SAC +
@@ -471,7 +476,7 @@ export default function Sidebar() {
       {/* Scrollable params */}
       <div style={{ flex: 1, overflowY: 'auto', padding: 'var(--space-5)' }}>
         <div style={{ ...sectionEyebrow, marginBottom: 'var(--space-4)' }}>
-          {isEvo ? t('sidebar.evo_params_title') : isQ ? t('sidebar.q_params_title') : isAz ? t('sidebar.az_params_title') : isSac ? t('sidebar.sac_params_title') : isTd3 ? t('sidebar.td3_params_title') : isDqn ? t('sidebar.dqn_params_title') : isA2c ? t('sidebar.a2c_params_title') : t('sidebar.params_title')}
+          {isEvo ? t('sidebar.evo_params_title') : isQ ? t('sidebar.q_params_title') : isAz ? t('sidebar.az_params_title') : isSac ? t('sidebar.sac_params_title') : isTd3 ? t('sidebar.td3_params_title') : isDqn ? t('sidebar.dqn_params_title') : isA2c ? t('sidebar.a2c_params_title') : isQrdqn ? t('sidebar.qrdqn_params_title') : t('sidebar.params_title')}
         </div>
 
         {algo === 'ppo' && (
@@ -1055,6 +1060,94 @@ export default function Sidebar() {
           </>
         )}
 
+        {/* QR-DQN (S5e — distributional DQN): the same off-policy knobs as DQN (learning rate, discount,
+            replay buffer, update frequency, target sync, and the two ε-greedy exploration knobs — sharing
+            DQN's slider ids so they read identically), plus the ONE knob DQN doesn't have: n_quantiles,
+            how many quantiles represent each action's return distribution. */}
+        {isQrdqn && (
+          <>
+            {qrdqnDefs.learning_rate && (
+              <ParamSlider
+                id="learning_rate" label={t('sidebar.learning_rate')}
+                value={qrdqnParams.learning_rate}
+                min={qrdqnDefs.learning_rate.min!} max={qrdqnDefs.learning_rate.max!} step={0.01}
+                recommended={qrdqnDefs.learning_rate.recommended as number}
+                onChange={(v) => setQrdqnParams({ learning_rate: v })}
+              />
+            )}
+
+            {qrdqnDefs.gamma && (
+              <ParamSlider
+                id="gamma" label={t('sidebar.gamma')}
+                value={qrdqnParams.gamma}
+                min={qrdqnDefs.gamma.min!} max={qrdqnDefs.gamma.max!} step={qrdqnDefs.gamma.step!}
+                recommended={qrdqnDefs.gamma.recommended as number}
+                onChange={(v) => setQrdqnParams({ gamma: v })}
+              />
+            )}
+
+            {qrdqnDefs.n_quantiles && (
+              <ParamSlider
+                id="qrdqn_n_quantiles" label={t('sidebar.qrdqn_n_quantiles')}
+                value={qrdqnParams.n_quantiles}
+                min={qrdqnDefs.n_quantiles.min!} max={qrdqnDefs.n_quantiles.max!} step={qrdqnDefs.n_quantiles.step!}
+                recommended={qrdqnDefs.n_quantiles.recommended as number}
+                onChange={(v) => setQrdqnParams({ n_quantiles: Math.round(v) })}
+              />
+            )}
+
+            {qrdqnDefs.buffer_size && (
+              <ParamSlider
+                id="dqn_buffer_size" label={t('sidebar.dqn_buffer_size')}
+                value={qrdqnParams.buffer_size}
+                min={qrdqnDefs.buffer_size.min!} max={qrdqnDefs.buffer_size.max!} step={qrdqnDefs.buffer_size.step!}
+                recommended={qrdqnDefs.buffer_size.recommended as number}
+                onChange={(v) => setQrdqnParams({ buffer_size: Math.round(v) })}
+              />
+            )}
+
+            {qrdqnDefs.train_freq && (
+              <ParamSlider
+                id="dqn_train_freq" label={t('sidebar.dqn_train_freq')}
+                value={qrdqnParams.train_freq}
+                min={qrdqnDefs.train_freq.min!} max={qrdqnDefs.train_freq.max!} step={qrdqnDefs.train_freq.step!}
+                recommended={qrdqnDefs.train_freq.recommended as number}
+                onChange={(v) => setQrdqnParams({ train_freq: Math.round(v) })}
+              />
+            )}
+
+            {qrdqnDefs.target_update_interval && (
+              <ParamSlider
+                id="dqn_target_update" label={t('sidebar.dqn_target_update')}
+                value={qrdqnParams.target_update_interval}
+                min={qrdqnDefs.target_update_interval.min!} max={qrdqnDefs.target_update_interval.max!} step={qrdqnDefs.target_update_interval.step!}
+                recommended={qrdqnDefs.target_update_interval.recommended as number}
+                onChange={(v) => setQrdqnParams({ target_update_interval: Math.round(v) })}
+              />
+            )}
+
+            {qrdqnDefs.exploration_fraction && (
+              <ParamSlider
+                id="dqn_exploration_fraction" label={t('sidebar.dqn_exploration_fraction')}
+                value={qrdqnParams.exploration_fraction}
+                min={qrdqnDefs.exploration_fraction.min!} max={qrdqnDefs.exploration_fraction.max!} step={qrdqnDefs.exploration_fraction.step!}
+                recommended={qrdqnDefs.exploration_fraction.recommended as number}
+                onChange={(v) => setQrdqnParams({ exploration_fraction: v })}
+              />
+            )}
+
+            {qrdqnDefs.exploration_final_eps && (
+              <ParamSlider
+                id="dqn_exploration_final_eps" label={t('sidebar.dqn_exploration_final_eps')}
+                value={qrdqnParams.exploration_final_eps}
+                min={qrdqnDefs.exploration_final_eps.min!} max={qrdqnDefs.exploration_final_eps.max!} step={qrdqnDefs.exploration_final_eps.step!}
+                recommended={qrdqnDefs.exploration_final_eps.recommended as number}
+                onChange={(v) => setQrdqnParams({ exploration_final_eps: v })}
+              />
+            )}
+          </>
+        )}
+
         {/* Divider */}
         <div style={{ height: 1, background: 'var(--border-default)', margin: 'var(--space-3) 0 var(--space-4)' }} />
 
@@ -1087,9 +1180,9 @@ export default function Sidebar() {
           </div>
         </div>
 
-        {/* Total Steps — PPO + SAC + TD3 + DQN + A2C (all run an env-step budget; evolution uses
+        {/* Total Steps — PPO + SAC + TD3 + DQN + A2C + QR-DQN (all run an env-step budget; evolution uses
             Generations, Q-learning Episodes, AlphaZero Iterations). */}
-        {(algo === 'ppo' || algo === 'sac' || algo === 'td3' || algo === 'dqn' || algo === 'a2c') && (
+        {(algo === 'ppo' || algo === 'sac' || algo === 'td3' || algo === 'dqn' || algo === 'a2c' || algo === 'qrdqn') && (
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <label style={fieldLabel}>
               {t('sidebar.total_steps')}

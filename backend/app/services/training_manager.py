@@ -389,7 +389,7 @@ class TrainingManager:
         # MaskablePPO *board* trainer (G6b) — hence the PPO guard excludes them; AZ is always a board game
         # but computes its own schedule, so it's added explicitly.
         if config.algo == "alphazero" or (
-            config.algo in ("ppo", "sac", "td3", "dqn", "a2c")
+            config.algo in ("ppo", "sac", "td3", "dqn", "a2c", "qrdqn")
             and not is_competitive_ma(spec)
             and not is_board_game(spec)
         ):
@@ -556,6 +556,23 @@ class TrainingManager:
                 from app.services.trainer_a2c import train_a2c  # lazy: loads torch/SB3
 
                 terminal = train_a2c(
+                    config,
+                    gym_id,
+                    control,
+                    self._emit_metrics,
+                    self._emit_progress,
+                    self._publish_predict,
+                    self._on_snapshot,
+                    resume,
+                )
+            elif config.algo == "qrdqn":
+                # Quantile-Regression DQN (S5e): the distributional value-based peer trainer — DQN that
+                # learns each action's whole return distribution (n_quantiles) instead of just its mean.
+                # Same off-policy lane as DQN (replay buffer + target net, ε-greedy, step-interval metrics,
+                # decoupled preview, empty-buffer resume gate); gated to the same discrete envs + Atari.
+                from app.services.trainer_qrdqn import train_qrdqn  # lazy: loads torch/SB3-contrib
+
+                terminal = train_qrdqn(
                     config,
                     gym_id,
                     control,

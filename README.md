@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  Pick a game, tune the knobs with beginner-friendly info popups, train with one of 7 algorithms,
+  Pick a game, tune the knobs with beginner-friendly info popups, train with one of 9 algorithms,
   watch the agent learn in real time, compare runs like a research paper, then <i>play against your own AI</i>
   with a skill meter. Bilingual&nbsp;(CZ/EN), dark&nbsp;/&nbsp;light.
 </p>
@@ -24,7 +24,7 @@
   <br>
   <img alt="100+ environments" src="https://img.shields.io/badge/environments-100%2B-6e7bff">
   <img alt="8 families" src="https://img.shields.io/badge/families-8-6e7bff">
-  <img alt="7 algorithms" src="https://img.shields.io/badge/algorithms-7-6e7bff">
+  <img alt="9 algorithms" src="https://img.shields.io/badge/algorithms-9-6e7bff">
   <img alt="tests" src="https://img.shields.io/badge/tests-421%20py%20%C2%B7%2074%20ts-3fb950">
   <img alt="i18n" src="https://img.shields.io/badge/CZ%20%2F%20EN-bilingual-e3b341">
 </p>
@@ -90,7 +90,7 @@ navigating the grid, the skill meter rising from *Child* to *Superhuman*, and th
 | Capability | What you get |
 | :-- | :-- |
 | 🎮 **100+ environments** | Eight families — Classic Control → Toy Text → MiniGrid → Box2D → Atari → MuJoCo → board games → multi-agent — all behind one data-driven registry. |
-| 🧠 **7 algorithms** | PPO · neuroevolution · tabular Q-learning · AlphaZero · SAC · TD3 · DQN, gated per-environment with a ★ recommended pick for each game. |
+| 🧠 **9 algorithms** | PPO · neuroevolution · tabular Q-learning · AlphaZero · SAC · TD3 · DQN · A2C · QR-DQN, gated per-environment with a ★ recommended pick for each game. |
 | 📈 **Live training** | Realtime reward / loss / fitness charts with EMA smoothing, a "solved @" marker, and a multi-run compare overlay. |
 | 👀 **Watch it learn** | The running policy renders live — client-side SVG for vector envs, server-streamed frames for pixels / MuJoCo — with visual on/off and time-acceleration. |
 | 🕹️ **Play vs your AI** | Take control over WebSocket and go head-to-head with the trained agent; a skill meter grades you Child → Below avg → Average → Above avg → Superhuman, with named leaderboards. |
@@ -130,7 +130,7 @@ See [`docs/adding-an-environment.md`](docs/adding-an-environment.md) and the
 
 ## Algorithms
 
-Three peer trainers plug into one training manager, plus four more families behind the same seam. Each game
+Every algorithm plugs into one training manager behind a single peer-trainer seam. Each game
 declares which algorithms it supports, and which one is ★ recommended.
 
 | Algorithm | Kind | Best for | Notes |
@@ -142,6 +142,8 @@ declares which algorithms it supports, and which one is ★ recommended.
 | **SAC** | off-policy actor-critic | continuous control (MuJoCo) | the ★ pick for robotics |
 | **TD3** | off-policy deterministic | continuous control | twin critics + delayed updates |
 | **DQN** | off-policy value-based | discrete + Atari | ε-greedy; the original deep-RL Atari algorithm (Mnih et al., 2015) |
+| **A2C** | on-policy actor-critic | discrete + continuous | PPO's simpler predecessor — one un-clipped update per rollout |
+| **QR-DQN** | distributional value-based | discrete + Atari | DQN that learns each action's whole return distribution (quantiles); a Rainbow ingredient |
 
 New algorithms follow [`docs/adding-an-algorithm.md`](docs/adding-an-algorithm.md).
 

@@ -417,6 +417,46 @@ def _standard_hyperparams(q_episodes: int = 5_000) -> dict[str, dict[str, Hyperp
                 choices=["tanh", "relu"],
             ),
         },
+        # QR-DQN (S5e) — distributional DQN. Exposed on the SAME discrete envs as DQN (gated by
+        # supported_algos: the classic-control discretes + LunarLander + Atari). The whole block mirrors
+        # the ``dqn`` block (same off-policy replay/target/ε-greedy knobs, same rl-zoo3 per-env ★ from
+        # _QRDQN_TUNED, Atari override in _cnn_hyperparams) plus ONE distinctive knob — ``n_quantiles``,
+        # how many quantiles represent each action's return distribution (DQN's single mean Q → a
+        # distribution). batch_size / learning_starts / gradient_steps are fixed/derived in the trainer.
+        "qrdqn": {
+            "learning_rate": HyperparamDef(
+                type="float", default=1e-3, recommended=1e-3,
+                min=1e-5, max=1e-2,
+            ),
+            "gamma": HyperparamDef(
+                type="float", default=0.99, recommended=0.99,
+                min=0.9, max=0.9999, step=0.001,
+            ),
+            "n_quantiles": HyperparamDef(  # QR-DQN's one knob beyond DQN — quantiles per return distribution
+                type="int", default=25, recommended=25,
+                min=5, max=200, step=5,
+            ),
+            "buffer_size": HyperparamDef(  # replay window — smaller than SAC/TD3's 1M (Atari is RAM-heavy)
+                type="int", default=100_000, recommended=100_000,
+                min=10_000, max=1_000_000, step=10_000,
+            ),
+            "train_freq": HyperparamDef(  # env steps collected between updates (CartPole's recipe wants 256)
+                type="int", default=4, recommended=4,
+                min=1, max=256, step=1,
+            ),
+            "target_update_interval": HyperparamDef(  # steps between hard target-net syncs (DQN's τ analogue)
+                type="int", default=250, recommended=250,
+                min=1, max=2_000, step=1,
+            ),
+            "exploration_fraction": HyperparamDef(  # fraction of the budget to anneal ε over, then hold
+                type="float", default=0.2, recommended=0.2,
+                min=0.01, max=0.5, step=0.01,
+            ),
+            "exploration_final_eps": HyperparamDef(  # the ε held after annealing (residual exploration)
+                type="float", default=0.05, recommended=0.05,
+                min=0.0, max=0.2, step=0.01,
+            ),
+        },
     }
 
 
@@ -478,6 +518,31 @@ def _cnn_hyperparams() -> dict[str, dict[str, HyperparamDef]]:
     hp["dqn"]["exploration_final_eps"] = HyperparamDef(
         type="float", default=0.01, recommended=0.01, min=0.0, max=0.2, step=0.01,
     )
+    # QR-DQN on Atari (S5e) = the same Nature-DQN recipe as DQN (small lr, long target-sync, gentle ε,
+    # a 50k memory-optimized replay buffer), plus its one distinctive knob n_quantiles at the paper's
+    # Atari value of 200 (a finer return distribution than the classic-control default of 25). Mirror the
+    # dqn block's Atari override key-for-key so DQN-vs-QR-DQN on Atari differs ONLY by the distribution.
+    hp["qrdqn"]["learning_rate"] = HyperparamDef(
+        type="float", default=1e-4, recommended=1e-4, min=1e-5, max=1e-2,
+    )
+    hp["qrdqn"]["n_quantiles"] = HyperparamDef(
+        type="int", default=200, recommended=200, min=5, max=200, step=5,
+    )
+    hp["qrdqn"]["buffer_size"] = HyperparamDef(
+        type="int", default=50_000, recommended=50_000, min=10_000, max=1_000_000, step=10_000,
+    )
+    hp["qrdqn"]["train_freq"] = HyperparamDef(
+        type="int", default=4, recommended=4, min=1, max=256, step=1,
+    )
+    hp["qrdqn"]["target_update_interval"] = HyperparamDef(
+        type="int", default=10_000, recommended=10_000, min=1_000, max=20_000, step=1_000,
+    )
+    hp["qrdqn"]["exploration_fraction"] = HyperparamDef(
+        type="float", default=0.1, recommended=0.1, min=0.01, max=0.5, step=0.01,
+    )
+    hp["qrdqn"]["exploration_final_eps"] = HyperparamDef(
+        type="float", default=0.01, recommended=0.01, min=0.0, max=0.2, step=0.01,
+    )
     return hp
 
 
@@ -497,7 +562,7 @@ register(
         family="classic_control",
         obs_type="vector",
         action_space="discrete",
-        supported_algos=["ppo", "neuroevolution", "dqn", "a2c"],  # the 4-way demo: PPO vs DQN (S5c) vs A2C (S5d) vs evo
+        supported_algos=["ppo", "neuroevolution", "dqn", "a2c", "qrdqn"],  # the 5-way demo: PPO vs DQN (S5c) vs A2C (S5d) vs QR-DQN (S5e) vs evo
         hyperparams=_standard_hyperparams(),
         solved_score=500.0,  # CartPole-v1 caps at 500; ≥10% (50) is kept in run history
         default_total_timesteps=50_000,  # solves CartPole on CPU in well under a minute
@@ -530,7 +595,7 @@ register(
         family="box2d",
         obs_type="vector",
         action_space="discrete",
-        supported_algos=["ppo", "neuroevolution", "dqn", "a2c"],  # dqn: value-based (S5c); a2c: on-policy actor-critic (S5d)
+        supported_algos=["ppo", "neuroevolution", "dqn", "a2c", "qrdqn"],  # dqn (S5c) + qrdqn (S5e) value-based; a2c on-policy actor-critic (S5d)
         # Same hyperparameter surface as CartPole — the standard SB3 PPO + neuroevolution
         # defaults (LunarLander just needs more steps; see the per-env Total Steps note in
         # content/parameters.ts).
@@ -747,7 +812,7 @@ register(
         family="classic_control",
         obs_type="vector",
         action_space="discrete",
-        supported_algos=["ppo", "neuroevolution", "dqn", "a2c"],  # dqn: value-based (S5c); a2c: on-policy actor-critic (S5d)
+        supported_algos=["ppo", "neuroevolution", "dqn", "a2c", "qrdqn"],  # dqn (S5c) + qrdqn (S5e) value-based; a2c on-policy actor-critic (S5d)
         hyperparams=_standard_hyperparams(),
         solved_score=-110.0,  # MountainCar-v0 reward_threshold; reward is -1/step (max 200 steps)
         min_score=-200.0,  # 0% reference: never reaching the flag = -1 × 200 steps (worst case)
@@ -777,7 +842,7 @@ register(
         family="classic_control",
         obs_type="vector",
         action_space="discrete",
-        supported_algos=["ppo", "neuroevolution", "dqn", "a2c"],  # dqn: value-based (S5c); a2c: on-policy actor-critic (S5d)
+        supported_algos=["ppo", "neuroevolution", "dqn", "a2c", "qrdqn"],  # dqn (S5c) + qrdqn (S5e) value-based; a2c on-policy actor-critic (S5d)
         hyperparams=_standard_hyperparams(),
         solved_score=-100.0,  # Acrobot-v1 reward_threshold; reward is -1/step (max 500 steps)
         min_score=-500.0,  # 0% reference: never swinging up = -1 × 500 steps (worst case)
@@ -1120,7 +1185,7 @@ def _atari_spec(
         family="atari",
         obs_type="image",
         action_space="discrete",
-        supported_algos=["ppo", "dqn"],  # image obs → CnnPolicy/GPU; dqn = DQN's birthplace (S5c); evo+Q can't consume pixels
+        supported_algos=["ppo", "dqn", "qrdqn"],  # image obs → CnnPolicy/GPU; dqn = DQN's birthplace (S5c); qrdqn = distributional DQN (S5e); evo+Q can't consume pixels
         hyperparams=_cnn_hyperparams(),  # small rollout + fuller batch for the CnnPolicy (+60% throughput)
         # All 18 ALE actions at fixed indices → one shared keyboard map across the whole family.
         make_kwargs={"full_action_space": True},
@@ -2741,6 +2806,28 @@ for _a2c_id, _a2c_params in _A2C_TUNED.items():
     if _a2c_spec is not None and "a2c" in _a2c_spec.hyperparams:
         _block = _a2c_spec.hyperparams["a2c"]
         for _param, _value in _a2c_params.items():
+            if _param in _block:
+                _block[_param].default = _value
+                _block[_param].recommended = _value
+
+
+# QR-DQN (S5e) per-env ★ recommended hyperparameters. QR-DQN shares DQN's off-policy machinery, so its
+# per-env recipe is the **same rl-zoo3 tuning as _DQN_TUNED** (deliberately — so a DQN-vs-QR-DQN run on one
+# game differs ONLY by the distributional target, not by the recipe), plus a per-env ``n_quantiles`` (the
+# rl-zoo3 QR-DQN CartPole recipe uses 10; the others keep the block's classic-control default of 25). Atari
+# uses the Nature override baked into ``_cnn_hyperparams`` instead (n_quantiles=200). Same data-tweak
+# pattern: set both default + recommended on the env's ``qrdqn`` HyperparamDef block.
+_QRDQN_TUNED: dict[str, dict[str, float]] = {
+    "cartpole": {**_DQN_TUNED["cartpole"], "n_quantiles": 10},  # zoo QR-DQN CartPole recipe (10 quantiles)
+    "mountaincar": {**_DQN_TUNED["mountaincar"]},
+    "acrobot": {**_DQN_TUNED["acrobot"]},
+    "lunarlander": {**_DQN_TUNED["lunarlander"]},
+}
+for _qrdqn_id, _qrdqn_params in _QRDQN_TUNED.items():
+    _qrdqn_spec = get_env(_qrdqn_id)
+    if _qrdqn_spec is not None and "qrdqn" in _qrdqn_spec.hyperparams:
+        _block = _qrdqn_spec.hyperparams["qrdqn"]
+        for _param, _value in _qrdqn_params.items():
             if _param in _block:
                 _block[_param].default = _value
                 _block[_param].recommended = _value

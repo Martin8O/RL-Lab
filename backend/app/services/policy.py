@@ -5,8 +5,9 @@ resuming training. Given a :class:`~app.services.checkpoints.LoadedCheckpoint`, 
 plain ``predict(obs) -> int`` over the frozen policy:
 
 * **PPO** — ``PPO.load`` the saved ``model.zip`` and predict deterministically (no env needed
-  for inference; we never call ``learn``). **SAC / TD3 / DQN / A2C** load their own SB3 class the
-  same way (SAC/TD3 box-only, DQN discrete-only, A2C either — an on-policy mirror of the PPO loader).
+  for inference; we never call ``learn``). **SAC / TD3 / DQN / A2C / QR-DQN** load their own SB3(-contrib)
+  class the same way (SAC/TD3 box-only, DQN + QR-DQN discrete-only, A2C either — QR-DQN acts on its
+  quantile-mean, so from the caller's side it returns a plain int exactly like DQN).
 * **neuroevolution** — reconstruct the champion genome (``population[0]``, the elite carried
   over by the trainer's ``_breed``) as the same numpy :class:`~app.services.trainer_evolution._Policy`
   used during evolution, reading the obs/act/hidden dims the trainer stored in ``population.npz``.
@@ -42,6 +43,8 @@ def predict_from_checkpoint(loaded: LoadedCheckpoint) -> PredictFn:
             return _td3_predict(loaded.blob)
         if loaded.config.algo == "dqn":
             return _dqn_predict(loaded.blob)
+        if loaded.config.algo == "qrdqn":
+            return _qrdqn_predict(loaded.blob)
         if loaded.config.algo == "a2c":
             return _a2c_predict(loaded.blob)
         if loaded.config.algo == "q_learning":
@@ -168,6 +171,27 @@ def _dqn_predict(blob: bytes) -> PredictFn:
     # save, including older Atari checkpoints saved before the buffer was trimmed. (Vector DQN buffers
     # are tiny anyway, so this is harmless there.)
     model = DQN.load(BytesIO(blob), device="cpu", buffer_size=1)  # env not needed for inference
+
+    def predict(obs: object) -> Any:
+        action, _ = model.predict(np.asarray(obs), deterministic=True)
+        return int(np.asarray(action).flatten()[0])
+
+    return predict
+
+
+def _qrdqn_predict(blob: bytes) -> PredictFn:
+    """Deterministic QR-DQN inference for AI-play (S5e). QR-DQN is discrete-action and distributional: it
+    learns each action's return distribution but acts on its mean, so ``predict(deterministic=True)``
+    drops the ε-exploration and returns the greedy ``argmax`` action as a plain ``int`` (the ADR-021
+    discrete contract) — identical to DQN from the caller's side. One loader serves both the vector
+    MlpPolicy and the Atari CnnPolicy. Like DQN there is no VecNormalize: QR-DQN trains on raw obs."""
+    import numpy as np
+    from sb3_contrib import QRDQN
+
+    # buffer_size=1 overrides the saved replay-buffer size: inference never touches the buffer, but
+    # QRDQN.load would otherwise allocate the full trained size — for an Atari CnnPolicy that is GBs of
+    # stacked frames (the S5c memory bug, shared with DQN). Forcing it to 1 keeps AI-play memory-trivial.
+    model = QRDQN.load(BytesIO(blob), device="cpu", buffer_size=1)  # env not needed for inference
 
     def predict(obs: object) -> Any:
         action, _ = model.predict(np.asarray(obs), deterministic=True)

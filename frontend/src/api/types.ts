@@ -89,7 +89,7 @@ export interface SystemInfo {
 // --- Training (B2) ---------------------------------------------------------
 // Mirrors backend/app/schemas/training.py — keep both sides in sync.
 
-export type Algo = 'ppo' | 'neuroevolution' | 'q_learning' | 'alphazero' | 'sac' | 'td3' | 'dqn' | 'a2c'
+export type Algo = 'ppo' | 'neuroevolution' | 'q_learning' | 'alphazero' | 'sac' | 'td3' | 'dqn' | 'a2c' | 'qrdqn'
 export type TrainState =
   | 'idle'
   | 'running'
@@ -232,6 +232,29 @@ export interface A2CHyperparams {
   activation: 'tanh' | 'relu'
 }
 
+/** QR-DQN (Quantile-Regression DQN, S5e) — the distributional DQN: instead of one mean Q per action it
+ *  learns each action's whole return distribution as `n_quantiles` values, trained with a quantile-Huber
+ *  loss, and acts on their mean (so the greedy policy is comparable to DQN's). Same off-policy machinery
+ *  as DQN (replay buffer, target net, ε-greedy), gated to the same discrete envs + Atari; raw obs/rewards,
+ *  so ep_rew_mean + the skill meter read like DQN's. `n_quantiles` is its one knob beyond DQN. batch_size /
+ *  learning_starts / gradient_steps are fixed/derived backend defaults (not surfaced here). */
+export interface QRDQNHyperparams {
+  learning_rate: number
+  gamma: number
+  /** Quantiles per action's return distribution (DQN's single mean Q → a distribution; ★25, Atari 200). */
+  n_quantiles: number
+  /** Replay-buffer capacity (smaller than SAC/TD3's 1M — Atari frames are RAM-heavy). */
+  buffer_size: number
+  /** Env steps collected between update phases (the trainer sets gradient_steps from this). */
+  train_freq: number
+  /** Steps between hard copies of the live net into the slow target net (DQN's τ analogue). */
+  target_update_interval: number
+  /** Fraction of the budget to anneal ε over (1.0 → exploration_final_eps), then hold. */
+  exploration_fraction: number
+  /** The ε value held after annealing (residual random exploration). */
+  exploration_final_eps: number
+}
+
 export interface TrainConfig {
   env_id: string
   algo: Algo
@@ -254,6 +277,8 @@ export interface TrainConfig {
   dqn?: DQNHyperparams | null
   /** Present only for Advantage Actor-Critic runs (algo "a2c", S5d); null/omitted otherwise. */
   a2c?: A2CHyperparams | null
+  /** Present only for Quantile-Regression DQN runs (algo "qrdqn", S5e); null/omitted otherwise. */
+  qrdqn?: QRDQNHyperparams | null
   /** Seed-sweep grouping (X3): runs launched by one sweep share this experiment_id (minted server-side);
    *  null/omitted for a plain single run. Each queued run still records its own seed + full config. */
   experiment_id?: string | null
