@@ -162,3 +162,14 @@ sb3-contrib==2.8.0
 # CSV/LaTeX/repro-card use the stdlib. Export is server-side (the frontend store is a capped ring buffer).
 et-xmlfile==2.0.0
 openpyxl==3.1.5
+
+# --- VizDoom stack (G8a probe — image-obs discrete FPS, rides the G4 image seam) ---
+# 3D FPS on the existing Atari/CarRacing image path (CnnPolicy on CUDA, server-JPEG render). The G8a
+# spike verified `pip install vizdoom` installs from a PREBUILT Windows wheel (cp311, no compiler, no
+# build tools, ~26 MB — bundles the ZDoom engine) and pulls NO new deps (numpy/gymnasium/pygame-ce all
+# already satisfied → the `pygame-ce`-only rule is safe). The Gymnasium wrapper returns a **Dict** obs
+# ({'screen': Box(0,255,(240,320,3),uint8), 'gamevariables': Box((1,),f32)}) with **Discrete** actions,
+# so G8b's family builder needs a screen-extraction wrapper (Dict→screen Box) before frame-stack/resize.
+# CnnPolicy CUDA smoke confirmed on the RTX 5070 (ep_rew_mean climbed on VizdoomBasic-v1). GPU-gated for
+# training; human play works on CPU. Wired now so the desktop + reproducible freeze pick it up for G8b.
+vizdoom==1.3.0
