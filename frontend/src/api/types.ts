@@ -89,7 +89,7 @@ export interface SystemInfo {
 // --- Training (B2) ---------------------------------------------------------
 // Mirrors backend/app/schemas/training.py — keep both sides in sync.
 
-export type Algo = 'ppo' | 'neuroevolution' | 'q_learning' | 'alphazero' | 'sac' | 'td3' | 'dqn'
+export type Algo = 'ppo' | 'neuroevolution' | 'q_learning' | 'alphazero' | 'sac' | 'td3' | 'dqn' | 'a2c'
 export type TrainState =
   | 'idle'
   | 'running'
@@ -212,6 +212,26 @@ export interface DQNHyperparams {
   exploration_final_eps: number
 }
 
+/** A2C (Advantage Actor-Critic, S5d) — PPO's simpler on-policy predecessor: same actor-critic shape
+ *  (policy + value head, no replay buffer), but a single un-clipped policy-gradient update per rollout
+ *  instead of PPO's clipped multi-epoch update. Handles discrete AND continuous actions. Trains on raw
+ *  obs/rewards, so ep_rew_mean + the skill meter read like PPO's. n_steps is A2C's signature short
+ *  rollout (★5, nudged up per env for the single-env setup); gae_lambda 1.0 = full Monte-Carlo returns.
+ *  vf_coef / max_grad_norm / RMSprop are fixed backend defaults (not surfaced here). */
+export interface A2CHyperparams {
+  learning_rate: number
+  gamma: number
+  /** Steps collected per update — A2C's signature short rollout (PPO uses 2048). */
+  n_steps: number
+  /** GAE λ: 1.0 = full Monte-Carlo returns (A2C classic); lower trades variance for bias (toward PPO). */
+  gae_lambda: number
+  /** Entropy bonus (exploration), the same knob as PPO. */
+  ent_coef: number
+  n_hidden_layers: number
+  neurons_per_layer: number
+  activation: 'tanh' | 'relu'
+}
+
 export interface TrainConfig {
   env_id: string
   algo: Algo
@@ -232,6 +252,8 @@ export interface TrainConfig {
   td3?: TD3Hyperparams | null
   /** Present only for Deep Q-Network runs (algo "dqn", S5c); null/omitted otherwise. */
   dqn?: DQNHyperparams | null
+  /** Present only for Advantage Actor-Critic runs (algo "a2c", S5d); null/omitted otherwise. */
+  a2c?: A2CHyperparams | null
   /** Seed-sweep grouping (X3): runs launched by one sweep share this experiment_id (minted server-side);
    *  null/omitted for a plain single run. Each queued run still records its own seed + full config. */
   experiment_id?: string | null

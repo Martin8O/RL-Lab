@@ -377,6 +377,46 @@ def _standard_hyperparams(q_episodes: int = 5_000) -> dict[str, dict[str, Hyperp
                 min=0.0, max=0.2, step=0.01,
             ),
         },
+        # A2C (S5d) — on-policy actor-critic, PPO's simpler predecessor. Exposed only on the curated
+        # classic-control envs (gated by supported_algos: CartPole + Acrobot + MountainCar + LunarLander
+        # discrete + Pendulum + MountainCarContinuous — both action types). Same lr/γ/ent_coef + net-arch
+        # surface as PPO, minus clip_range/batch_size/n_epochs, plus gae_lambda; n_steps is A2C's signature
+        # short rollout (★5, nudged up per env from _A2C_TUNED to steady the single-env gradient). vf_coef /
+        # max_grad_norm / RMSprop are fixed (advanced, not sliders).
+        "a2c": {
+            "learning_rate": HyperparamDef(
+                type="float", default=7e-4, recommended=7e-4,
+                min=1e-5, max=1e-2,
+            ),
+            "gamma": HyperparamDef(
+                type="float", default=0.99, recommended=0.99,
+                min=0.9, max=0.9999, step=0.001,
+            ),
+            "n_steps": HyperparamDef(  # A2C's signature short rollout (PPO uses 2048); ★ nudged up per env
+                type="int", default=5, recommended=5,
+                min=5, max=128, step=1,
+            ),
+            "gae_lambda": HyperparamDef(  # 1.0 = full Monte-Carlo returns (A2C classic); lower → GAE trade
+                type="float", default=1.0, recommended=1.0,
+                min=0.8, max=1.0, step=0.01,
+            ),
+            "ent_coef": HyperparamDef(  # entropy bonus (exploration), same knob as PPO
+                type="float", default=0.0, recommended=0.0,
+                min=0.0, max=0.1, step=0.001,
+            ),
+            "n_hidden_layers": HyperparamDef(
+                type="int", default=2, recommended=2,
+                min=1, max=4, step=1,
+            ),
+            "neurons_per_layer": HyperparamDef(
+                type="int", default=64, recommended=64,
+                min=16, max=512, step=16,
+            ),
+            "activation": HyperparamDef(
+                type="categorical", default="tanh", recommended="tanh",
+                choices=["tanh", "relu"],
+            ),
+        },
     }
 
 
@@ -457,7 +497,7 @@ register(
         family="classic_control",
         obs_type="vector",
         action_space="discrete",
-        supported_algos=["ppo", "neuroevolution", "dqn"],  # dqn: off-policy value-based (S5c — the PPO-vs-DQN demo)
+        supported_algos=["ppo", "neuroevolution", "dqn", "a2c"],  # the 4-way demo: PPO vs DQN (S5c) vs A2C (S5d) vs evo
         hyperparams=_standard_hyperparams(),
         solved_score=500.0,  # CartPole-v1 caps at 500; ≥10% (50) is kept in run history
         default_total_timesteps=50_000,  # solves CartPole on CPU in well under a minute
@@ -490,7 +530,7 @@ register(
         family="box2d",
         obs_type="vector",
         action_space="discrete",
-        supported_algos=["ppo", "neuroevolution", "dqn"],  # dqn: discrete-action value-based (S5c)
+        supported_algos=["ppo", "neuroevolution", "dqn", "a2c"],  # dqn: value-based (S5c); a2c: on-policy actor-critic (S5d)
         # Same hyperparameter surface as CartPole — the standard SB3 PPO + neuroevolution
         # defaults (LunarLander just needs more steps; see the per-env Total Steps note in
         # content/parameters.ts).
@@ -707,7 +747,7 @@ register(
         family="classic_control",
         obs_type="vector",
         action_space="discrete",
-        supported_algos=["ppo", "neuroevolution", "dqn"],  # dqn: discrete-action value-based (S5c)
+        supported_algos=["ppo", "neuroevolution", "dqn", "a2c"],  # dqn: value-based (S5c); a2c: on-policy actor-critic (S5d)
         hyperparams=_standard_hyperparams(),
         solved_score=-110.0,  # MountainCar-v0 reward_threshold; reward is -1/step (max 200 steps)
         min_score=-200.0,  # 0% reference: never reaching the flag = -1 × 200 steps (worst case)
@@ -737,7 +777,7 @@ register(
         family="classic_control",
         obs_type="vector",
         action_space="discrete",
-        supported_algos=["ppo", "neuroevolution", "dqn"],  # dqn: discrete-action value-based (S5c)
+        supported_algos=["ppo", "neuroevolution", "dqn", "a2c"],  # dqn: value-based (S5c); a2c: on-policy actor-critic (S5d)
         hyperparams=_standard_hyperparams(),
         solved_score=-100.0,  # Acrobot-v1 reward_threshold; reward is -1/step (max 500 steps)
         min_score=-500.0,  # 0% reference: never swinging up = -1 × 500 steps (worst case)
@@ -781,7 +821,7 @@ register(
         family="classic_control",
         obs_type="vector",
         action_space="box",
-        supported_algos=["ppo", "neuroevolution", "sac", "td3"],  # sac/td3: off-policy continuous control (S5a/S5b)
+        supported_algos=["ppo", "neuroevolution", "sac", "td3", "a2c"],  # sac/td3: off-policy (S5a/S5b); a2c: on-policy actor-critic (S5d)
         recommended_algo="sac",  # SAC/TD3 solve continuous swing-up far better than PPO (S5a: −1117→−178, superhuman)
         hyperparams=_standard_hyperparams(),
         # Pendulum-v1 has NO official gym reward_threshold (verified: gym.spec(...).reward_threshold
@@ -822,7 +862,7 @@ register(
         family="classic_control",
         obs_type="vector",
         action_space="box",
-        supported_algos=["ppo", "neuroevolution", "sac", "td3"],  # sac/td3: off-policy continuous control (S5a/S5b)
+        supported_algos=["ppo", "neuroevolution", "sac", "td3", "a2c"],  # sac/td3: off-policy (S5a/S5b); a2c: on-policy actor-critic (S5d)
         recommended_algo="neuroevolution",  # the sparse exploration trap — population search finds the flag (S5a notes)
         hyperparams=_standard_hyperparams(),
         solved_score=90.0,  # MountainCarContinuous-v0 reward_threshold (reach the flag = +100 bonus)
@@ -2677,6 +2717,30 @@ for _dqn_id, _dqn_params in _DQN_TUNED.items():
     if _dqn_spec is not None and "dqn" in _dqn_spec.hyperparams:
         _block = _dqn_spec.hyperparams["dqn"]
         for _param, _value in _dqn_params.items():
+            if _param in _block:
+                _block[_param].default = _value
+                _block[_param].recommended = _value
+
+
+# A2C (S5d) per-env ★ recommended hyperparameters. The DQNHyperparams defaults are SB3's canonical A2C
+# recipe, but that recipe assumes MANY parallel envs (the classic A3C/A2C setup); we run a SINGLE env, so
+# a bare n_steps=5 gives a very high-variance gradient. These per-env values nudge n_steps up (a longer
+# rollout per update ⇒ a steadier single-env gradient) — the pedagogical point of A2C-vs-PPO survives (it
+# is still the plain, un-clipped actor-critic), it just gets a fair single-env shot. Same data-tweak
+# pattern as _DQN_TUNED: set both default + recommended on the env's ``a2c`` HyperparamDef block.
+_A2C_TUNED: dict[str, dict[str, float]] = {
+    "cartpole": {"n_steps": 32},  # the demo — a longer rollout so single-env A2C climbs to 500 reliably
+    "acrobot": {"n_steps": 16},
+    "mountaincar": {"n_steps": 16, "ent_coef": 0.01},  # a touch of entropy for the exploration trap
+    "lunarlander": {"n_steps": 8, "gamma": 0.995},  # LunarLander's zoo recipe leans slightly longer-horizon
+    "pendulum": {"n_steps": 8, "gamma": 0.9},  # Pendulum's zoo A2C uses the shorter-horizon gamma 0.9
+    "mountaincarcontinuous": {"n_steps": 32},  # continuous exploration trap — a longer rollout helps
+}
+for _a2c_id, _a2c_params in _A2C_TUNED.items():
+    _a2c_spec = get_env(_a2c_id)
+    if _a2c_spec is not None and "a2c" in _a2c_spec.hyperparams:
+        _block = _a2c_spec.hyperparams["a2c"]
+        for _param, _value in _a2c_params.items():
             if _param in _block:
                 _block[_param].default = _value
                 _block[_param].recommended = _value

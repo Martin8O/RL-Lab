@@ -20,6 +20,7 @@ const HYPER_KEY: Record<string, keyof TrainConfig> = {
   sac: 'sac',
   td3: 'td3',
   dqn: 'dqn',
+  a2c: 'a2c',
   alphazero: 'alphazero',
 }
 

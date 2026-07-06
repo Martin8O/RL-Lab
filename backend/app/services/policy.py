@@ -5,7 +5,8 @@ resuming training. Given a :class:`~app.services.checkpoints.LoadedCheckpoint`, 
 plain ``predict(obs) -> int`` over the frozen policy:
 
 * **PPO** — ``PPO.load`` the saved ``model.zip`` and predict deterministically (no env needed
-  for inference; we never call ``learn``).
+  for inference; we never call ``learn``). **SAC / TD3 / DQN / A2C** load their own SB3 class the
+  same way (SAC/TD3 box-only, DQN discrete-only, A2C either — an on-policy mirror of the PPO loader).
 * **neuroevolution** — reconstruct the champion genome (``population[0]``, the elite carried
   over by the trainer's ``_breed``) as the same numpy :class:`~app.services.trainer_evolution._Policy`
   used during evolution, reading the obs/act/hidden dims the trainer stored in ``population.npz``.
@@ -41,6 +42,8 @@ def predict_from_checkpoint(loaded: LoadedCheckpoint) -> PredictFn:
             return _td3_predict(loaded.blob)
         if loaded.config.algo == "dqn":
             return _dqn_predict(loaded.blob)
+        if loaded.config.algo == "a2c":
+            return _a2c_predict(loaded.blob)
         if loaded.config.algo == "q_learning":
             return _q_learning_predict(loaded.blob)
         return _evolution_predict(loaded.blob)
@@ -75,6 +78,37 @@ def _ppo_predict(blob: bytes) -> PredictFn:
         action, _ = model.predict(x, deterministic=True)
         arr = np.asarray(action)
         if is_box:  # continuous: the deterministic action is the Gaussian mean, clipped to bounds
+            return np.clip(arr.astype(np.float32).reshape(-1), low, high)
+        return int(arr.flatten()[0])
+
+    return predict
+
+
+def _a2c_predict(blob: bytes) -> PredictFn:
+    """Deterministic A2C inference for AI-play (S5d). A2C is an on-policy actor-critic just like PPO, so
+    this mirrors the PPO loader exactly — ``deterministic=True`` returns the greedy action (an ``int``
+    for a discrete env, the Gaussian mean clipped to bounds for a continuous Box env), covering both
+    action types A2C is offered on. A2C trains on raw obs (it is offered only on the un-normalized
+    classic-control envs, never the VecNormalize'd MuJoCo family), so there are no running stats to
+    apply; ``load_obs_normalizer`` returns None for its blobs, leaving obs unchanged."""
+    import numpy as np
+    from stable_baselines3 import A2C
+
+    from app.services import vecnorm
+
+    model = A2C.load(BytesIO(blob), device="cpu")  # env not needed for inference
+    is_box = getattr(model.action_space, "n", None) is None
+    low = np.asarray(getattr(model.action_space, "low", 0.0), dtype=np.float32)
+    high = np.asarray(getattr(model.action_space, "high", 0.0), dtype=np.float32)
+    normalize = vecnorm.load_obs_normalizer(blob)  # None for A2C's un-normalized classic-control blobs
+
+    def predict(obs: object) -> Any:
+        x = np.asarray(obs)
+        if normalize is not None:
+            x = normalize(x)
+        action, _ = model.predict(x, deterministic=True)
+        arr = np.asarray(action)
+        if is_box:  # continuous: the deterministic mean action, clipped to bounds
             return np.clip(arr.astype(np.float32).reshape(-1), low, high)
         return int(arr.flatten()[0])
 

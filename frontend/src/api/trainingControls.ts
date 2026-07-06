@@ -30,6 +30,7 @@ export function buildTrainConfig(): TrainConfig | null {
     sac: s.algo === 'sac' ? s.sacParams : null,
     td3: s.algo === 'td3' ? s.td3Params : null,
     dqn: s.algo === 'dqn' ? s.dqnParams : null,
+    a2c: s.algo === 'a2c' ? s.a2cParams : null,
   }
 }
 

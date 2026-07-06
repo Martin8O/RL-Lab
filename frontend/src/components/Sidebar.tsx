@@ -106,6 +106,7 @@ function formatValue(id: string, v: number | string): string {
     case 'dqn_buffer_size': return formatCount(v)  // 100000 → "100k" (the shared count formatter)
     case 'dqn_exploration_fraction':
     case 'dqn_exploration_final_eps': return v.toFixed(2)  // ε-greedy fractions (≈0.16 / 0.04)
+    case 'a2c_gae_lambda': return v.toFixed(2)  // GAE λ (≈1.00 for classic A2C)
     case 'q_learning_rate':
     case 'epsilon_start':
     case 'epsilon_end':
@@ -249,6 +250,7 @@ function ALGO_LABEL(t: (k: string) => string, id: string): string {
     case 'sac':            return t('sidebar.algo_sac')
     case 'td3':            return t('sidebar.algo_td3')
     case 'dqn':            return t('sidebar.algo_dqn')
+    case 'a2c':            return t('sidebar.algo_a2c')
     default:               return id
   }
 }
@@ -390,6 +392,8 @@ export default function Sidebar() {
   const setTd3Params    = useAppStore((s) => s.setTd3Params)
   const dqnParams       = useAppStore((s) => s.dqnParams)
   const setDqnParams    = useAppStore((s) => s.setDqnParams)
+  const a2cParams       = useAppStore((s) => s.a2cParams)
+  const setA2cParams    = useAppStore((s) => s.setA2cParams)
   const seed            = useAppStore((s) => s.seed)
   const setSeed         = useAppStore((s) => s.setSeed)
   const totalTimesteps  = useAppStore((s) => s.totalTimesteps)
@@ -414,12 +418,14 @@ export default function Sidebar() {
   const sacEntChoices = sacDefs.ent_coef?.choices ?? null  // SAC entropy: ["auto", "0.1", "0.2"]
   const td3Defs = selectedEnv?.hyperparams?.['td3'] ?? {}
   const dqnDefs = selectedEnv?.hyperparams?.['dqn'] ?? {}
+  const a2cDefs = selectedEnv?.hyperparams?.['a2c'] ?? {}
   const isEvo = algo === 'neuroevolution'
   const isQ   = algo === 'q_learning'
   const isAz  = algo === 'alphazero'
   const isSac = algo === 'sac'
   const isTd3 = algo === 'td3'
   const isDqn = algo === 'dqn'
+  const isA2c = algo === 'a2c'
 
   // Per-env step ladder + the ★ recommended budget; always include the current value so the
   // <select> can render it even after a reload with a value off the ladder. The off-policy algos (SAC +
@@ -465,7 +471,7 @@ export default function Sidebar() {
       {/* Scrollable params */}
       <div style={{ flex: 1, overflowY: 'auto', padding: 'var(--space-5)' }}>
         <div style={{ ...sectionEyebrow, marginBottom: 'var(--space-4)' }}>
-          {isEvo ? t('sidebar.evo_params_title') : isQ ? t('sidebar.q_params_title') : isAz ? t('sidebar.az_params_title') : isSac ? t('sidebar.sac_params_title') : isTd3 ? t('sidebar.td3_params_title') : isDqn ? t('sidebar.dqn_params_title') : t('sidebar.params_title')}
+          {isEvo ? t('sidebar.evo_params_title') : isQ ? t('sidebar.q_params_title') : isAz ? t('sidebar.az_params_title') : isSac ? t('sidebar.sac_params_title') : isTd3 ? t('sidebar.td3_params_title') : isDqn ? t('sidebar.dqn_params_title') : isA2c ? t('sidebar.a2c_params_title') : t('sidebar.params_title')}
         </div>
 
         {algo === 'ppo' && (
@@ -963,6 +969,92 @@ export default function Sidebar() {
           </>
         )}
 
+        {/* A2C (S5d — on-policy actor-critic, PPO's simpler predecessor): the learning rate + discount,
+            n_steps (A2C's signature short rollout), the GAE λ (1.0 = full Monte-Carlo returns), the
+            entropy bonus, and the same network-size + activation knobs as PPO. No clip/batch/epochs —
+            A2C does one plain policy-gradient update per rollout. */}
+        {isA2c && (
+          <>
+            {a2cDefs.learning_rate && (
+              <ParamSlider
+                id="learning_rate" label={t('sidebar.learning_rate')}
+                value={a2cParams.learning_rate}
+                min={a2cDefs.learning_rate.min!} max={a2cDefs.learning_rate.max!} step={0.01}
+                recommended={a2cDefs.learning_rate.recommended as number}
+                onChange={(v) => setA2cParams({ learning_rate: v })}
+              />
+            )}
+
+            {a2cDefs.gamma && (
+              <ParamSlider
+                id="gamma" label={t('sidebar.gamma')}
+                value={a2cParams.gamma}
+                min={a2cDefs.gamma.min!} max={a2cDefs.gamma.max!} step={a2cDefs.gamma.step!}
+                recommended={a2cDefs.gamma.recommended as number}
+                onChange={(v) => setA2cParams({ gamma: v })}
+              />
+            )}
+
+            {a2cDefs.n_steps && (
+              <ParamSlider
+                id="a2c_n_steps" label={t('sidebar.a2c_n_steps')}
+                value={a2cParams.n_steps}
+                min={a2cDefs.n_steps.min!} max={a2cDefs.n_steps.max!} step={a2cDefs.n_steps.step!}
+                recommended={a2cDefs.n_steps.recommended as number}
+                onChange={(v) => setA2cParams({ n_steps: Math.round(v) })}
+              />
+            )}
+
+            {a2cDefs.gae_lambda && (
+              <ParamSlider
+                id="a2c_gae_lambda" label={t('sidebar.a2c_gae_lambda')}
+                value={a2cParams.gae_lambda}
+                min={a2cDefs.gae_lambda.min!} max={a2cDefs.gae_lambda.max!} step={a2cDefs.gae_lambda.step!}
+                recommended={a2cDefs.gae_lambda.recommended as number}
+                onChange={(v) => setA2cParams({ gae_lambda: v })}
+              />
+            )}
+
+            {a2cDefs.ent_coef && (
+              <ParamSlider
+                id="ent_coef" label={t('sidebar.ent_coef')}
+                value={a2cParams.ent_coef}
+                min={a2cDefs.ent_coef.min!} max={a2cDefs.ent_coef.max!} step={a2cDefs.ent_coef.step!}
+                recommended={a2cDefs.ent_coef.recommended as number}
+                onChange={(v) => setA2cParams({ ent_coef: v })}
+              />
+            )}
+
+            {a2cDefs.n_hidden_layers && (
+              <ParamSlider
+                id="n_hidden_layers" label={t('sidebar.n_hidden_layers')}
+                value={a2cParams.n_hidden_layers}
+                min={a2cDefs.n_hidden_layers.min!} max={a2cDefs.n_hidden_layers.max!} step={a2cDefs.n_hidden_layers.step!}
+                recommended={a2cDefs.n_hidden_layers.recommended as number}
+                onChange={(v) => setA2cParams({ n_hidden_layers: Math.round(v) })}
+              />
+            )}
+
+            {a2cDefs.neurons_per_layer && (
+              <ParamSlider
+                id="neurons_per_layer" label={t('sidebar.neurons_per_layer')}
+                value={a2cParams.neurons_per_layer}
+                min={a2cDefs.neurons_per_layer.min!} max={a2cDefs.neurons_per_layer.max!} step={a2cDefs.neurons_per_layer.step!}
+                recommended={a2cDefs.neurons_per_layer.recommended as number}
+                onChange={(v) => setA2cParams({ neurons_per_layer: Math.round(v) })}
+              />
+            )}
+
+            {a2cDefs.activation && (
+              <ActivationToggle
+                value={a2cParams.activation}
+                label={t('sidebar.activation')}
+                onChange={(v) => setA2cParams({ activation: v })}
+              />
+            )}
+          </>
+        )}
+
         {/* Divider */}
         <div style={{ height: 1, background: 'var(--border-default)', margin: 'var(--space-3) 0 var(--space-4)' }} />
 
@@ -995,9 +1087,9 @@ export default function Sidebar() {
           </div>
         </div>
 
-        {/* Total Steps — PPO + SAC + TD3 + DQN (all run an env-step budget; evolution uses Generations,
-            Q-learning Episodes, AlphaZero Iterations). */}
-        {(algo === 'ppo' || algo === 'sac' || algo === 'td3' || algo === 'dqn') && (
+        {/* Total Steps — PPO + SAC + TD3 + DQN + A2C (all run an env-step budget; evolution uses
+            Generations, Q-learning Episodes, AlphaZero Iterations). */}
+        {(algo === 'ppo' || algo === 'sac' || algo === 'td3' || algo === 'dqn' || algo === 'a2c') && (
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <label style={fieldLabel}>
               {t('sidebar.total_steps')}

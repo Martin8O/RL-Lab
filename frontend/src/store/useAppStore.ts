@@ -24,6 +24,7 @@ import type {
   SACHyperparams,
   TD3Hyperparams,
   DQNHyperparams,
+  A2CHyperparams,
   SelfPlayHyperparams,
   TrainingMetrics,
   TrainingProgress,
@@ -136,6 +137,21 @@ const DEFAULT_DQN_PARAMS: DQNHyperparams = {
   exploration_final_eps:  0.05,
 }
 
+// Matches the registry's ★ A2C block (S5d — on-policy actor-critic, PPO's simpler predecessor). These
+// are the generic SB3 defaults; the per-env ★ (n_steps nudged up for the single-env setup) snap from the
+// registry on env switch. Same net-arch/lr/ent_coef surface as PPO, minus clip/batch/epochs, plus
+// gae_lambda; n_steps is A2C's signature short rollout.
+const DEFAULT_A2C_PARAMS: A2CHyperparams = {
+  learning_rate:     7e-4,
+  gamma:             0.99,
+  n_steps:           5,
+  gae_lambda:        1.0,
+  ent_coef:          0.0,
+  n_hidden_layers:   2,
+  neurons_per_layer: 64,
+  activation:        'tanh',
+}
+
 // The run-result state that must NOT outlive its run: chart history, the latest stats frame, the
 // session-best, and every algorithm's curve. Cleared both between runs (clearMetrics) and when the
 // user switches game — otherwise a finished run's chart/stats/skill linger and get silently rescaled
@@ -181,6 +197,7 @@ function envDefaults(
     sacParams: SACHyperparams
     td3Params: TD3Hyperparams
     dqnParams: DQNHyperparams
+    a2cParams: A2CHyperparams
     totalTimesteps: number
   },
 ): {
@@ -192,6 +209,7 @@ function envDefaults(
   sacParams: SACHyperparams
   td3Params: TD3Hyperparams
   dqnParams: DQNHyperparams
+  a2cParams: A2CHyperparams
   totalTimesteps: number
 } | null {
   if (!spec) return null
@@ -202,6 +220,7 @@ function envDefaults(
   const sac = spec.hyperparams?.sac ?? {}
   const td3 = spec.hyperparams?.td3 ?? {}
   const dqn = spec.hyperparams?.dqn ?? {}
+  const a2c = spec.hyperparams?.a2c ?? {}
   const num = (key: string, block: Record<string, { recommended: number | string }>, fb: number) =>
     block[key] !== undefined ? Number(block[key].recommended) : fb
   return {
@@ -277,6 +296,18 @@ function envDefaults(
       exploration_fraction:   num('exploration_fraction', dqn, prev.dqnParams.exploration_fraction),
       exploration_final_eps:  num('exploration_final_eps', dqn, prev.dqnParams.exploration_final_eps),
     },
+    // A2C block (S5d — on-policy actor-critic). Same net-arch/lr/ent_coef surface as PPO plus gae_lambda;
+    // the per-env ★ n_steps (nudged up for the single-env setup) snaps from the registry here.
+    a2cParams: {
+      learning_rate:     num('learning_rate', a2c, prev.a2cParams.learning_rate),
+      gamma:             num('gamma', a2c, prev.a2cParams.gamma),
+      n_steps:           Math.round(num('n_steps', a2c, prev.a2cParams.n_steps)),
+      gae_lambda:        num('gae_lambda', a2c, prev.a2cParams.gae_lambda),
+      ent_coef:          num('ent_coef', a2c, prev.a2cParams.ent_coef),
+      n_hidden_layers:   Math.round(num('n_hidden_layers', a2c, prev.a2cParams.n_hidden_layers)),
+      neurons_per_layer: Math.round(num('neurons_per_layer', a2c, prev.a2cParams.neurons_per_layer)),
+      activation:        (a2c.activation?.recommended as 'tanh' | 'relu') ?? prev.a2cParams.activation,
+    },
     totalTimesteps: spec.default_total_timesteps || prev.totalTimesteps,
   }
 }
@@ -295,6 +326,7 @@ interface AppState {
   sacParams:       SACHyperparams        // S5a: Soft Actor-Critic (off-policy continuous control)
   td3Params:       TD3Hyperparams        // S5b: Twin Delayed DDPG (off-policy continuous control)
   dqnParams:       DQNHyperparams        // S5c: Deep Q-Network (off-policy value-based, discrete actions)
+  a2cParams:       A2CHyperparams        // S5d: Advantage Actor-Critic (on-policy, PPO's predecessor)
   seed:            number
   totalTimesteps:  number
   sweepCount:      number     // X3: how many seeds a "Run N seeds" sweep launches (★ 3)
@@ -360,6 +392,7 @@ interface AppState {
   setSacParams:       (s: Partial<SACHyperparams>)      => void
   setTd3Params:       (s: Partial<TD3Hyperparams>)      => void
   setDqnParams:       (s: Partial<DQNHyperparams>)      => void
+  setA2cParams:       (s: Partial<A2CHyperparams>)      => void
   setSeed:            (s: number)                       => void
   setTotalTimesteps:  (n: number)                       => void
   setSweepCount:      (n: number)                       => void
@@ -416,6 +449,7 @@ export const useAppStore = create<AppState>()(
       sacParams:       DEFAULT_SAC_PARAMS,
       td3Params:       DEFAULT_TD3_PARAMS,
       dqnParams:       DEFAULT_DQN_PARAMS,
+      a2cParams:       DEFAULT_A2C_PARAMS,
       seed:            42,
       totalTimesteps:  50_000,
       sweepCount:      3,
@@ -514,11 +548,17 @@ export const useAppStore = create<AppState>()(
         // tick. The other algos keep their values across a switch (their defaults already equal their ★).
         const dqnPatch =
           algo === 'dqn' ? (() => { const d = envDefaults(spec, s); return d ? { dqnParams: d.dqnParams } : {} })() : {}
+        // A2C (S5d) is the same story: its ★ n_steps is nudged up **per env** for the single-env setup, so
+        // snap its sliders to THIS env's ★ when A2C becomes active (else the generic n_steps=5 shows off the
+        // green ★ tick). Mirrors dqnPatch.
+        const a2cPatch =
+          algo === 'a2c' ? (() => { const d = envDefaults(spec, s); return d ? { a2cParams: d.a2cParams } : {} })() : {}
         return {
           algo,
           activeTab: (algo === 'neuroevolution' ? 'fitness' : 'reward') as ChartTab,
           totalTimesteps: spec ? budgetFor(spec, algo) : s.totalTimesteps,
           ...dqnPatch,
+          ...a2cPatch,
         }
       }),
       setHyperparams:    (h)              => set((s) => ({ hyperparams: { ...s.hyperparams, ...h } })),
@@ -529,6 +569,7 @@ export const useAppStore = create<AppState>()(
       setSacParams:      (sp)             => set((s) => ({ sacParams: { ...s.sacParams, ...sp } })),
       setTd3Params:      (sp)             => set((s) => ({ td3Params: { ...s.td3Params, ...sp } })),
       setDqnParams:      (sp)             => set((s) => ({ dqnParams: { ...s.dqnParams, ...sp } })),
+      setA2cParams:      (sp)             => set((s) => ({ a2cParams: { ...s.a2cParams, ...sp } })),
       setSeed:           (seed)           => set({ seed }),
       setTotalTimesteps: (n)              => set({ totalTimesteps: n }),
       setSweepCount:     (n)              => set({ sweepCount: n }),
@@ -721,6 +762,7 @@ export const useAppStore = create<AppState>()(
         sacParams:       s.sacParams,
         td3Params:       s.td3Params,
         dqnParams:       s.dqnParams,
+        a2cParams:       s.a2cParams,
         seed:            s.seed,
         totalTimesteps:  s.totalTimesteps,
         sweepCount:      s.sweepCount,

@@ -8,7 +8,9 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, model_validator
 
-Algo = Literal["ppo", "neuroevolution", "q_learning", "alphazero", "sac", "td3", "dqn"]
+Algo = Literal[
+    "ppo", "neuroevolution", "q_learning", "alphazero", "sac", "td3", "dqn", "a2c"
+]
 TrainState = Literal[
     "idle", "running", "paused", "stopping", "stopped", "finished", "error"
 ]
@@ -237,14 +239,46 @@ class DQNHyperparams(BaseModel):
     exploration_final_eps: float = 0.05  # the ε value held after annealing (residual random exploration)
 
 
+class A2CHyperparams(BaseModel):
+    """Tunable A2C knobs (the 8th algorithm, S5d — Advantage Actor-Critic, on-policy).
+
+    A2C is PPO's **simpler predecessor** and its on-policy sibling: the same actor-critic shape
+    (one network with a policy head + a value head, trained with gradients on freshly-collected
+    rollouts, **no replay buffer**), but *without* PPO's clipped-surrogate objective — it does one
+    plain policy-gradient update per rollout instead of several clipped epochs. That makes it the
+    natural **PPO-vs-A2C teaching comparison**: same family, so any gap is down to PPO's clipping +
+    multi-epoch reuse. Handles **both** discrete and continuous (``Box``) actions (unlike DQN's
+    discrete-only / SAC-TD3's continuous-only gates), so it is offered on a curated mix of both.
+
+    Its signature difference from PPO is the **short rollout**: ``n_steps`` defaults to 5 (PPO uses
+    2048) — A2C updates after only a handful of steps, which is why the original recipe leans on many
+    parallel envs (we run one, so the ★ per-env value is nudged up a little to steady the gradient).
+    ``gae_lambda`` defaults to 1.0 (A2C classically uses full Monte-Carlo returns, no GAE smoothing);
+    lower it toward PPO's 0.95 to trade variance for bias. ``ent_coef`` is the same exploration-
+    entropy bonus as PPO. ``vf_coef`` / ``max_grad_norm`` / RMSprop are SB3 defaults, kept fixed
+    (advanced, not sliders). Trains on raw obs/rewards (no VecNormalize — it is offered only on the
+    classic-control envs, none of which are the MuJoCo family that normalizes), so ``ep_rew_mean`` and
+    the ``[min_score, solved_score]`` skill meter read exactly like PPO's.
+    """
+
+    learning_rate: float = 7e-4  # A2C's canonical value (SB3 default; RMSprop, larger than PPO's 3e-4)
+    gamma: float = 0.99
+    n_steps: int = 5  # steps collected per update — A2C's signature short rollout (PPO uses 2048)
+    gae_lambda: float = 1.0  # 1.0 = full Monte-Carlo returns (A2C classic); lower → GAE bias/variance trade
+    ent_coef: float = 0.0  # entropy bonus (exploration), same knob as PPO
+    n_hidden_layers: int = 2
+    neurons_per_layer: int = 64
+    activation: Literal["tanh", "relu"] = "tanh"
+
+
 class TrainConfig(BaseModel):
     """Full, reproducible description of a training run (echoed back in status).
 
     ``hyperparams`` configures PPO; ``evolution`` configures neuroevolution; ``q_learning``
     configures tabular Q-learning; ``alphazero`` configures the AlphaZero-lite board trainer;
     ``sac`` configures Soft Actor-Critic; ``td3`` configures Twin Delayed DDPG; ``dqn`` configures
-    Deep Q-Network. Exactly one applies, selected by ``algo``; the others stay None so the recorded
-    config is clean.
+    Deep Q-Network; ``a2c`` configures Advantage Actor-Critic. Exactly one applies, selected by
+    ``algo``; the others stay None so the recorded config is clean.
     """
 
     env_id: str = "cartpole"
@@ -269,6 +303,10 @@ class TrainConfig(BaseModel):
     # Present only for Deep Q-Network runs (algo=="dqn", S5c); None otherwise. Like SAC/TD3, DQN reuses
     # the env-step total_timesteps budget (and the off-policy offpolicy_total_timesteps ★ on the registry).
     dqn: DQNHyperparams | None = None
+    # Present only for Advantage Actor-Critic runs (algo=="a2c", S5d); None otherwise. A2C is on-policy
+    # (like PPO), so it reuses the PPO env-step total_timesteps budget (default_total_timesteps) — NOT the
+    # off-policy budget.
+    a2c: A2CHyperparams | None = None
     # Seed-sweep grouping (X3): runs launched by one seed-sweep share this ``experiment_id`` (minted
     # server-side; None for a plain single run). ``experiment_label`` is an optional human name. Each
     # queued run still records its own ``seed`` + full config — the sweep is just orchestration, so the

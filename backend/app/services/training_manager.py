@@ -389,7 +389,7 @@ class TrainingManager:
         # MaskablePPO *board* trainer (G6b) — hence the PPO guard excludes them; AZ is always a board game
         # but computes its own schedule, so it's added explicitly.
         if config.algo == "alphazero" or (
-            config.algo in ("ppo", "sac", "td3", "dqn")
+            config.algo in ("ppo", "sac", "td3", "dqn", "a2c")
             and not is_competitive_ma(spec)
             and not is_board_game(spec)
         ):
@@ -539,6 +539,23 @@ class TrainingManager:
                 from app.services.trainer_dqn import train_dqn  # lazy: loads torch/SB3
 
                 terminal = train_dqn(
+                    config,
+                    gym_id,
+                    control,
+                    self._emit_metrics,
+                    self._emit_progress,
+                    self._publish_predict,
+                    self._on_snapshot,
+                    resume,
+                )
+            elif config.algo == "a2c":
+                # Advantage Actor-Critic (S5d): the on-policy peer trainer — PPO's simpler predecessor
+                # (actor-critic, no replay buffer, single update per rollout, no clip). Same on-policy
+                # lane as PPO (metrics + progress frames, decoupled numpy preview, snapshot); offered on a
+                # curated mix of discrete + continuous classic-control vector envs. MlpPolicy/CPU only.
+                from app.services.trainer_a2c import train_a2c  # lazy: loads torch/SB3
+
+                terminal = train_a2c(
                     config,
                     gym_id,
                     control,

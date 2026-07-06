@@ -56,6 +56,7 @@ function algoLabel(t: (k: string) => string, algo: Algo): string {
   if (algo === 'sac') return t('sidebar.algo_sac')
   if (algo === 'td3') return t('sidebar.algo_td3')
   if (algo === 'dqn') return t('sidebar.algo_dqn')
+  if (algo === 'a2c') return t('sidebar.algo_a2c')
   return t('sidebar.algo_ppo')  // ppo (and any unrecognised algo) reads as PPO
 }
 
