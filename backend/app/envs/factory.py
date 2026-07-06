@@ -96,6 +96,11 @@ def make_env(
     # gym.spec()/gym.make() touches the id (the family has no native gym TimeLimit; it self-truncates). G2c.
     if gid.startswith("MiniGrid"):
         import minigrid  # noqa: F401 — import side effect registers the MiniGrid-* envs
+    # VizDoom scenarios (Vizdoom*-v1) register the same way — importing the Gymnasium wrapper is the
+    # side effect that adds the ids. Done lazily here so human play (this raw make_env + JPEG path)
+    # can build a Doom env; training/AI-play go through image_vec.make_vizdoom, which registers there. G8b.
+    if gid.startswith("Vizdoom"):
+        from vizdoom import gymnasium_wrapper  # noqa: F401 — side effect registers the Vizdoom* ids
 
     kwargs: dict[str, Any] = {}
     if spec is not None:

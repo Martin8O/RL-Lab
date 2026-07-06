@@ -144,7 +144,8 @@ export default function EnvPreview() {
   // Atari (image obs → server JPEG) gets a one-time, game-agnostic retro/CRT skin (scanlines + glow +
   // bezel) so all ~60 games read as deliberately retro instead of "tiny ugly pixels". A true vector
   // re-skin would need per-game object extraction, so this is the family-wide alternative (G4a follow-up).
-  const retroSkin = !clientRender && selectedEnv?.family === 'atari'
+  // VizDoom (G8b) reuses it — a 1993 CRT-era 3D FPS, so scanlines + glow fit the era perfectly.
+  const retroSkin = !clientRender && (selectedEnv?.family === 'atari' || selectedEnv?.family === 'vizdoom')
   // Toy Text grids re-render declaratively (low-frequency moves), unlike the imperative physics
   // stages: the latest streamed board + agent position live in React state here, tagged with the env
   // it belongs to so a stale board never flashes after an env switch.

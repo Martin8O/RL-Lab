@@ -40,6 +40,10 @@ data/
 .env.*
 !.env.example
 
+# ── VizDoom (G8b) — the ZDoom engine writes this config to CWD on first run ──
+_vizdoom.ini
+_vizdoom/
+
 # ── Editor / OS ─────────────────────────────────────────────
 .claude/settings.local.json
 .idea/

@@ -19,6 +19,14 @@ un-gate the moment a CUDA device is present. The two
 compose: **CarRacing** (`obs_type="image"` **and** `action_space="box"`, G3c) is human-playable as data by
 reusing *both* the server-JPEG path and the continuous-box play path at once (a steer/gas/brake vector keymap),
 with training the same GPU-gated `CnnPolicy` case — confirming the seams stack without new engine code. A
+**new image *family*** (**VizDoom** — a 3D FPS, `family="vizdoom"`, G8b / ADR-097) is the one image case that needs
+a little code once: the Gymnasium VizDoom wrapper emits a `Dict` obs (`{'screen': Box(240,320,3), …}`), so it gets
+its own vec builder `image_vec.make_vizdoom` (a screen-extraction wrapper `Dict→screen Box` → WarpFrame 84×84 →
+`VecFrameStack`, `SubprocVecEnv`, **not** `AtariWrapper`) plus a `make_image_vec` branch and a `Vizdoom`-id
+registration in `factory.make_env` (for human play). After that seam exists, each *scenario* is data + content +
+a short calibration probe — PPO/DQN/QR-DQN, AI-play and the server-JPEG render all ride the shared image path
+unchanged. One tuning note baked into the family: PPO's Atari default `ent_coef=0` **entropy-collapses** on VizDoom
+(one critical action = shoot), so the family recipe adds a small `ent_coef=0.01` (like the board games). A
 **dict-observation** env (MiniGrid — a 7×7×3 view + `direction` + a `mission` string) is **data too**:
 `make_env` applies `FlatObsWrapper` for `family=="minigrid"`, flattening it to a vector so the same
 `MlpPolicy`/genome train (on CPU) with no engine change, while the colourful grid still renders server-side

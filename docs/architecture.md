@@ -108,8 +108,13 @@ typed seams need real code — see [`adding-an-environment.md`](adding-an-enviro
 
 1. **Policy/device** — `trainer_ppo._build_model` (image obs → `CnnPolicy`+CUDA vs `MlpPolicy`+CPU). **Landed
    for Atari in G4b / ADR-044**; the image preview policy is an SB3 `save`/`load` CPU snapshot (ADR-019 holds).
-2. **Shared Atari path** — `app/envs/atari.make_atari` (`AtariWrapper`+frame-stack) feeds the trainer (`n_envs=8`)
-   *and* the preview streamer (`n_envs=1`) so obs/action shapes match (**G4b**). CarRacing's image trainer is G3c-train.
+2. **Shared image path** — one dispatcher `app/envs/image_vec.make_image_vec` routes an image-obs env by family to
+   its vec builder, feeding the trainer (`n_envs=8`) *and* the preview/AI-play (`n_envs=1`) so obs/action shapes
+   match: `atari.make_atari` (`AtariWrapper`+frame-stack, **G4b**), `make_carracing` (raw-RGB+frame-stack+box,
+   G3c-train), and `make_vizdoom` (**a 3rd builder, G8b / ADR-097** — the Gymnasium VizDoom wrapper emits a `Dict`
+   obs, so a screen-extraction wrapper `Dict→screen Box` runs before a WarpFrame 84×84 + frame-stack; `SubprocVecEnv`
+   like CarRacing, **not** `AtariWrapper`). A new image family = a builder + a `make_image_vec` branch; every trainer
+   (PPO/DQN/QR-DQN), the preview and AI-play dispatch through it unchanged.
 3. **Action space** — discrete `int` vs continuous `box` (done for classic-control + multi-joint; CarRacing image-box *human* play landed; **Atari image AI-play landed in G4c / ADR-046** via `play_session._run_image_ai` over the `make_atari` vec env); image-box *training* is G3c-train.
 4. **Competitive play** — a `side` selector + a 2-agent env (Pong).
 5. **Board games** (OpenSpiel, **foundation G6a / ADR-050; neural trainer G6b / ADR-051**) — a 2-player,

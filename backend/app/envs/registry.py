@@ -1532,6 +1532,124 @@ for _row in _ATARI_GAMES:
 
 
 # ---------------------------------------------------------------------------
+# VizDoom family (ZDoom / Farama) — G8b "new image family on the G4 seam".
+#
+# A 3D first-person shooter, image-obs + discrete-action, so it rides the EXISTING image seam
+# (CnnPolicy on CUDA, server-JPEG render, AI-play _run_image_ai, raw-JPEG human play) — but with
+# its OWN vec builder (envs/image_vec.py::make_vizdoom), NOT the ALE AtariWrapper: the Gymnasium
+# VizDoom wrapper emits a **Dict** obs ({'screen': Box(240,320,3), 'gamevariables': …}), so a
+# screen-extraction wrapper (Dict→screen Box) runs first, then a WarpFrame grayscale/84×84 + a
+# 4-frame stack (the make_carracing shape, not make_atari). Discrete(4) per scenario: index 0 =
+# NO-OP, 1..3 = one available button each (the wrapper's max_buttons_pressed=1 combos; the exact
+# index→button differs per scenario — see content/playKeymaps.ts + Local/_probe_vizdoom_buttons.py).
+#
+# Like Atari: image obs → GPU-gated training (hw_requirement="gpu"; the manager rejects Run on a
+# CPU box, human play stays), supported_algos = ppo + dqn + qrdqn (all route image obs through
+# make_image_vec, so they come for free), and hyperparams = _cnn_hyperparams() (the shared CnnPolicy
+# PPO/DQN/QR-DQN recipe — no new tunables). Left out of _OFFPOLICY_BUDGETS/_DQN_TUNED on purpose, so
+# DQN/QR-DQN reuse the PPO image budget (default_total_timesteps), exactly like Atari.
+#
+# Per-scenario [min_score, solved_score] the ADR-026 way (min = the idle/no-op baseline, NOT random
+# flailing; solved = a competent agent), MEASURED (Local/_probe_vizdoom_idle.py) against the real
+# scenario reward configs:
+#   * Basic (basic.cfg: living_reward=-1, kill≈+100, timeout 300) — idle times out at exactly -300
+#     (300 tics × -1); a fast kill tops ~+95 → [-300, 90].
+#   * Defend the Center (death_penalty=1, +1/kill, ~26 ammo) — idle is swarmed and dies with 0 kills at
+#     -1; a competent turret kills ~15-26 → [-1, 20].
+#   * Health Gathering (living_reward=+1, death_penalty=100, timeout 2100) — the ONE with a POSITIVE
+#     floor: an idle agent still banks living_reward while it survives on its starting health, dying at
+#     ~384 tics for +284 net, so min_score=280 keeps a do-nothing at ~0% (a -ve/0 floor would read the
+#     do-nothing as ~18% "skilled" — the exact ADR-026 trap). Full-survival tops +2100 → [280, 2000].
+# Adding more of the ~9 named VizDoom scenarios later is a one-row data change here.
+# ---------------------------------------------------------------------------
+
+
+def _vizdoom_hyperparams() -> dict[str, dict[str, HyperparamDef]]:
+    """VizDoom CnnPolicy recipe = the shared ``_cnn_hyperparams`` + a small PPO entropy bonus.
+
+    VizDoom Basic COLLAPSES under PPO's ``ent_coef=0`` (the Atari default): the CnnPolicy's action
+    entropy decays to zero and it locks into a degenerate never-ATTACK policy that times out every
+    episode — measured live, ``ep_rew_mean`` slid -74 → -300 over 30k steps and stuck there (loss
+    blew up to ~1550). Atari tolerates ``ent_coef=0`` because most of its games reward *any* motion;
+    VizDoom Basic needs the ONE critical action (shoot) kept alive, so a small entropy bonus is
+    load-bearing. Same param *surface* as Atari (the ``ent_coef`` slider already spans [0, 0.1]) — only
+    the ★ default differs, so NO new param popup (the same trick ``_board_hyperparams`` uses for its
+    masked-PPO-vs-MCTS collapse). DQN/QR-DQN keep their own ε-greedy exploration, so they're untouched.
+    """
+    hp = _cnn_hyperparams()
+    hp["ppo"]["ent_coef"] = HyperparamDef(
+        type="float", default=0.01, recommended=0.01, min=0.0, max=0.1, step=0.001,
+    )
+    return hp
+
+
+def _vizdoom_spec(
+    env_id: str,
+    gym_id: str,
+    display: str,
+    difficulty: Literal["beginner", "intermediate", "advanced"],
+    min_score: float,
+    solved_score: float,
+    default_total_timesteps: int,
+    desc_en: str,
+    desc_cz: str,
+) -> EnvSpec:
+    """Build one VizDoom EnvSpec from a data row (the family is otherwise identical)."""
+    return EnvSpec(
+        id=env_id,
+        gym_id=gym_id,
+        display_name=Bilingual(en=display, cz=display),  # scenario names are proper nouns
+        description=Bilingual(en=desc_en, cz=desc_cz),
+        family="vizdoom",
+        obs_type="image",  # a Dict screen buffer → screen-extract + WarpFrame → Box(84,84,4) (make_vizdoom)
+        action_space="discrete",
+        supported_algos=["ppo", "dqn", "qrdqn"],  # image obs → CnnPolicy/GPU (like Atari); evo+Q can't consume pixels
+        hyperparams=_vizdoom_hyperparams(),  # shared CnnPolicy PPO/DQN/QR-DQN recipe + a small PPO entropy bonus (anti-collapse)
+        recommended_algo="ppo",  # PPO learns these scenarios reliably; DQN/QR-DQN offered for the image head-to-head
+        min_score=min_score,
+        solved_score=solved_score,
+        default_total_timesteps=default_total_timesteps,
+        play_step_scale=1,  # real-time FPS; the episode ends on the scenario goal/timeout, the speed slider paces it
+        human_playable=True,
+        competitive=False,
+        difficulty=difficulty,
+        hw_requirement="gpu",  # CnnPolicy training needs a GPU; the UI gates Run on a CPU box, human play stays
+        train_implemented=True,  # G8b: rides the existing CnnPolicy/CUDA image trainer via make_vizdoom
+    )
+
+
+# id, gym_id, display, difficulty, min_score, solved_score, default_total_timesteps, desc EN, desc CZ
+_VIZDOOM_SCENARIOS: list[
+    tuple[str, str, str, Literal["beginner", "intermediate", "advanced"], float, float, int, str, str]
+] = [
+    ("doom_basic", "VizdoomBasic-v1", "Doom: Basic", "beginner", -300.0, 90.0, 500_000,
+     "VizDoom's classic first task: a single monster stands along the far wall of a bare room. Strafe "
+     "left and right to line it up and shoot it — every tic costs a point, so a quick, clean kill scores "
+     "highest. The agent sees only the raw 3D view and learns to aim from pixels.",
+     "Klasická úvodní úloha VizDoomu: na protější stěně holé místnosti stojí jedna nestvůra. Úkroky "
+     "doleva a doprava si ji zarovnejte a zastřelte ji — každý tik stojí bod, takže nejvíc boduje rychlý, "
+     "čistý zásah. Agent vidí jen surový 3D pohled a míření se učí z pixelů."),
+    ("doom_defend_center", "VizdoomDefendCenter-v1", "Doom: Defend the Center", "intermediate", -1.0, 20.0, 2_000_000,
+     "Pinned in the centre of a circular arena, you cannot move — only turn on the spot and shoot as "
+     "monsters close in from every side. Each kill scores a point and ammo is limited, so make every "
+     "shot count and survive as long as you can.",
+     "Přišpendleni uprostřed kruhové arény se nemůžete pohybovat — jen otáčet na místě a střílet, zatímco "
+     "se ze všech stran blíží nestvůry. Každý zásah je bod a střelivo je omezené, takže využijte každou "
+     "ránu a přežijte co nejdéle."),
+    ("doom_health_gathering", "VizdoomHealthGathering-v1", "Doom: Health Gathering", "advanced", 280.0, 2000.0, 3_000_000,
+     "The floor is acid and steadily drains your health, so standing still is fatal. Walk around the room "
+     "and drive over the green medkits to keep topping your health up — the goal is simply to stay alive "
+     "as long as possible. This one demands real 3D navigation.",
+     "Podlaha je kyselina a stále ubírá zdraví, takže stát na místě je smrtelné. Choďte po místnosti a "
+     "najíždějte na zelené lékárničky, ať si zdraví průběžně doplňujete — cílem je prostě zůstat naživu co "
+     "nejdéle. Tohle vyžaduje skutečnou 3D navigaci."),
+]
+
+for _vzd_row in _VIZDOOM_SCENARIOS:
+    register(_vizdoom_spec(*_vzd_row))
+
+
+# ---------------------------------------------------------------------------
 # MiniGrid family (Farama) — G2c "new CPU grid family".
 #
 # The native observation is a Dict (a 7×7×3 partial-view "image" + the agent's

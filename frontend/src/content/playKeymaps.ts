@@ -239,6 +239,42 @@ const HUMANOID_KEYMAP: PlayKeymap = {
   idleAction: 0,
 }
 
+// VizDoom (G8b) — the 3D FPS scenarios. Each scenario's Discrete(4) action space is built by the
+// Gymnasium wrapper as {NO-OP, one-per-available-button}, so the action index → button differs per
+// scenario (probed in Local/_probe_vizdoom_buttons.py) and each needs its OWN keymap — they are NOT
+// one shared family map. Index 0 is always NO-OP (releasing all keys). Real-time (not turn-based);
+// the play speed slider paces the action. Human play runs at the smooth default frame_skip=1.
+//
+// Basic — 0 NO-OP · 1 ATTACK · 2 MOVE_RIGHT · 3 MOVE_LEFT (strafe left/right + shoot the monster).
+const VIZDOOM_BASIC_KEYMAP: PlayKeymap = {
+  bindings: [
+    { keys: [' ', 'Spacebar'], action: 1 }, // ATTACK
+    { keys: ['ArrowRight', 'd', 'D'], action: 2 }, // MOVE_RIGHT (strafe)
+    { keys: ['ArrowLeft', 'a', 'A'], action: 3 }, // MOVE_LEFT (strafe)
+  ],
+  idleAction: 0, // NO-OP — releasing all keys stands still
+}
+
+// Defend the Center — 0 NO-OP · 1 ATTACK · 2 TURN_RIGHT · 3 TURN_LEFT (rotate on the spot + shoot).
+const VIZDOOM_DEFEND_KEYMAP: PlayKeymap = {
+  bindings: [
+    { keys: [' ', 'Spacebar'], action: 1 }, // ATTACK
+    { keys: ['ArrowRight', 'd', 'D'], action: 2 }, // TURN_RIGHT
+    { keys: ['ArrowLeft', 'a', 'A'], action: 3 }, // TURN_LEFT
+  ],
+  idleAction: 0, // NO-OP — releasing all keys stands still
+}
+
+// Health Gathering — 0 NO-OP · 1 MOVE_FORWARD · 2 TURN_RIGHT · 3 TURN_LEFT (walk forward + steer).
+const VIZDOOM_HEALTH_KEYMAP: PlayKeymap = {
+  bindings: [
+    { keys: ['ArrowUp', 'w', 'W'], action: 1 }, // MOVE_FORWARD
+    { keys: ['ArrowRight', 'd', 'D'], action: 2 }, // TURN_RIGHT
+    { keys: ['ArrowLeft', 'a', 'A'], action: 3 }, // TURN_LEFT
+  ],
+  idleAction: 0, // NO-OP — releasing all keys stands still
+}
+
 export const PLAY_KEYMAPS: Record<string, PlayKeymap> = {
   // CartPole: 0 = push left, 1 = push right. No idle action — the cart always moves.
   cartpole: {
@@ -299,6 +335,10 @@ export const PLAY_KEYMAPS: Record<string, PlayKeymap> = {
   bipedalwalkerhardcore: BIPEDAL_KEYMAP,
   // CarRacing — steer / gas / brake vector control (see CARRACING_KEYMAP).
   carracing: CARRACING_KEYMAP,
+  // VizDoom (G8b) — per-scenario Discrete(4) keymaps (the action index → button differs per scenario).
+  doom_basic: VIZDOOM_BASIC_KEYMAP,
+  doom_defend_center: VIZDOOM_DEFEND_KEYMAP,
+  doom_health_gathering: VIZDOOM_HEALTH_KEYMAP,
   // MuJoCo (G5a) — per-joint torque vector control (see the per-env keymaps above).
   reacher: REACHER_KEYMAP,
   swimmer: SWIMMER_KEYMAP,

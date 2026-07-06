@@ -318,7 +318,7 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
     general: {
       en: '**Where this run trains — CPU or GPU.** It depends on what the agent looks at, not on how '
         + 'powerful your computer is.\n'
-        + '**Picture games (Atari)** learn straight from the screen pixels with a **convolutional** network. '
+        + '**Picture games (Atari, ViZDoom)** learn straight from the screen pixels with a **convolutional** network. '
         + 'That is heavy maths the graphics card does best, so these train on the **GPU**.\n'
         + '**Board games with AlphaZero** also train on the **GPU**: AlphaZero plays many self-play games '
         + 'at once and learns with a bigger network, and that batched work is exactly what a graphics card '
@@ -334,7 +334,7 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
       // RichText supports only **bold** and \n — no single-* italics (they would render literally).
       cz: '**Kde tento běh trénuje — na CPU, nebo na GPU.** Záleží na tom, na co se agent dívá, ne na tom, '
         + 'jak výkonný máte počítač.\n'
-        + '**Obrázkové hry (Atari)** se učí přímo z pixelů obrazovky pomocí **konvoluční** sítě. To je náročná '
+        + '**Obrázkové hry (Atari, ViZDoom)** se učí přímo z pixelů obrazovky pomocí **konvoluční** sítě. To je náročná '
         + 'matematika, kterou nejlépe zvládne grafická karta, takže tyto trénují na **GPU**.\n'
         + '**Deskové hry s AlphaZero** trénují také na **GPU**: AlphaZero hraje mnoho self-play partií '
         + 'najednou a učí se s větší sítí, a přesně taková dávková práce grafické kartě sedí. (Stejná desková '
@@ -486,6 +486,18 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
       carracing: {
         en: 'Only PPO is offered here: on a GPU it trains a convolutional network (CnnPolicy) straight from the 96×96 picture — a different policy from the small games\' MLP. Neuroevolution is turned off as data (a flat-vector genome cannot take pixels). Training needs a CUDA GPU, so Run is enabled on a GPU machine (and stays disabled on a CPU-only box); you can also play it by hand and watch your trained AI drive.',
         cz: 'Tady je k dispozici jen PPO: na GPU trénuje konvoluční síť (CnnPolicy) přímo z obrazu 96×96 — jiná strategie než MLP u malých her. Neuroevoluce je vypnutá jako data (genom z plochého vektoru neumí pixely). Trénink potřebuje GPU (CUDA), takže Spustit je povolené na stroji s GPU (a na čistém CPU zůstává zakázané); můžete si to i zahrát rukama a sledovat, jak vaše natrénovaná AI řídí.',
+      },
+      doom_basic: {
+        en: 'Three image algorithms are offered — **PPO**, **DQN** and **QR-DQN** — each training a convolutional network (CnnPolicy) on a GPU straight from the 3D view. Basic is VizDoom\'s "hello world": the agent only has to strafe and shoot one monster, so it learns fast — PPO reaches a positive score within tens of thousands of steps, and DQN (value-based) with its distributional cousin QR-DQN both learn it too, making a clean image-based head-to-head. Neuroevolution and Q-learning are off as data (a flat genome / a lookup table cannot take pixels). Training needs a CUDA GPU, so Run is enabled only on a GPU machine; you can play it by hand and watch your trained AI on any machine.',
+        cz: 'K dispozici jsou tři obrázkové algoritmy — **PPO**, **DQN** a **QR-DQN** — každý trénuje na GPU konvoluční síť (CnnPolicy) přímo z 3D pohledu. Basic je „hello world“ VizDoomu: agent se musí jen uhýbat do stran a zastřelit jednu nestvůru, takže se učí rychle — PPO se za desítky tisíc kroků dostane do kladného skóre a DQN (hodnotové) i jeho distribuční příbuzný QR-DQN se ho také naučí, což dává čisté obrázkové srovnání. Neuroevoluce a Q-učení jsou vypnuté jako data (plochý genom ani tabulka neumí pixely). Trénink potřebuje GPU (CUDA), takže Spustit je povolené jen na stroji s GPU; rukama si to zahrajete a natrénovanou AI můžete sledovat na jakémkoli stroji.',
+      },
+      doom_defend_center: {
+        en: 'Same three image algorithms as the other VizDoom scenarios — **PPO**, **DQN**, **QR-DQN** (CnnPolicy on a GPU). Here the agent is fixed in the centre and must turn and shoot the monsters closing in, with limited ammo — harder than Basic, so it needs more steps to climb. PPO is a reliable first choice; race DQN and QR-DQN against it to compare the value-based family. Neuroevolution and Q-learning are off (pixels). Training is GPU-only; play by hand and watch a trained AI anywhere.',
+        cz: 'Stejné tři obrázkové algoritmy jako u ostatních scénářů VizDoomu — **PPO**, **DQN**, **QR-DQN** (CnnPolicy na GPU). Tady je agent připevněný uprostřed a musí se otáčet a střílet blížící se nestvůry s omezeným střelivem — těžší než Basic, takže potřebuje víc kroků, než se rozjede. PPO je spolehlivá první volba; postavte proti němu DQN a QR-DQN a porovnejte hodnotovou rodinu. Neuroevoluce a Q-učení jsou vypnuté (pixely). Trénink je jen na GPU; rukama si zahrajete a natrénovanou AI můžete sledovat kdekoli.',
+      },
+      doom_health_gathering: {
+        en: 'The same three image algorithms — **PPO**, **DQN**, **QR-DQN** (CnnPolicy on a GPU). This one adds real 3D navigation: the acid floor drains health, so the agent must walk around and collect medkits to survive — the hardest of the three scenarios, needing the most steps. PPO handles the navigation well; DQN and QR-DQN are worth comparing. Neuroevolution and Q-learning are off (pixels). Training is GPU-only; play by hand and watch a trained AI anywhere.',
+        cz: 'Stejné tři obrázkové algoritmy — **PPO**, **DQN**, **QR-DQN** (CnnPolicy na GPU). Tenhle přidává skutečnou 3D navigaci: kyselá podlaha ubírá zdraví, takže agent musí chodit po místnosti a sbírat lékárničky, aby přežil — nejtěžší ze tří scénářů, potřebuje nejvíc kroků. PPO navigaci zvládá dobře; DQN a QR-DQN stojí za porovnání. Neuroevoluce a Q-učení jsou vypnuté (pixely). Trénink je jen na GPU; rukama si zahrajete a natrénovanou AI můžete sledovat kdekoli.',
       },
       frozenlake: {
         en: 'Both can solve it. The state is a single grid cell (one-hot–encoded for the network), and the reward is sparse — only reaching the goal pays — so a little exploration matters. Because the ice slips, success is a *rate*: even a good policy scores below 1.0. A nice task to compare PPO and Neuroevolution.',

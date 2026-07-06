@@ -14,6 +14,7 @@ export const ENV_CATEGORIES: { id: string; label: Bilingual }[] = [
   { id: 'mujoco',          label: { en: 'MuJoCo (robotics)', cz: 'MuJoCo (robotika)' } },
   { id: 'board',           label: { en: 'Board games', cz: 'Deskové hry' } },
   { id: 'petting_zoo',     label: { en: 'Multi-agent', cz: 'Více agentů' } },
+  { id: 'vizdoom',         label: { en: 'ViZDoom (3D FPS)', cz: 'ViZDoom (3D FPS)' } },
 ]
 
 const ORDER = ENV_CATEGORIES.map((c) => c.id)

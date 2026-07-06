@@ -93,6 +93,41 @@ const MUJOCO_WALK_TIP: Bilingual = {
     + 'natrénovaný model na GPU, přepněte na „Sledovat AI“.',
 }
 
+// VizDoom (G8b) — the 3D FPS scenarios. Unlike Atari (one shared family guide) the three scenarios
+// use DIFFERENT controls (Basic strafes, Defend the Center turns on the spot, Health Gathering walks
+// + turns), so each keeps its own controls + goal; the arcade-style tips are shared.
+const VIZDOOM_BASIC_CONTROLS: PlayControl[] = [
+  { keys: '← / A', action: { en: 'Strafe left', cz: 'Úkrok doleva' } },
+  { keys: '→ / D', action: { en: 'Strafe right', cz: 'Úkrok doprava' } },
+  { keys: 'Space', action: { en: 'Shoot', cz: 'Střelba' } },
+  { keys: '(release)', action: { en: 'Stand still', cz: 'Stát na místě' } },
+]
+
+const VIZDOOM_DEFEND_CONTROLS: PlayControl[] = [
+  { keys: '← / A', action: { en: 'Turn left', cz: 'Otočit se doleva' } },
+  { keys: '→ / D', action: { en: 'Turn right', cz: 'Otočit se doprava' } },
+  { keys: 'Space', action: { en: 'Shoot', cz: 'Střelba' } },
+  { keys: '(release)', action: { en: 'Stand still', cz: 'Stát na místě' } },
+]
+
+const VIZDOOM_HEALTH_CONTROLS: PlayControl[] = [
+  { keys: '↑ / W', action: { en: 'Move forward', cz: 'Jít vpřed' } },
+  { keys: '← / A', action: { en: 'Turn left', cz: 'Otočit se doleva' } },
+  { keys: '→ / D', action: { en: 'Turn right', cz: 'Otočit se doprava' } },
+  { keys: '(release)', action: { en: 'Stand still', cz: 'Stát na místě' } },
+]
+
+const VIZDOOM_TIPS: Bilingual = {
+  en: 'This is a real-time 3D shooter rendered from the agent\'s own first-person view — the exact '
+    + 'pixels its AI trains on. If the action feels too fast, lower the play speed (down to 0.1×) so you '
+    + 'have time to aim and react. The episode ends when the scenario\'s goal is met or its time runs '
+    + 'out. Switch to "Watch AI" once a model has been trained for this scenario on a GPU.',
+  cz: 'Tohle je 3D střílečka v reálném čase vykreslená z pohledu agenta v první osobě — přesně z těch '
+    + 'pixelů se jeho AI učí. Pokud je akce moc rychlá, snižte rychlost hraní (až na 0,1×), ať máte čas '
+    + 'zamířit a reagovat. Epizoda končí, když splníte cíl scénáře nebo vyprší čas. Až bude pro tento '
+    + 'scénář natrénovaný model na GPU, přepněte na „Sledovat AI“.',
+}
+
 export const PLAY_GUIDES: Record<string, PlayGuide> = {
   cartpole: {
     goal: {
@@ -910,6 +945,43 @@ export const PLAY_GUIDES: Record<string, PlayGuide> = {
     },
     controls: MINIGRID_CONTROLS,
     tips: MINIGRID_TIPS,
+  },
+  // VizDoom (G8b) — per-scenario goal + controls; shared arcade tips.
+  doom_basic: {
+    goal: {
+      en: 'A single monster stands somewhere along the far wall of a bare room. Strafe left and right to '
+        + 'line it up in your sights and shoot it as fast as you can — every tic you take costs points, so '
+        + 'a clean, quick kill scores highest.',
+      cz: 'Na protější stěně holé místnosti stojí jedna nestvůra. Úkroky doleva a doprava si ji '
+        + 'zarovnejte do mířidel a co nejrychleji ji zastřelte — každý tik navíc stojí body, takže '
+        + 'nejvíc boduje čistý, rychlý zásah.',
+    },
+    controls: VIZDOOM_BASIC_CONTROLS,
+    tips: VIZDOOM_TIPS,
+  },
+  doom_defend_center: {
+    goal: {
+      en: 'You are pinned in the centre of a circular room as monsters close in from every side. You '
+        + 'cannot move — only turn on the spot and shoot. Every kill scores a point; you have limited '
+        + 'ammo, so make each shot count and survive as long as you can.',
+      cz: 'Jste přišpendleni uprostřed kruhové místnosti a ze všech stran se blíží nestvůry. Nemůžete '
+        + 'se pohybovat — jen se otáčet na místě a střílet. Každý zásah je bod; máte omezené střelivo, '
+        + 'takže každou ránu využijte a přežijte co nejdéle.',
+    },
+    controls: VIZDOOM_DEFEND_CONTROLS,
+    tips: VIZDOOM_TIPS,
+  },
+  doom_health_gathering: {
+    goal: {
+      en: 'The floor is acid and steadily drains your health, so standing still means dying. Walk around '
+        + 'the room and drive over the green medkits to top your health back up — the goal is simply to '
+        + 'stay alive as long as possible.',
+      cz: 'Podlaha je kyselina a stále vám ubírá zdraví, takže stát na místě znamená umřít. Choďte po '
+        + 'místnosti a najíždějte na zelené lékárničky, ať si zdraví doplníte — cílem je prostě zůstat '
+        + 'naživu co nejdéle.',
+    },
+    controls: VIZDOOM_HEALTH_CONTROLS,
+    tips: VIZDOOM_TIPS,
   },
 }
 
