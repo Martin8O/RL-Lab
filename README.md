@@ -158,10 +158,10 @@ A ranked summary table sorts by AUC / final-% / time-to-solve, and one click exp
 reproducibility card with a config hash + BibTeX.
 
 <p align="center">
-  <img src="docs/media/data-lab.png" width="100%" alt="Data Lab comparing Q-learning vs PPO on Taxi: overlaid learning curves, rliable aggregate (Q-learning IQM 0.99 vs PPO 0.00), performance profile, probability of improvement P(Q-learning > PPO)=1.00, ranked summary table, and export zone">
+  <img src="docs/media/data-lab.gif" width="100%" alt="Data Lab in action: runs are added one by one to a head-to-head comparison of PPO vs Neuroevolution on CartPole — learning curves overlay, seeds collapse into mean ± CI bands, and the rliable aggregate (IQM/mean/median/optimality-gap), performance profile, probability-of-improvement, and ranked summary table update live as the selection grows">
 </p>
 
-<p align="center"><i>Different algorithms, same game: tabular <b>Q-learning</b> solves Taxi (IQM 0.99) while <b>PPO</b> stalls (IQM 0.00) — P(Q-learning &gt; PPO) = 1.00. Wide bands on few seeds are shown honestly; that width <b>is</b> the message.</i></p>
+<p align="center"><i>Building a comparison live: pick runs on the left and the Data Lab overlays their curves, collapses seeds into a mean ± CI band, and recomputes the full <code>rliable</code> aggregate, performance profile, and ranked table on the fly — here <b>PPO</b> vs <b>Neuroevolution</b> on CartPole. Wide bands on few seeds are shown honestly; that width <b>is</b> the message.</i></p>
 
 > See [`docs/reproducibility.md`](docs/reproducibility.md) for how runs are recorded and reproduced.
 
