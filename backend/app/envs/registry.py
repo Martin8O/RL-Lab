@@ -1560,6 +1560,14 @@ for _row in _ATARI_GAMES:
 #     floor: an idle agent still banks living_reward while it survives on its starting health, dying at
 #     ~384 tics for +284 net, so min_score=280 keeps a do-nothing at ~0% (a -ve/0 floor would read the
 #     do-nothing as ~18% "skilled" — the exact ADR-026 trap). Full-survival tops +2100 → [280, 2000].
+#   * Defend the Line (G8d-1; death_penalty=1, +1/kill, ~26 ammo) — a close cousin of Defend the Center
+#     (same buttons TURN_LEFT/TURN_RIGHT/ATTACK → reuses that keymap), but monsters advance in a line
+#     from the front and INFIGHT, so an idle agent banks ~1-2 free kills before dying (probed idle mean
+#     1.9, mode 1, NOT -1 like Defend the Center) → min_score=1 keeps a do-nothing at ~0%; a competent
+#     turret kills ~15-26 → [1, 20].
+#   * Health Gathering Supreme (G8d-1; same config as Health Gathering, timeout 2100) — a harder map
+#     (walls + poison vials), but the reward is identical so the idle probe lands on the SAME +284 floor
+#     (dies at ~384 tics on start health) → the positive floor [280, 2000] carries over verbatim.
 # Adding more of the ~9 named VizDoom scenarios later is a one-row data change here.
 # ---------------------------------------------------------------------------
 
@@ -1643,6 +1651,22 @@ _VIZDOOM_SCENARIOS: list[
      "Podlaha je kyselina a stále ubírá zdraví, takže stát na místě je smrtelné. Choďte po místnosti a "
      "najíždějte na zelené lékárničky, ať si zdraví průběžně doplňujete — cílem je prostě zůstat naživu co "
      "nejdéle. Tohle vyžaduje skutečnou 3D navigaci."),
+    ("doom_defend_line", "VizdoomDefendLine-v1", "Doom: Defend the Line", "intermediate", 1.0, 20.0, 2_000_000,
+     "Rooted to the spot at one end of a hall, you face a line of monsters marching straight toward you. "
+     "You cannot move — only turn on the spot and shoot as they advance. Every kill scores a point and "
+     "ammo is limited, so make each shot count and hold the line as long as you can.",
+     "Přikováni na místě na konci chodby čelíte řadě nestvůr, které pochodují přímo na vás. Nemůžete se "
+     "pohybovat — jen se otáčet na místě a střílet, jak postupují. Každý zásah je bod a střelivo je "
+     "omezené, takže využijte každou ránu a udržte řadu co nejdéle."),
+    ("doom_health_gathering_supreme", "VizdoomHealthGatheringSupreme-v1", "Doom: Health Gathering Supreme", "advanced", 280.0, 2000.0, 3_000_000,
+     "A harder twist on Health Gathering: the acid floor still drains your health and green medkits still "
+     "refill it, but now walls block the way and blue poison vials hurt you if you grab them. Stay alive "
+     "as long as possible while navigating the room and telling medkits from poison — the toughest "
+     "navigation challenge of the family.",
+     "Těžší varianta Health Gathering: kyselá podlaha stále ubírá zdraví a zelené lékárničky ho doplňují, "
+     "jenže teď cestu blokují stěny a modré lahvičky s jedem vám při sebrání ublíží. Zůstaňte naživu co "
+     "nejdéle, obcházejte překážky a rozlišujte lékárničky od jedu — nejtěžší navigační výzva této "
+     "rodiny."),
 ]
 
 for _vzd_row in _VIZDOOM_SCENARIOS:

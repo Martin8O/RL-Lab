@@ -21,7 +21,13 @@ from fastapi.testclient import TestClient
 
 client = TestClient(app)
 
-SCENARIOS = ["doom_basic", "doom_defend_center", "doom_health_gathering"]
+SCENARIOS = [
+    "doom_basic",
+    "doom_defend_center",
+    "doom_health_gathering",
+    "doom_defend_line",  # G8d-1
+    "doom_health_gathering_supreme",  # G8d-1
+]
 
 
 # -- registry ---------------------------------------------------------------
@@ -29,7 +35,7 @@ SCENARIOS = ["doom_basic", "doom_defend_center", "doom_health_gathering"]
 
 def test_vizdoom_family_registered() -> None:
     fam = [e for e in list_envs() if e.family == "vizdoom"]
-    assert len(fam) == 3, "G8b registers 3 VizDoom scenarios"
+    assert len(fam) == 5, "G8b registers 3 VizDoom scenarios; G8d-1 adds 2 more"
     for spec in fam:
         assert spec.gym_id.startswith("Vizdoom") and spec.gym_id.endswith("-v1")  # v0 deprecated in 1.3.0
         assert spec.obs_type == "image"  # a Dict screen buffer → screen-extract + WarpFrame → Box(84,84,4)
@@ -51,6 +57,18 @@ def test_vizdoom_sample_specs() -> None:
     assert basic is not None and basic.gym_id == "VizdoomBasic-v1"
     # Idle times out at -1/tic over 300 tics → a deep negative floor; a fast kill (≈+100) is "solved".
     assert basic.min_score == -300.0 and basic.solved_score == 90.0
+
+    # G8d-1 — Defend the Line: monsters INFIGHT, so an idle agent banks ~1-2 free kills (probed idle
+    # mean 1.9, mode 1) → a positive floor of 1 (NOT -1 like Defend the Center); competent turret ~20.
+    line = get_env("doom_defend_line")
+    assert line is not None and line.gym_id == "VizdoomDefendLine-v1"
+    assert line.min_score == 1.0 and line.solved_score == 20.0
+
+    # G8d-1 — Health Gathering Supreme: identical reward config to Health Gathering, so the idle probe
+    # lands on the SAME +284 floor (survives on start health) → the positive band carries over verbatim.
+    supreme = get_env("doom_health_gathering_supreme")
+    assert supreme is not None and supreme.gym_id == "VizdoomHealthGatheringSupreme-v1"
+    assert supreme.min_score == 280.0 and supreme.solved_score == 2000.0
 
 
 def test_vizdoom_not_in_offpolicy_budgets() -> None:

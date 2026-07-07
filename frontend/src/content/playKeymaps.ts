@@ -339,6 +339,9 @@ export const PLAY_KEYMAPS: Record<string, PlayKeymap> = {
   doom_basic: VIZDOOM_BASIC_KEYMAP,
   doom_defend_center: VIZDOOM_DEFEND_KEYMAP,
   doom_health_gathering: VIZDOOM_HEALTH_KEYMAP,
+  // G8d-1 — same Discrete(4) button map as their siblings (button-probe confirmed), so reuse verbatim:
+  doom_defend_line: VIZDOOM_DEFEND_KEYMAP, // TURN_LEFT/TURN_RIGHT/ATTACK, identical to Defend the Center
+  doom_health_gathering_supreme: VIZDOOM_HEALTH_KEYMAP, // MOVE_FORWARD/TURN_RIGHT/TURN_LEFT, like Health Gathering
   // MuJoCo (G5a) — per-joint torque vector control (see the per-env keymaps above).
   reacher: REACHER_KEYMAP,
   swimmer: SWIMMER_KEYMAP,

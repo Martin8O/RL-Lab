@@ -983,6 +983,32 @@ export const PLAY_GUIDES: Record<string, PlayGuide> = {
     controls: VIZDOOM_HEALTH_CONTROLS,
     tips: VIZDOOM_TIPS,
   },
+  // G8d-1 — reuse the sibling controls (same button map): defend_line turns + shoots like Defend the
+  // Center; health_gathering_supreme walks + turns like Health Gathering.
+  doom_defend_line: {
+    goal: {
+      en: 'You are rooted to the spot at one end of a hall as a line of monsters marches straight toward '
+        + 'you. You cannot move — only turn on the spot and shoot. Every kill scores a point; you have '
+        + 'limited ammo, so make each shot count and hold the line as long as you can.',
+      cz: 'Jste přikováni na místě na konci chodby a řada nestvůr pochoduje přímo na vás. Nemůžete se '
+        + 'pohybovat — jen se otáčet na místě a střílet. Každý zásah je bod; máte omezené střelivo, takže '
+        + 'každou ránu využijte a udržte řadu co nejdéle.',
+    },
+    controls: VIZDOOM_DEFEND_CONTROLS,
+    tips: VIZDOOM_TIPS,
+  },
+  doom_health_gathering_supreme: {
+    goal: {
+      en: 'The floor is acid and steadily drains your health, so standing still means dying. Walk around '
+        + 'the maze-like room and drive over the green medkits to top your health up — but avoid the blue '
+        + 'poison vials, which hurt you. The goal is simply to stay alive as long as possible.',
+      cz: 'Podlaha je kyselina a stále vám ubírá zdraví, takže stát na místě znamená umřít. Choďte po '
+        + 'bludišťovité místnosti a najíždějte na zelené lékárničky, ať si zdraví doplníte — ale vyhýbejte '
+        + 'se modrým lahvičkám s jedem, které vám ubližují. Cílem je prostě zůstat naživu co nejdéle.',
+    },
+    controls: VIZDOOM_HEALTH_CONTROLS,
+    tips: VIZDOOM_TIPS,
+  },
 }
 
 export const DEFAULT_PLAY_GUIDE: PlayGuide = PLAY_GUIDES.cartpole
