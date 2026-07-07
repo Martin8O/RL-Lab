@@ -12,6 +12,7 @@ import { buildTrainConfig } from '../api/trainingControls'
 import type { Algo, CheckpointMeta } from '../api/types'
 import { categoryLabel } from '../content/envCategories'
 import { formatCount } from '../format'
+import LabSelect from './LabSelect'
 import {
   DEFAULT_CKPT_FILTERS,
   checkpointFacets,
@@ -200,17 +201,21 @@ function Modal({ title, hint, onClose, children }: {
     <div
       onClick={onClose}
       style={{
-        position: 'fixed', inset: 0, zIndex: 50, background: 'rgba(2, 6, 23, 0.5)',
+        position: 'fixed', inset: 0, zIndex: 50,
+        background: 'var(--backdrop)', backdropFilter: 'blur(7px)', WebkitBackdropFilter: 'blur(7px)',
+        animation: 'lab-fade-in var(--dur-3) var(--ease-out)',
         display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
       }}
     >
       <div
         onClick={(e) => e.stopPropagation()}
         role="dialog" aria-modal="true" aria-label={title}
+        className="glass"
         style={{
           width: 'min(560px, 94vw)', maxHeight: '74vh', display: 'flex', flexDirection: 'column',
-          background: 'var(--surface-1)', border: '1px solid var(--border-default)',
+          background: 'var(--surface-glass)', border: '1px solid var(--border-default)',
           borderRadius: 'var(--radius-xl)', boxShadow: 'var(--shadow-popover)', overflow: 'hidden',
+          animation: 'lab-rise var(--dur-3) var(--ease-out)',
         }}
       >
         <div style={{
@@ -234,11 +239,15 @@ function Modal({ title, hint, onClose, children }: {
   )
 }
 
+// Trigger layout for the LabSelect filters (visuals come from `.lab-trigger` in index.css).
 const browserCtrl: CSSProperties = {
+  height: 'var(--control-sm)',
+}
+const browserSearch: CSSProperties = {
   height: 'var(--control-sm)', padding: '0 8px', borderRadius: 'var(--radius-md)',
-  fontSize: 'var(--fs-label)', fontFamily: 'var(--font-sans)',
-  background: 'var(--surface-2)', color: 'var(--text-strong)',
-  border: '1px solid var(--border-default)', cursor: 'pointer', transition: 'var(--t-colors)',
+  fontSize: 'var(--fs-label)', fontFamily: 'var(--font-sans)', color: 'var(--text-strong)',
+  background: 'var(--surface-2)', border: '1px solid var(--border-default)',
+  transition: 'var(--t-colors)',
 }
 
 // save/load v2 — the filter / sort / group toolbar + grouped slot list rendered inside the Load and
@@ -283,52 +292,52 @@ function CheckpointBrowser({ slots, manage, onLoad, onDelete }: {
           onChange={(e) => set('search', e.target.value)}
           placeholder={t('saveload.filter_search')}
           aria-label={t('saveload.filter_search')}
-          style={{ ...browserCtrl, flex: '1 1 130px', minWidth: 110, cursor: 'text' }}
+          style={{ ...browserSearch, flex: '1 1 130px', minWidth: 110, cursor: 'text' }}
         />
-        <select
+        <LabSelect
+          ariaLabel={t('saveload.filter_category')}
           value={filters.category}
-          onChange={(e) => set('category', e.target.value)}
-          aria-label={t('saveload.filter_category')}
+          onChange={(v) => set('category', v)}
           style={browserCtrl}
-        >
-          <option value="">{t('saveload.filter_all_categories')}</option>
-          {facets.categories.map((id) => (
-            <option key={id} value={id}>{categoryLabel(id)[locale]}</option>
-          ))}
-        </select>
-        <select
+          options={[
+            { value: '', label: t('saveload.filter_all_categories') },
+            ...facets.categories.map((id) => ({ value: id, label: categoryLabel(id)[locale] })),
+          ]}
+        />
+        <LabSelect
+          ariaLabel={t('saveload.filter_algo')}
           value={filters.algo}
-          onChange={(e) => set('algo', e.target.value)}
-          aria-label={t('saveload.filter_algo')}
+          onChange={(v) => set('algo', v)}
           style={browserCtrl}
-        >
-          <option value="">{t('saveload.filter_all_algos')}</option>
-          {facets.algos.map((a) => (
-            <option key={a} value={a}>{algoLabel(t, a)}</option>
-          ))}
-        </select>
-        <select
+          options={[
+            { value: '', label: t('saveload.filter_all_algos') },
+            ...facets.algos.map((a) => ({ value: a, label: algoLabel(t, a) })),
+          ]}
+        />
+        <LabSelect
+          ariaLabel={t('saveload.sort_label')}
           value={filters.sort}
-          onChange={(e) => set('sort', e.target.value as CkptSort)}
-          aria-label={t('saveload.sort_label')}
+          onChange={(v) => set('sort', v as CkptSort)}
           style={browserCtrl}
-        >
-          <option value="newest">{t('saveload.sort_newest')}</option>
-          <option value="oldest">{t('saveload.sort_oldest')}</option>
-          <option value="best">{t('saveload.sort_best')}</option>
-          <option value="game">{t('saveload.sort_game')}</option>
-        </select>
-        <select
+          options={[
+            { value: 'newest', label: t('saveload.sort_newest') },
+            { value: 'oldest', label: t('saveload.sort_oldest') },
+            { value: 'best', label: t('saveload.sort_best') },
+            { value: 'game', label: t('saveload.sort_game') },
+          ]}
+        />
+        <LabSelect
+          ariaLabel={t('saveload.group_label')}
           value={filters.group}
-          onChange={(e) => set('group', e.target.value as CkptGroup)}
-          aria-label={t('saveload.group_label')}
+          onChange={(v) => set('group', v as CkptGroup)}
           style={browserCtrl}
-        >
-          <option value="none">{t('saveload.group_none')}</option>
-          <option value="category">{t('saveload.group_category')}</option>
-          <option value="game">{t('saveload.group_game')}</option>
-          <option value="algo">{t('saveload.group_algo')}</option>
-        </select>
+          options={[
+            { value: 'none', label: t('saveload.group_none') },
+            { value: 'category', label: t('saveload.group_category') },
+            { value: 'game', label: t('saveload.group_game') },
+            { value: 'algo', label: t('saveload.group_algo') },
+          ]}
+        />
       </div>
 
       {total === 0 ? (
@@ -469,11 +478,12 @@ export default function SaveLoadControls() {
       {error && <div style={{ fontSize: 'var(--fs-meta)', color: 'var(--danger)' }}>{error}</div>}
 
       {toast && (
-        <div style={{
+        <div className="glass" style={{
           position: 'fixed', left: '50%', top: '50%', transform: 'translate(-50%, -50%)', zIndex: 1100,
           display: 'flex', alignItems: 'center', gap: 10, pointerEvents: 'none',
-          background: 'var(--surface-1)', border: '1px solid var(--border-default)',
+          background: 'var(--surface-glass)', border: '1px solid var(--border-default)',
           borderRadius: 'var(--radius-lg)', boxShadow: 'var(--shadow-popover)',
+          animation: 'lab-fade-in var(--dur-3) var(--ease-out)',
           padding: '14px 26px', fontSize: 'var(--fs-body)', fontWeight: 'var(--fw-semibold)', color: 'var(--text-strong)',
         }}>
           <span style={{ color: 'var(--success)', fontSize: 18 }}>✓</span> {toast}

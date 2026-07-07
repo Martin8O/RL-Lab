@@ -266,6 +266,19 @@ export default function AnalysisChart({
           onMouseLeave={() => { setHoverX(null); endDrag() }}
           onDoubleClick={() => setView(null)}
         >
+          <defs>
+            {/* Vertical fade for the multi-seed CI band, so it reads as a soft confidence cloud. */}
+            {band && (
+              <linearGradient id="ac-band" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor={band.color} stopOpacity={0.26} />
+                <stop offset="100%" stopColor={band.color} stopOpacity={0.07} />
+              </linearGradient>
+            )}
+            <filter id="ac-glow" x="-30%" y="-30%" width="160%" height="160%">
+              <feGaussianBlur stdDeviation="2.4" />
+            </filter>
+          </defs>
+
           {/* horizontal grid */}
           {yTicks.map((v) => (
             <line key={`gy${v}`} x1={PAD.l} y1={toY(v)} x2={PAD.l + chartW} y2={toY(v)}
@@ -301,7 +314,9 @@ export default function AnalysisChart({
             const mean = idx.map((i, k) => `${k ? 'L' : 'M'}${toX(band.x[i]).toFixed(1)},${toY(band.mean[i]).toFixed(1)}`).join('')
             return (
               <g>
-                <polygon points={[...top, ...bot].join(' ')} fill={band.color} opacity={0.16} />
+                <polygon points={[...top, ...bot].join(' ')} fill="url(#ac-band)" />
+                <path d={mean} fill="none" stroke={band.color} strokeWidth={4.5}
+                  strokeLinejoin="round" opacity={0.30} filter="url(#ac-glow)" />
                 <path d={mean} fill="none" stroke={band.color} strokeWidth={2.25} strokeLinejoin="round" />
               </g>
             )

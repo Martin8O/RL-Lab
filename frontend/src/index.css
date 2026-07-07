@@ -59,6 +59,23 @@
   --chart-axis:       #58626f;
   --chart-plot-bg:    #0c0e13;
 
+  /* Refined chrome — gradients, glow + glass (visual upgrade 2026-07; components opt in) */
+  --accent-grad:      linear-gradient(180deg, #7e8aff 0%, #5f6cf5 100%);
+  --accent-glow:      0 0 18px rgba(110, 123, 255, 0.28);
+  --shadow-cta:       inset 0 1px 0 rgba(255, 255, 255, 0.20),
+                      0 1px 2px rgba(0, 0, 0, 0.45),
+                      0 3px 10px rgba(95, 108, 245, 0.28);
+  --header-grad:      linear-gradient(180deg, #141822 0%, #101319 100%);
+  --backdrop:         rgba(3, 4, 8, 0.55);
+  /* Glass = a mostly-opaque base (readability first — text over popovers must stay crisp) with only
+     a faint iris sheen + a light blur for material feel. NOT see-through: high alpha keeps content
+     legible over busy backdrops. */
+  --surface-glass:    linear-gradient(205deg, rgba(124, 139, 255, 0.06), rgba(124, 139, 255, 0) 60%)
+                      rgba(20, 24, 33, 0.94);
+  --stage-dot:        rgba(255, 255, 255, 0.05);
+  --stage-vignette:   inset 0 0 90px rgba(0, 0, 0, 0.30);
+  --meter-gloss:      linear-gradient(180deg, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0.02) 55%);
+
   /* Data-visualisation palette (series order is meaningful) */
   --viz-1: #7c8bff;   /* iris   — primary / average      */
   --viz-2: #34d6a5;   /* teal   — best / upper bound      */
@@ -86,8 +103,9 @@
   --shadow-sm:      0 1px 3px rgba(0, 0, 0, 0.45), 0 1px 2px rgba(0, 0, 0, 0.30);
   --shadow-md:      0 4px 12px rgba(0, 0, 0, 0.45), 0 2px 4px rgba(0, 0, 0, 0.30);
   --shadow-lg:      0 12px 28px rgba(0, 0, 0, 0.50), 0 4px 10px rgba(0, 0, 0, 0.35);
-  --shadow-popover: 0 16px 40px rgba(0, 0, 0, 0.55), 0 6px 14px rgba(0, 0, 0, 0.40);
-  --ring-inset:     inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  --shadow-popover: 0 16px 40px rgba(0, 0, 0, 0.55), 0 6px 14px rgba(0, 0, 0, 0.40),
+                    0 0 0 1px rgba(124, 139, 255, 0.09);
+  --ring-inset:     inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -99,8 +117,8 @@
   --bg-sunken:        #e9edf2;
   --bg-base:          #f4f6f9;
   --surface-1:        #ffffff;
-  --surface-2:        #ffffff;
-  --surface-3:        #f1f4f8;
+  --surface-2:        #f7f9fc;   /* gently off-white so controls read as raised on paper */
+  --surface-3:        #eef2f7;
   --surface-inset:    #f7f9fb;
 
   --border-subtle:    #edf0f4;
@@ -137,6 +155,21 @@
   --chart-grid:       rgba(12, 17, 27, 0.07);
   --chart-axis:       #97a1b0;
   --chart-plot-bg:    #fbfcfe;
+
+  /* Refined chrome — light-theme counterparts */
+  --accent-grad:      linear-gradient(180deg, #6069c2 0%, #454e9e 100%);
+  --accent-glow:      0 0 16px rgba(86, 95, 179, 0.22);
+  --shadow-cta:       inset 0 1px 0 rgba(255, 255, 255, 0.22),
+                      0 1px 2px rgba(16, 24, 40, 0.18),
+                      0 3px 10px rgba(69, 78, 158, 0.24);
+  --header-grad:      linear-gradient(180deg, #ffffff 0%, #fafbfd 100%);
+  --backdrop:         rgba(23, 30, 42, 0.34);
+  /* Mostly-opaque so text over popovers stays crisp; a faint iris sheen keeps the material feel. */
+  --surface-glass:    linear-gradient(205deg, rgba(86, 95, 179, 0.06), rgba(86, 95, 179, 0) 60%)
+                      rgba(252, 253, 255, 0.95);
+  --stage-dot:        rgba(12, 17, 27, 0.06);
+  --stage-vignette:   none;
+  --meter-gloss:      linear-gradient(180deg, rgba(255, 255, 255, 0.34), rgba(255, 255, 255, 0.04) 55%);
 
   --viz-1: #565fb3;
   --viz-2: #0e9f6e;
@@ -259,6 +292,23 @@
 /* Back-compat: TopBar previously declared `pulse` locally; keep it global. */
 @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
 
+/* Sonar ring — the "instrument is live" pulse on the backend status dot (colour via --ring-c). */
+@keyframes lab-sonar {
+  0%   { box-shadow: 0 0 0 0 var(--ring-c, rgba(54, 211, 153, 0.45)); }
+  70%  { box-shadow: 0 0 0 7px transparent; }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}
+/* Live-dot halo on the chart's latest point (SVG: transform-box makes scale work per-element). */
+@keyframes lab-halo {
+  0%, 100% { opacity: 0.32; transform: scale(1); }
+  50%      { opacity: 0.10; transform: scale(1.55); }
+}
+.chart-halo {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: lab-halo 2.2s var(--ease-in-out) infinite;
+}
+
 /* Idle CartPole placeholder — a quiet sway on the pole */
 @keyframes cp-sway { 0%, 100% { transform: rotate(-7deg); } 50% { transform: rotate(7deg); } }
 .cp-pole { transform-box: fill-box; transform-origin: bottom center; animation: cp-sway 3.6s var(--ease-in-out) infinite; }
@@ -335,9 +385,13 @@ input[type="range"]::-webkit-slider-thumb {
   background: var(--accent);
   border: 2px solid var(--surface-1);
   box-shadow: var(--shadow-sm);
-  transition: background-color var(--dur-2) var(--ease-out);
+  transition: background-color var(--dur-2) var(--ease-out),
+              box-shadow var(--dur-2) var(--ease-out);
 }
-input[type="range"]:hover:not(:disabled)::-webkit-slider-thumb { background: var(--accent-hover); }
+input[type="range"]:hover:not(:disabled)::-webkit-slider-thumb {
+  background: var(--accent-hover);
+  box-shadow: var(--shadow-sm), 0 0 0 4px var(--accent-surface);
+}
 
 input[type="range"]::-moz-range-track {
   height: 4px;
@@ -403,6 +457,56 @@ input[type="range"]::-moz-range-thumb {
   color: var(--text-muted);
 }
 .hr { height: var(--hairline); background: var(--border-default); border: 0; }
+
+/* Frosted-glass panel for popovers/modals — pair with background: var(--surface-glass).
+   Strong blur so whatever little shows through the near-opaque fill is a soft frost, not a
+   distracting sharp image — readability of the panel's own text comes first. */
+.glass {
+  backdrop-filter: blur(20px) saturate(1.4);
+  -webkit-backdrop-filter: blur(20px) saturate(1.4);
+}
+
+/* Tactile press on opted-in buttons (CTAs, tabs) — a 1px dip, nothing structural. */
+.btn-press:not(:disabled):active { transform: translateY(1px); }
+
+/* Primary CTA feedback (Run / Play): the gradient fill + glow live inline via tokens; this class
+   only adds what inline styles can't — hover brightening + the press dip. */
+.btn-cta { transition: var(--t-colors), filter var(--dur-2) var(--ease-out), transform var(--dur-1) var(--ease-out); }
+.btn-cta:not(:disabled):hover  { filter: brightness(1.08) saturate(1.04); }
+.btn-cta:not(:disabled):active { transform: translateY(1px); filter: brightness(0.97); }
+
+/* Data Lab table rows — quiet hover so a wide ranking table scans comfortably. */
+.dl-row { transition: background-color var(--dur-1) var(--ease-out); }
+.dl-row:hover { background-color: var(--surface-2); }
+
+/* Flyout menu rows (EnvSelector + LabSelect) — background/border live HERE so :hover can win
+   (inline would override it); layout + text colour stay inline in the component. */
+.menu-row { background: transparent; border: 1px solid transparent; }
+.menu-row:hover, .menu-row:focus-visible { background: var(--surface-3); }
+.menu-row.is-active { background: var(--surface-3); }
+.menu-row.is-selected { background: var(--accent-surface); border-color: var(--accent-border); }
+
+/* LabSelect trigger (the custom dropdown's closed control) — visuals live here so :hover works;
+   layout (width/height/font) stays inline at each call site. */
+.lab-trigger {
+  background: var(--surface-2);
+  border: 1px solid var(--border-default);
+  transition: var(--t-colors);
+}
+.lab-trigger:hover:not(:disabled) { border-color: var(--border-strong); background: var(--surface-3); }
+.lab-trigger:focus-visible { border-color: var(--accent); }
+.lab-trigger:disabled { opacity: 0.6; }
+
+/* The environment stage: a faint engineering dot-grid + (dark) soft vignette, so the live
+   scene reads as a calibrated instrument bed instead of a flat rectangle. The background
+   lives HERE (not inline) so the texture and colour stay one layer. */
+.env-stage {
+  background-color: var(--chart-plot-bg);
+  background-image: radial-gradient(var(--stage-dot) 1px, transparent 1.15px);
+  background-size: 22px 22px;
+  background-position: center;
+  box-shadow: var(--stage-vignette);
+}
 
 /* Dimmed panel (panelDim.ts): a panel whose data doesn't apply to the current activity recedes
    instead of looking broken. Theme-aware — dark mode needs a harder dim (lower opacity + dropped

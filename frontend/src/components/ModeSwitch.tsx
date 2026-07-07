@@ -64,11 +64,12 @@ function Tab({ active, onClick, mark, label, ariaLabel }: {
       aria-selected={active}
       aria-label={ariaLabel}
       onClick={onClick}
+      className="btn-press"
       style={{
         display: 'inline-flex', alignItems: 'center', gap: 9, height: 40, padding: '0 13px 0 9px',
         border: 'none', borderRadius: 'var(--radius-md)', cursor: 'pointer',
-        background: active ? 'var(--surface-3)' : 'transparent',
-        boxShadow: active ? 'var(--shadow-xs)' : 'none',
+        background: active ? 'linear-gradient(180deg, var(--surface-3), var(--surface-2))' : 'transparent',
+        boxShadow: active ? 'var(--ring-inset), var(--shadow-xs)' : 'none',
         // The inactive tab greys out (dimmed mark + muted text) so the current view is unmistakable
         // and the other reads as the "go there / go back" affordance.
         opacity: active ? 1 : 0.5,

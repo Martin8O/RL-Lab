@@ -356,7 +356,7 @@ export default function AnalysisSurface() {
       <header style={{
         height: 'var(--topbar-h)', flexShrink: 0, display: 'flex', alignItems: 'center',
         gap: 'var(--space-4)', padding: '0 var(--space-5)',
-        background: 'var(--surface-1)', borderBottom: '2px solid var(--border-default)',
+        background: 'var(--header-grad)', borderBottom: '2px solid var(--border-default)',
       }}>
         {/* View switcher: the greyed RL Lab tab is the way back to the dashboard. */}
         <ModeSwitch />

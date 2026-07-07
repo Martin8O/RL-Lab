@@ -105,7 +105,9 @@ function NameModal({ score, steps, onDone }: { score: number; steps: number; onD
     <div
       onClick={onDone}
       style={{
-        position: 'fixed', inset: 0, zIndex: 1100, background: 'rgba(0,0,0,0.5)',
+        position: 'fixed', inset: 0, zIndex: 1100,
+        background: 'var(--backdrop)', backdropFilter: 'blur(7px)', WebkitBackdropFilter: 'blur(7px)',
+        animation: 'lab-fade-in var(--dur-3) var(--ease-out)',
         display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
       }}
     >
@@ -114,12 +116,14 @@ function NameModal({ score, steps, onDone }: { score: number; steps: number; onD
         aria-modal="true"
         aria-label={t('playscore.new_record')}
         onClick={(e) => e.stopPropagation()}
+        className="glass"
         style={{
           width: '100%', maxWidth: 360,
-          background: 'var(--surface-1)', color: 'var(--text-default)',
+          background: 'var(--surface-glass)', color: 'var(--text-default)',
           border: '1px solid var(--border-default)', borderRadius: 'var(--radius-xl)',
           boxShadow: 'var(--shadow-popover)', padding: 'var(--space-5)',
           display: 'flex', flexDirection: 'column', gap: 'var(--space-3)',
+          animation: 'lab-rise var(--dur-3) var(--ease-out)',
         }}
       >
         <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-h)' }}>

@@ -9,6 +9,7 @@ import type { RunDetail, RunMeta } from '../api/types'
 import SkillMeter from './SkillMeter'
 import ParamInfo from './ParamInfo'
 import HwStats from './HwStats'
+import LabSelect from './LabSelect'
 
 // ── EMA ─────────────────────────────────────────────────────────────────────
 
@@ -222,10 +223,15 @@ function LineChart({ series, markers = [], goal, width, height, xFmt, ariaLabel 
       <defs>
         {series.map((s, i) => (s.area ? (
           <linearGradient key={i} id={`rc-area-${i}`} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={s.color} stopOpacity={0.22} />
+            <stop offset="0%" stopColor={s.color} stopOpacity={0.30} />
+            <stop offset="45%" stopColor={s.color} stopOpacity={0.10} />
             <stop offset="100%" stopColor={s.color} stopOpacity={0} />
           </linearGradient>
         ) : null))}
+        {/* Soft neon glow under the main (smoothed) lines — the "live signal" read. */}
+        <filter id="rc-glow" x="-30%" y="-30%" width="160%" height="160%">
+          <feGaussianBlur stdDeviation="2.6" />
+        </filter>
       </defs>
 
       {/* Horizontal grid — faint, so it reads as a backdrop, not as an axis. */}
@@ -284,26 +290,40 @@ function LineChart({ series, markers = [], goal, width, height, xFmt, ariaLabel 
         return <path key={`area-${i}`} d={d} fill={`url(#rc-area-${i})`} />
       })}
 
-      {/* Lines */}
+      {/* Lines — the main smoothed series (width ≥ 2, solid) get a blurred under-stroke so the
+          live signal reads with a subtle glow; raw traces and dashed overlays stay flat. */}
       {series.map((s, i) => {
         const d = buildSvgPath(s.x, s.values, toX, toY)
         if (!d) return null
         return (
-          <path
-            key={i}
-            d={d} fill="none" stroke={s.color} strokeWidth={s.width}
-            opacity={s.opacity ?? 1} strokeLinejoin="round" strokeLinecap="round"
-            strokeDasharray={s.dash ? '5 4' : undefined}
-          />
+          <g key={i}>
+            {s.width >= 2 && !s.dash && (
+              <path
+                d={d} fill="none" stroke={s.color} strokeWidth={s.width + 2.5}
+                opacity={0.28} strokeLinejoin="round" strokeLinecap="round"
+                filter="url(#rc-glow)"
+              />
+            )}
+            <path
+              d={d} fill="none" stroke={s.color} strokeWidth={s.width}
+              opacity={s.opacity ?? 1} strokeLinejoin="round" strokeLinecap="round"
+              strokeDasharray={s.dash ? '5 4' : undefined}
+            />
+          </g>
         )
       })}
 
-      {/* Latest-value dots */}
+      {/* Latest-value dots — a breathing halo marks the live point of each headline series. */}
       {series.map((s, i) => {
         if (!s.dot) return null
         const p = lastPoint(s)
         if (p === null) return null
-        return <circle key={`dot-${i}`} cx={toX(p.x)} cy={toY(p.y)} r={3.5} fill={s.color} />
+        return (
+          <g key={`dot-${i}`}>
+            <circle className="chart-halo" cx={toX(p.x)} cy={toY(p.y)} r={7} fill={s.color} />
+            <circle cx={toX(p.x)} cy={toY(p.y)} r={3.5} fill={s.color} />
+          </g>
+        )
       })}
 
       {/* Solved markers: a coloured vertical line + the x-value labelled on the axis, so a
@@ -485,11 +505,12 @@ function ComparePopover({ runs, selectedOrder, solveMin, solveMax, onToggle, onD
     <>
       {/* Click-away backdrop */}
       <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 30 }} />
-      <div role="dialog" aria-label={t('runs.title')} style={{
+      <div role="dialog" aria-label={t('runs.title')} className="glass" style={{
         position: 'absolute', top: 'calc(100% + 4px)', right: 0, zIndex: 31,
         width: 290, maxHeight: 280, display: 'flex', flexDirection: 'column',
-        background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 6,
+        background: 'var(--surface-glass)', border: '1px solid var(--border)', borderRadius: 6,
         boxShadow: 'var(--shadow-popover)',
+        animation: 'lab-rise var(--dur-2) var(--ease-out)',
       }}>
         <div style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
@@ -872,7 +893,7 @@ export default function RewardChart() {
       {/* Tab bar + chart controls (Smooth / Window) */}
       <div style={{
         display: 'flex', alignItems: 'center', borderBottom: '1px solid var(--border-default)',
-        background: 'var(--surface-1)', flexShrink: 0, padding: '0 var(--space-3) 0 var(--space-1)',
+        background: 'var(--header-grad)', flexShrink: 0, padding: '0 var(--space-3) 0 var(--space-1)',
         minHeight: 'var(--panel-head-h)',
       }}>
         {TABS.map((tab) => (
@@ -925,21 +946,18 @@ export default function RewardChart() {
           style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11 }}
         >
           {!compactControls && <span style={{ color: 'var(--text-muted)' }}>{t('chart.window')}</span>}
-          <select
-            value={chartWindow}
-            onChange={(e) => setChartWindow(parseInt(e.target.value, 10))}
-            style={{
-              background: 'var(--surface-2)', color: 'var(--text)',
-              border: '1px solid var(--border)', borderRadius: 4,
-              fontSize: 11, padding: '2px 4px', cursor: 'pointer',
-            }}
-            aria-label={t('chart.window')}
-          >
-            <option value={0}>{t('chart.window_all')}</option>
-            <option value={25}>25</option>
-            <option value={50}>50</option>
-            <option value={100}>100</option>
-          </select>
+          <LabSelect
+            ariaLabel={t('chart.window')}
+            value={String(chartWindow)}
+            onChange={(v) => setChartWindow(parseInt(v, 10))}
+            style={{ height: 22, fontSize: 11, borderRadius: 4, padding: '0 6px 0 7px' }}
+            options={[
+              { value: '0', label: t('chart.window_all') },
+              { value: '25', label: '25' },
+              { value: '50', label: '50' },
+              { value: '100', label: '100' },
+            ]}
+          />
         </label>
 
         {/* Compare past runs (D2) */}

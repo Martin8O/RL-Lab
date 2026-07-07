@@ -130,10 +130,11 @@ export default function SkillMeter({ slot, overlay = false }: {
       label: t(m.key === 'human' ? 'playscore.best_human' : 'playscore.best_ai', { score: Math.round(m.value) }),
     }))
 
+  // The floating HUD variant is frosted glass (the live game stays visible through it).
   const containerStyle: CSSProperties = overlay
     ? {
         position: 'absolute', left: 10, right: 10, bottom: 10, zIndex: 3,
-        background: 'var(--surface-1)', border: '1px solid var(--border-default)',
+        background: 'var(--surface-glass)', border: '1px solid var(--border-default)',
         borderRadius: 'var(--radius-md)', boxShadow: 'var(--shadow-md)',
         padding: '5px 11px', minHeight: 30,
         display: 'flex', alignItems: 'center', gap: 10,
@@ -145,7 +146,7 @@ export default function SkillMeter({ slot, overlay = false }: {
       }
 
   return (
-    <div style={containerStyle}>
+    <div className={overlay ? 'glass' : undefined} style={containerStyle}>
       <span style={{
         fontSize: 11, fontWeight: 600, letterSpacing: '0.02em',
         color: 'var(--text-muted)', whiteSpace: 'nowrap',
@@ -158,6 +159,12 @@ export default function SkillMeter({ slot, overlay = false }: {
         <div style={{
           position: 'absolute', inset: 0, borderRadius: 7,
           background: GRADIENT, opacity: showReading ? 1 : 0.8,
+          boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.28)',
+        }} />
+        {/* Gloss: a soft top highlight so the gauge reads as a lit instrument, not a flat strip */}
+        <div aria-hidden style={{
+          position: 'absolute', inset: 0, borderRadius: 7,
+          background: 'var(--meter-gloss)', pointerEvents: 'none',
         }} />
         {ticks.map((tk, i) => (
           <div key={i} style={{
@@ -182,12 +189,14 @@ export default function SkillMeter({ slot, overlay = false }: {
           <div style={{
             position: 'absolute', left: `${frac * 100}%`, top: -3, bottom: -3,
             width: 2, marginLeft: -1, background: 'var(--text-h)',
-            borderRadius: 1, boxShadow: '0 0 3px rgba(0,0,0,0.55)',
+            borderRadius: 1, boxShadow: '0 0 6px rgba(0,0,0,0.55)',
+            transition: 'left var(--dur-3) var(--ease-out)',
           }}>
             <div style={{
               position: 'absolute', left: '50%', top: -4, transform: 'translateX(-50%)',
               width: 8, height: 8, borderRadius: '50%',
               background: 'var(--text-h)', border: '1.5px solid var(--surface)',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.45)',
             }} />
           </div>
         )}

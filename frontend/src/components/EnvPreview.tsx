@@ -698,7 +698,7 @@ export default function EnvPreview() {
       <div style={{
         minHeight: 'var(--panel-head-h)', padding: '0 var(--space-4)',
         borderBottom: '1px solid var(--border-default)',
-        background: 'var(--surface-1)', flexShrink: 0,
+        background: 'var(--header-grad)', flexShrink: 0,
         display: 'flex', alignItems: 'center', gap: 'var(--space-3)',
       }}>
         <span style={{ fontSize: 'var(--fs-meta)', fontWeight: 'var(--fw-semibold)', letterSpacing: 'var(--ls-eyebrow)', textTransform: 'uppercase', color: 'var(--text-faint)' }}>
@@ -779,10 +779,12 @@ export default function EnvPreview() {
       {/* Stage: the live SVG cart (CartPole), or a JPEG canvas for image-rendered envs.
           stageRef is the fullscreen target (Esc exits); it fills the screen with the same flex
           centring + background, so the game scales up and the skill-meter overlay rides along. */}
+      {/* Background (colour + engineering dot-grid + vignette) comes from the .env-stage class in
+          index.css — do NOT set an inline background here, it would override the texture layer. */}
       <div ref={stageRef} className="env-stage" style={{
         position: 'relative',
         flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
-        background: 'var(--chart-plot-bg)', overflow: 'hidden', padding: 'var(--space-5)',
+        overflow: 'hidden', padding: 'var(--space-5)',
       }}>
         {clientRender ? (
           <div style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16 }}>
@@ -860,13 +862,15 @@ export default function EnvPreview() {
         {isFullscreen && selectedEnv?.human_playable && (
           <button
             onClick={playState === 'playing' ? stopFullscreenPlay : startFullscreenPlay}
+            className={playState === 'playing' ? undefined : 'btn-cta'}
             style={{
               position: 'absolute', left: 16, top: '50%', transform: 'translateY(-50%)', zIndex: 3,
               display: 'inline-flex', alignItems: 'center', gap: 7,
               height: 'var(--control-md)', padding: '0 16px', borderRadius: 'var(--radius-md)',
               cursor: 'pointer', fontSize: 'var(--fs-sm)', fontWeight: 'var(--fw-semibold)',
-              border: '1px solid transparent', boxShadow: 'var(--shadow-md)', transition: 'var(--t-colors)',
-              background: playState === 'playing' ? 'var(--danger-surface)' : 'var(--accent)',
+              border: '1px solid transparent', transition: 'var(--t-colors)',
+              boxShadow: playState === 'playing' ? 'var(--shadow-md)' : 'var(--shadow-cta)',
+              background: playState === 'playing' ? 'var(--danger-surface)' : 'var(--accent-grad)',
               color: playState === 'playing' ? 'var(--danger)' : 'var(--accent-contrast)',
             }}
           >
@@ -896,10 +900,10 @@ export default function EnvPreview() {
         </button>
 
         {playState === 'playing' && playMode === 'human' && clientKind !== 'board' && (
-          <div style={{
+          <div className="glass" style={{
             position: 'absolute', top: 12, left: 12,
             padding: '4px 10px', borderRadius: 'var(--radius-pill)',
-            background: 'var(--surface-3)', border: '1px solid var(--border-default)',
+            background: 'var(--surface-glass)', border: '1px solid var(--border-default)',
             color: 'var(--text-strong)', boxShadow: 'var(--shadow-sm)',
             fontSize: 'var(--fs-meta)', fontWeight: 'var(--fw-semibold)', pointerEvents: 'none',
           }}>

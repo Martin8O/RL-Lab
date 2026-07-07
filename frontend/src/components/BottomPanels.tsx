@@ -30,7 +30,9 @@ function PanelShell({ title, right, borderRight = true, center = false, dimmed =
       <div style={{
         padding: '6px 12px', borderBottom: '1px solid var(--border)',
         display: 'flex', alignItems: 'center', justifyContent: center ? 'center' : 'space-between',
-        fontWeight: 600, fontSize: 12, color: 'var(--text-h)', flexShrink: 0, minHeight: 30,
+        fontWeight: 'var(--fw-semibold)', fontSize: 'var(--fs-meta)',
+        letterSpacing: 'var(--ls-eyebrow)', textTransform: 'uppercase', color: 'var(--text-muted)',
+        flexShrink: 0, minHeight: 30,
       }}>
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>{title}{right}</span>
       </div>

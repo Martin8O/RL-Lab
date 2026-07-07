@@ -12,6 +12,7 @@ import { solvedPct } from '../checkpointBrowser'
 import { formatCount } from '../../format'
 import { algoLabel } from './chartMath'
 import RunConfigModal from './RunConfigModal'
+import LabSelect from '../LabSelect'
 import {
   DEFAULT_RUN_FILTERS,
   organizeRuns,
@@ -19,7 +20,13 @@ import {
   type RunFilters,
 } from './analysisPicker'
 
+// Trigger layout for the LabSelect filters (visuals come from `.lab-trigger` in index.css).
 const selectStyle: React.CSSProperties = {
+  height: 30,
+  borderRadius: 'var(--radius-sm)',
+  color: 'var(--text-default)',
+}
+const searchStyle: React.CSSProperties = {
   height: 30,
   padding: '0 8px',
   background: 'var(--surface-inset)',
@@ -84,51 +91,53 @@ export default function SourcePicker({
           onChange={(e) => patch({ search: e.target.value })}
           placeholder={t('saveload.filter_search')}
           aria-label={t('saveload.filter_search')}
-          style={{ ...selectStyle, width: '100%' }}
+          style={{ ...searchStyle, width: '100%' }}
         />
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
-          <select aria-label={t('saveload.filter_category')} value={filters.category}
-            onChange={(e) => patch({ category: e.target.value })} style={selectStyle}>
-            <option value="">{t('saveload.filter_all_categories')}</option>
-            {facets.categories.map((c) => (
-              <option key={c} value={c}>{categoryLabel(c)[locale]}</option>
-            ))}
-          </select>
-          <select aria-label={t('saveload.filter_algo')} value={filters.algo}
-            onChange={(e) => patch({ algo: e.target.value })} style={selectStyle}>
-            <option value="">{t('saveload.filter_all_algos')}</option>
-            {facets.algos.map((a) => (
-              <option key={a} value={a}>{algoLabel(t, a)}</option>
-            ))}
-          </select>
-          <select aria-label={t('saveload.sort_label')} value={filters.sort}
-            onChange={(e) => patch({ sort: e.target.value as RunFilters['sort'] })} style={selectStyle}>
-            <option value="newest">{t('saveload.sort_newest')}</option>
-            <option value="oldest">{t('saveload.sort_oldest')}</option>
-            <option value="best">{t('saveload.sort_best')}</option>
-            <option value="game">{t('saveload.sort_game')}</option>
-          </select>
-          <select aria-label={t('saveload.group_label')} value={filters.group}
-            onChange={(e) => patch({ group: e.target.value as RunFilters['group'] })} style={selectStyle}>
-            <option value="none">{t('saveload.group_none')}</option>
-            <option value="category">{t('saveload.group_category')}</option>
-            <option value="game">{t('saveload.group_game')}</option>
-            <option value="algo">{t('saveload.group_algo')}</option>
-          </select>
-          <select aria-label={t('analysis.filter_min_skill')} value={filters.minPct}
-            onChange={(e) => patch({ minPct: Number(e.target.value) })} style={selectStyle}>
-            <option value={0}>{t('analysis.filter_skill_all')}</option>
-            <option value={25}>≥ 25 %</option>
-            <option value={50}>≥ 50 %</option>
-            <option value={75}>≥ 75 %</option>
-            <option value={100}>{t('analysis.filter_skill_solved')}</option>
-          </select>
-          <select aria-label={t('analysis.filter_excluded')} value={filters.excluded}
-            onChange={(e) => patch({ excluded: e.target.value as RunFilters['excluded'] })} style={selectStyle}>
-            <option value="hide">{t('analysis.excluded_hide')}</option>
-            <option value="show">{t('analysis.excluded_show')}</option>
-            <option value="only">{t('analysis.excluded_only')}</option>
-          </select>
+          <LabSelect ariaLabel={t('saveload.filter_category')} value={filters.category}
+            onChange={(v) => patch({ category: v })} style={selectStyle}
+            options={[
+              { value: '', label: t('saveload.filter_all_categories') },
+              ...facets.categories.map((c) => ({ value: c, label: categoryLabel(c)[locale] })),
+            ]} />
+          <LabSelect ariaLabel={t('saveload.filter_algo')} value={filters.algo}
+            onChange={(v) => patch({ algo: v })} style={selectStyle}
+            options={[
+              { value: '', label: t('saveload.filter_all_algos') },
+              ...facets.algos.map((a) => ({ value: a, label: algoLabel(t, a) })),
+            ]} />
+          <LabSelect ariaLabel={t('saveload.sort_label')} value={filters.sort}
+            onChange={(v) => patch({ sort: v as RunFilters['sort'] })} style={selectStyle}
+            options={[
+              { value: 'newest', label: t('saveload.sort_newest') },
+              { value: 'oldest', label: t('saveload.sort_oldest') },
+              { value: 'best', label: t('saveload.sort_best') },
+              { value: 'game', label: t('saveload.sort_game') },
+            ]} />
+          <LabSelect ariaLabel={t('saveload.group_label')} value={filters.group}
+            onChange={(v) => patch({ group: v as RunFilters['group'] })} style={selectStyle}
+            options={[
+              { value: 'none', label: t('saveload.group_none') },
+              { value: 'category', label: t('saveload.group_category') },
+              { value: 'game', label: t('saveload.group_game') },
+              { value: 'algo', label: t('saveload.group_algo') },
+            ]} />
+          <LabSelect ariaLabel={t('analysis.filter_min_skill')} value={String(filters.minPct)}
+            onChange={(v) => patch({ minPct: Number(v) })} style={selectStyle}
+            options={[
+              { value: '0', label: t('analysis.filter_skill_all') },
+              { value: '25', label: '≥ 25 %' },
+              { value: '50', label: '≥ 50 %' },
+              { value: '75', label: '≥ 75 %' },
+              { value: '100', label: t('analysis.filter_skill_solved') },
+            ]} />
+          <LabSelect ariaLabel={t('analysis.filter_excluded')} value={filters.excluded}
+            onChange={(v) => patch({ excluded: v as RunFilters['excluded'] })} style={selectStyle}
+            options={[
+              { value: 'hide', label: t('analysis.excluded_hide') },
+              { value: 'show', label: t('analysis.excluded_show') },
+              { value: 'only', label: t('analysis.excluded_only') },
+            ]} />
         </div>
       </div>
 

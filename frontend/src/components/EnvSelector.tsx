@@ -85,6 +85,8 @@ export default function EnvSelector({ disabled }: { disabled?: boolean }) {
         aria-expanded={open}
         disabled={disabled || envs.length === 0}
         onClick={() => (open ? setOpen(false) : openMenu())}
+        onMouseEnter={(e) => { if (!disabled && envs.length > 0) { e.currentTarget.style.borderColor = 'var(--border-strong)'; e.currentTarget.style.background = 'var(--surface-3)' } }}
+        onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border-default)'; e.currentTarget.style.background = 'var(--surface-2)' }}
         style={{ ...triggerStyle, cursor: disabled || envs.length === 0 ? 'default' : 'pointer' }}
       >
         <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -92,18 +94,25 @@ export default function EnvSelector({ disabled }: { disabled?: boolean }) {
             ? t('sidebar.loading_envs')
             : selected?.display_name[locale] ?? t('sidebar.game_selector')}
         </span>
-        <span aria-hidden style={{ color: 'var(--text-faint)', flexShrink: 0 }}>▾</span>
+        <span aria-hidden style={{
+          color: 'var(--text-faint)', flexShrink: 0,
+          display: 'inline-flex',
+          transform: open ? 'rotate(180deg)' : 'none',
+          transition: 'transform var(--dur-2) var(--ease-out)',
+        }}>▾</span>
       </button>
 
       {open && rect && createPortal(
         <div
           ref={popoverRef}
           role="menu"
+          className="glass"
           style={{
             position: 'fixed', top: rect.bottom + 4, left: rect.left, zIndex: 1000,
             display: 'flex', maxWidth: 'calc(100vw - 24px)',
-            background: 'var(--surface-1)', border: '1px solid var(--border-default)',
+            background: 'var(--surface-glass)', border: '1px solid var(--border-default)',
             borderRadius: 'var(--radius-lg)', boxShadow: 'var(--shadow-popover)', overflow: 'hidden',
+            animation: 'lab-rise var(--dur-2) var(--ease-out)',
           }}
         >
           {/* Categories */}
@@ -115,6 +124,7 @@ export default function EnvSelector({ disabled }: { disabled?: boolean }) {
                 onMouseEnter={() => setActiveCat(g.id)}
                 onFocus={() => setActiveCat(g.id)}
                 onClick={() => setActiveCat(g.id)}
+                className={g.id === activeCat ? 'menu-row is-active' : 'menu-row'}
                 style={rowStyle(g.id === activeCat)}
               >
                 <span style={ellipsis}>{categoryLabel(g.id)[locale]}</span>
@@ -129,9 +139,11 @@ export default function EnvSelector({ disabled }: { disabled?: boolean }) {
                 key={e.id}
                 role="menuitem"
                 onClick={() => { setSelectedEnvId(e.id); setOpen(false) }}
+                className={e.id === selectedEnvId ? 'menu-row is-selected' : 'menu-row'}
                 style={rowStyle(e.id === selectedEnvId, true)}
               >
                 <span style={ellipsis}>{e.display_name[locale]}</span>
+                {e.id === selectedEnvId && <span aria-hidden style={{ color: 'var(--accent)', fontSize: 11, flexShrink: 0 }}>✓</span>}
               </button>
             ))}
           </div>
@@ -164,13 +176,14 @@ const triggerStyle: CSSProperties = {
 }
 const ellipsis: CSSProperties = { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }
 
+// Background + border live in the `.menu-row` CSS classes (index.css) so :hover can win — an
+// inline background would override it (CSS specificity: inline beats stylesheet pseudo-classes).
 function rowStyle(active: boolean, accentWhenActive = false): CSSProperties {
   return {
     display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
     height: 'var(--control-sm)', padding: '0 10px', borderRadius: 'var(--radius-sm)',
-    border: '1px solid transparent', cursor: 'pointer', textAlign: 'left',
+    cursor: 'pointer', textAlign: 'left',
     fontFamily: 'var(--font-sans)', fontSize: 'var(--fs-label)',
-    background: active ? 'var(--surface-3)' : 'transparent',
     color: active && accentWhenActive ? 'var(--accent)' : active ? 'var(--text-strong)' : 'var(--text-muted)',
     transition: 'var(--t-colors)',
   }

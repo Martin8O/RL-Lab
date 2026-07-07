@@ -73,7 +73,8 @@ function InstructionsModal({ onClose }: { onClose: () => void }) {
       onClick={onClose}
       style={{
         position: 'fixed', inset: 0, zIndex: 1000,
-        background: 'rgba(0,0,0,0.5)',
+        background: 'var(--backdrop)', backdropFilter: 'blur(7px)', WebkitBackdropFilter: 'blur(7px)',
+        animation: 'lab-fade-in var(--dur-3) var(--ease-out)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         padding: 20,
       }}
@@ -83,18 +84,21 @@ function InstructionsModal({ onClose }: { onClose: () => void }) {
         aria-modal="true"
         aria-label={title}
         onClick={(e) => e.stopPropagation()}
+        className="glass"
         style={{
           width: '100%', maxWidth: 460, maxHeight: '80vh', overflowY: 'auto',
-          background: 'var(--surface-1)', color: 'var(--text-default)',
+          background: 'var(--surface-glass)', color: 'var(--text-default)',
           border: '1px solid var(--border-default)', borderRadius: 'var(--radius-xl)',
           boxShadow: 'var(--shadow-popover)',
+          animation: 'lab-rise var(--dur-3) var(--ease-out)',
         }}
       >
-        {/* Header */}
+        {/* Header — frosted: its own backdrop blur keeps scrolled content readable behind it */}
         <div style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           padding: '12px 16px', borderBottom: '1px solid var(--border)',
-          position: 'sticky', top: 0, background: 'var(--surface)',
+          position: 'sticky', top: 0, background: 'var(--surface-glass)',
+          backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)',
         }}>
           <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-h)' }}>{title}</span>
           <button

@@ -23,8 +23,11 @@ function StatusDot() {
           style={{
             position: 'relative', width: 8, height: 8, borderRadius: '50%',
             background: color,
-            boxShadow: status === 'online' ? `0 0 0 3px var(--success-surface)` : 'none',
-            animation: status === 'connecting' ? 'lab-pulse 1.4s var(--ease-in-out) infinite' : undefined,
+            // Online = a slow sonar ring (the instrument is live); connecting keeps the pulse.
+            ...(status === 'online' ? { ['--ring-c' as string]: 'rgba(54, 211, 153, 0.45)' } : null),
+            animation: status === 'online'
+              ? 'lab-sonar 2.8s var(--ease-out) infinite'
+              : status === 'connecting' ? 'lab-pulse 1.4s var(--ease-in-out) infinite' : undefined,
           }}
         />
       </span>
@@ -43,6 +46,7 @@ function Chip({ label, value, title, accent, infoId, infoLabel }: {
         display: 'inline-flex', alignItems: 'center', gap: 7,
         height: 28, padding: '0 11px',
         background: 'var(--surface-2)', border: '1px solid var(--border-default)',
+        boxShadow: 'var(--ring-inset)',
         borderRadius: 'var(--radius-pill)', fontSize: 'var(--fs-label)',
         whiteSpace: 'nowrap',
         cursor: title ? 'help' : undefined,
@@ -98,7 +102,7 @@ export default function TopBar() {
     <header style={{
       height: 'var(--topbar-h)', flexShrink: 0,
       display: 'flex', alignItems: 'center', gap: 'var(--space-4)', padding: '0 var(--space-5)',
-      background: 'var(--surface-1)', borderBottom: '2px solid var(--border-default)',
+      background: 'var(--header-grad)', borderBottom: '2px solid var(--border-default)',
     }}>
       {/* View switcher: RL Lab (dashboard) ⇆ DataLab (analysis surface). */}
       <ModeSwitch />

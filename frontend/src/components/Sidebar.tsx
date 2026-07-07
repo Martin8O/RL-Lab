@@ -8,6 +8,7 @@ import { formatCount } from '../format'
 import ParamInfo from './ParamInfo'
 import SaveLoadControls from './SaveLoadControls'
 import EnvSelector from './EnvSelector'
+import LabSelect from './LabSelect'
 
 // ── Shared style helpers ─────────────────────────────────────────────────────
 
@@ -19,12 +20,9 @@ const sectionEyebrow: CSSProperties = {
   fontSize: 'var(--fs-meta)', fontWeight: 'var(--fw-semibold)',
   letterSpacing: 'var(--ls-eyebrow)', textTransform: 'uppercase', color: 'var(--text-faint)',
 }
+// Trigger layout for the custom LabSelect dropdowns (visuals come from `.lab-trigger`).
 const selectStyle: CSSProperties = {
-  width: '100%', height: 'var(--control-md)', padding: '0 12px',
-  background: 'var(--surface-2)', color: 'var(--text-strong)',
-  border: '1px solid var(--border-default)', borderRadius: 'var(--radius-md)',
-  fontFamily: 'var(--font-sans)', fontSize: 'var(--fs-sm)', cursor: 'pointer',
-  transition: 'var(--t-colors)',
+  width: '100%', height: 'var(--control-md)', fontSize: 'var(--fs-sm)',
 }
 // Quiet mono count pill beside the algorithm label — mirrors EnvSelector's games "Total: N" pill
 // exactly (same format, for the algorithm catalogue count).
@@ -287,17 +285,17 @@ function AlgoSwitch({ value, options, recommended, algoCount, disabled, onChange
           </span>
         )}
       </label>
-      <select
-        aria-label={t('sidebar.algorithm')}
+      <LabSelect
+        ariaLabel={t('sidebar.algorithm')}
         value={value}
         disabled={disabled || options.length === 0}
-        onChange={(e) => onChange(e.target.value as Algo)}
-        style={{ ...selectStyle, cursor: disabled || options.length === 0 ? 'default' : 'pointer' }}
-      >
-        {options.map((id) => (
-          <option key={id} value={id}>{id === recommended ? `★ ${ALGO_LABEL(t, id)}` : ALGO_LABEL(t, id)}</option>
-        ))}
-      </select>
+        onChange={(v) => onChange(v as Algo)}
+        style={selectStyle}
+        options={options.map((id) => ({
+          value: id,
+          label: id === recommended ? `★ ${ALGO_LABEL(t, id)}` : ALGO_LABEL(t, id),
+        }))}
+      />
       {recommended && (
         onRecommended ? (
           <span style={recHint('var(--success)')}>
@@ -346,10 +344,10 @@ function runBtn(kind: BtnKind, lg = false): CSSProperties {
     cursor: 'pointer', whiteSpace: 'nowrap', transition: 'var(--t-colors)',
   }
   switch (kind) {
-    case 'primary':  return { ...base, background: 'var(--accent)', color: 'var(--accent-contrast)', boxShadow: 'var(--shadow-xs)' }
-    case 'resume':   return { ...base, background: 'var(--success-surface)', color: 'var(--success)' }
-    case 'pause':    return { ...base, background: 'var(--warning-surface)', color: 'var(--warning)' }
-    case 'stop':     return { ...base, background: 'var(--danger-surface)', color: 'var(--danger)' }
+    case 'primary':  return { ...base, background: 'var(--accent-grad)', color: 'var(--accent-contrast)', boxShadow: 'var(--shadow-cta)' }
+    case 'resume':   return { ...base, background: 'var(--success-surface)', color: 'var(--success)', boxShadow: 'var(--ring-inset)' }
+    case 'pause':    return { ...base, background: 'var(--warning-surface)', color: 'var(--warning)', boxShadow: 'var(--ring-inset)' }
+    case 'stop':     return { ...base, background: 'var(--danger-surface)', color: 'var(--danger)', boxShadow: 'var(--ring-inset)' }
     case 'disabled': return { ...base, background: 'var(--surface-2)', color: 'var(--text-muted)', borderColor: 'var(--border-default)', cursor: 'not-allowed' }
   }
 }
@@ -450,9 +448,14 @@ export default function Sidebar() {
       <div style={{
         height: 'var(--panel-head-h)', flexShrink: 0,
         padding: '0 var(--space-5)', borderBottom: '1px solid var(--border-default)',
-        display: 'flex', alignItems: 'center',
-        fontWeight: 'var(--fw-semibold)', fontSize: 'var(--fs-sm)', color: 'var(--text-strong)',
+        display: 'flex', alignItems: 'center', gap: 8,
+        fontWeight: 'var(--fw-semibold)', fontSize: 'var(--fs-meta)',
+        letterSpacing: 'var(--ls-eyebrow)', textTransform: 'uppercase', color: 'var(--text-muted)',
       }}>
+        <span aria-hidden style={{
+          width: 3, height: 14, borderRadius: 2, background: 'var(--accent)',
+          boxShadow: 'var(--accent-glow)', flexShrink: 0,
+        }} />
         {t('sidebar.title')}
       </div>
 
@@ -1188,25 +1191,17 @@ export default function Sidebar() {
               {t('sidebar.total_steps')}
               <ParamInfo paramId="total_steps" label={t('sidebar.total_steps')} />
             </label>
-            <select
-              aria-label={t('sidebar.total_steps')}
-              value={totalTimesteps}
+            <LabSelect
+              ariaLabel={t('sidebar.total_steps')}
+              value={String(totalTimesteps)}
               disabled={isActive}
-              onChange={(e) => setTotalTimesteps(parseInt(e.target.value, 10))}
-              style={{
-                width: 'auto', height: 'var(--control-sm)', padding: '0 10px',
-                background: 'var(--surface-2)', color: 'var(--text-strong)',
-                border: '1px solid var(--border-default)', borderRadius: 'var(--radius-md)',
-                fontFamily: 'var(--font-mono)', fontFeatureSettings: 'var(--ff-tabular)',
-                fontSize: 'var(--fs-label)', cursor: isActive ? 'default' : 'pointer',
-              }}
-            >
-              {stepsOptions.map((n) => (
-                <option key={n} value={n}>
-                  {n === defaultSteps ? `${formatSteps(n)} ★` : formatSteps(n)}
-                </option>
-              ))}
-            </select>
+              onChange={(v) => setTotalTimesteps(parseInt(v, 10))}
+              style={{ fontFamily: 'var(--font-mono)', fontFeatureSettings: 'var(--ff-tabular)' }}
+              options={stepsOptions.map((n) => ({
+                value: String(n),
+                label: n === defaultSteps ? `${formatSteps(n)} ★` : formatSteps(n),
+              }))}
+            />
           </div>
         )}
       </div>
@@ -1250,17 +1245,17 @@ export default function Sidebar() {
           <button disabled style={runBtn('disabled', true)}>{t('sidebar.stopping')}</button>
         ) : isRunning ? (
           <>
-            <button onClick={handlePause} style={runBtn('pause')}>{PauseGlyph} {t('sidebar.pause')}</button>
-            <button onClick={handleStop} style={runBtn('stop')}>{StopGlyph} {t(sweep ? 'sidebar.cancel_sweep' : 'sidebar.stop')}</button>
+            <button onClick={handlePause} className="btn-press" style={runBtn('pause')}>{PauseGlyph} {t('sidebar.pause')}</button>
+            <button onClick={handleStop} className="btn-press" style={runBtn('stop')}>{StopGlyph} {t(sweep ? 'sidebar.cancel_sweep' : 'sidebar.stop')}</button>
           </>
         ) : isPaused ? (
           <>
-            <button onClick={handleResume} style={runBtn('resume')}>{PlayGlyph} {t('sidebar.resume')}</button>
-            <button onClick={handleStop} style={runBtn('stop')}>{StopGlyph} {t(sweep ? 'sidebar.cancel_sweep' : 'sidebar.stop')}</button>
+            <button onClick={handleResume} className="btn-press" style={runBtn('resume')}>{PlayGlyph} {t('sidebar.resume')}</button>
+            <button onClick={handleStop} className="btn-press" style={runBtn('stop')}>{StopGlyph} {t(sweep ? 'sidebar.cancel_sweep' : 'sidebar.stop')}</button>
           </>
         ) : (
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
-            <button onClick={handleRun} disabled={!canRun} style={canRun ? runBtn('primary', true) : runBtn('disabled', true)}>
+            <button onClick={handleRun} disabled={!canRun} className={canRun ? 'btn-cta' : undefined} style={canRun ? runBtn('primary', true) : runBtn('disabled', true)}>
               {PlayGlyph} {t('sidebar.run')}
             </button>
             {/* Seed sweep (X3): run the current config across N seeds (seed … seed+N−1), queued
@@ -1294,6 +1289,7 @@ export default function Sidebar() {
                 onClick={handleRunSweep}
                 disabled={!canRun}
                 title={t('sidebar.run_sweep_hint')}
+                className={canRun ? 'btn-cta' : undefined}
                 style={canRun ? runBtn('primary') : runBtn('disabled')}
               >
                 {t('sidebar.run_sweep', { count: sweepCount })}

@@ -9,6 +9,14 @@
       "port": 5173
     },
     {
+      "name": "frontend-alt",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--", "--port", "5273"],
+      "cwd": "D:\\Projekty\\RL\\frontend",
+      "port": 5273,
+      "autoPort": false
+    },
+    {
       "name": "backend",
       "runtimeExecutable": "D:\\Projekty\\RL\\.venv\\Scripts\\python.exe",
       "runtimeArgs": ["-m", "uvicorn", "app.main:app", "--app-dir", "backend", "--port", "8000", "--reload"],

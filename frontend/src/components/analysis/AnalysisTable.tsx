@@ -132,7 +132,7 @@ export default function AnalysisTable({
             </tr>
           )}
           {sorted.map(({ summary: s, label }) => (
-            <tr key={s.run_id} style={{ borderTop: '1px solid var(--border-subtle)' }}>
+            <tr key={s.run_id} className="dl-row" style={{ borderTop: '1px solid var(--border-subtle)' }}>
               <td style={{ ...tdBase, textAlign: 'left', fontFamily: 'var(--font-sans)', color: 'var(--text-default)' }}>
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}>
                   <span style={{ width: 9, height: 9, borderRadius: 2, flexShrink: 0, background: colorOf(s.run_id) ?? 'var(--text-faint)' }} />

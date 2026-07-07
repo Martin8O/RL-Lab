@@ -12,9 +12,11 @@ describe('<Sidebar />', () => {
   it('renders the panel title and the algorithm options (a dropdown, env-gated)', () => {
     render(<Sidebar />)
     expect(screen.getByText('Parameters')).toBeInTheDocument()
-    expect(screen.getByRole('combobox', { name: 'Algorithm' })).toBeInTheDocument()
+    // The picker is a custom LabSelect (combobox trigger + portal listbox) — options render on open.
+    const combo = screen.getByRole('combobox', { name: 'Algorithm' })
+    fireEvent.click(combo)
     // cartpole's ★ recommended algo is ppo, so its option carries the marker.
-    expect(screen.getByRole('option', { name: '★ PPO' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: /★ PPO/ })).toBeInTheDocument()
     expect(screen.getByRole('option', { name: 'Neuroevolution' })).toBeInTheDocument()
   })
 
@@ -26,7 +28,8 @@ describe('<Sidebar />', () => {
 
   it('offers a one-click switch to the recommended algo when another is selected', () => {
     render(<Sidebar />)
-    fireEvent.change(screen.getByRole('combobox', { name: 'Algorithm' }), { target: { value: 'neuroevolution' } })
+    fireEvent.click(screen.getByRole('combobox', { name: 'Algorithm' }))
+    fireEvent.click(screen.getByRole('option', { name: 'Neuroevolution' }))
     expect(useAppStore.getState().algo).toBe('neuroevolution')
     const recBtn = screen.getByRole('button', { name: 'Recommended: PPO' })
     fireEvent.click(recBtn)
@@ -44,7 +47,8 @@ describe('<Sidebar />', () => {
     expect(screen.getByText('PPO Hyperparameters')).toBeInTheDocument()
     expect(screen.getByLabelText('Learning Rate')).toBeInTheDocument()
 
-    fireEvent.change(screen.getByRole('combobox', { name: 'Algorithm' }), { target: { value: 'neuroevolution' } })
+    fireEvent.click(screen.getByRole('combobox', { name: 'Algorithm' }))
+    fireEvent.click(screen.getByRole('option', { name: 'Neuroevolution' }))
 
     expect(screen.getByText('Evolution Settings')).toBeInTheDocument()
     expect(screen.getByLabelText('Population Size')).toBeInTheDocument()
