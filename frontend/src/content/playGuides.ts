@@ -117,6 +117,13 @@ const VIZDOOM_HEALTH_CONTROLS: PlayControl[] = [
   { keys: '(release)', action: { en: 'Stand still', cz: 'Stát na místě' } },
 ]
 
+// Take Cover (G8d-2) — strafe only, no shooting (the agent just dodges fireballs).
+const VIZDOOM_TAKECOVER_CONTROLS: PlayControl[] = [
+  { keys: '← / A', action: { en: 'Strafe left', cz: 'Úkrok doleva' } },
+  { keys: '→ / D', action: { en: 'Strafe right', cz: 'Úkrok doprava' } },
+  { keys: '(release)', action: { en: 'Stand still', cz: 'Stát na místě' } },
+]
+
 const VIZDOOM_TIPS: Bilingual = {
   en: 'This is a real-time 3D shooter rendered from the agent\'s own first-person view — the exact '
     + 'pixels its AI trains on. If the action feels too fast, lower the play speed (down to 0.1×) so you '
@@ -1007,6 +1014,34 @@ export const PLAY_GUIDES: Record<string, PlayGuide> = {
         + 'se modrým lahvičkám s jedem, které vám ubližují. Cílem je prostě zůstat naživu co nejdéle.',
     },
     controls: VIZDOOM_HEALTH_CONTROLS,
+    tips: VIZDOOM_TIPS,
+  },
+  // G8d-2 — predict_position reuses the turn+shoot controls (same button map as the defend pair);
+  // take_cover gets its own strafe-only controls (no attack).
+  doom_predict_position: {
+    goal: {
+      en: 'A single monster paces back and forth on the far side of the hall and you hold a slow rocket '
+        + 'launcher. You cannot move — only turn on the spot and fire. Because the rocket takes time to '
+        + 'reach the target, you have to aim ahead of the monster and lead it. One well-timed shot wins; '
+        + 'a miss ends the round with nothing.',
+      cz: 'Na druhé straně chodby přechází sem a tam jedna nestvůra a vy držíte pomalý raketomet. Nemůžete '
+        + 'se pohybovat — jen se otáčet na místě a střílet. Protože raketa k cíli nějakou dobu letí, musíte '
+        + 'mířit před nestvůru a předvídat její pohyb. Jedna dobře načasovaná rána vyhrává; když minete, '
+        + 'kolo končí bez bodu.',
+    },
+    controls: VIZDOOM_DEFEND_CONTROLS,
+    tips: VIZDOOM_TIPS,
+  },
+  doom_take_cover: {
+    goal: {
+      en: 'Monsters line the far wall and hurl fireballs at you, and more keep appearing. You cannot shoot '
+        + '— you can only strafe left and right to dodge. There is no goal but survival: stay alive as long '
+        + 'as you can by reading the incoming fire and slipping between the shots.',
+      cz: 'U protější stěny stojí nestvůry a chrlí na vás ohnivé koule a stále přibývají další. Nemůžete '
+        + 'střílet — jen uhýbat úkroky doleva a doprava. Není žádný cíl kromě přežití: zůstaňte naživu co '
+        + 'nejdéle tím, že sledujete přilétající střely a proplétáte se mezi nimi.',
+    },
+    controls: VIZDOOM_TAKECOVER_CONTROLS,
     tips: VIZDOOM_TIPS,
   },
 }

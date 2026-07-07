@@ -1568,7 +1568,20 @@ for _row in _ATARI_GAMES:
 #   * Health Gathering Supreme (G8d-1; same config as Health Gathering, timeout 2100) — a harder map
 #     (walls + poison vials), but the reward is identical so the idle probe lands on the SAME +284 floor
 #     (dies at ~384 tics on start health) → the positive floor [280, 2000] carries over verbatim.
-# Adding more of the ~9 named VizDoom scenarios later is a one-row data change here.
+#   * Predict Position (G8d-2; living_reward=-0.001, timeout 300, +1 for the rocket kill, one shot ends
+#     the episode) — the family's first SPARSE scenario. Same buttons TURN_LEFT/TURN_RIGHT/ATTACK as the
+#     defend pair → reuses that keymap. The running score only slides -0.001/tic until a terminal hit/miss,
+#     so it is NOT a valid mid-episode reading → sparse_reward=True (measuring… meter, ADR-030). IDLE never
+#     fires and eats the full timeout for exactly -0.3 (the floor); a reliable lead-and-hit tops ~+0.95
+#     (probed: random misses ≈ -0.06, a lucky hit +0.96) → [-0.3, 0.9].
+#   * Take Cover (G8d-2; living_reward=+1, no timeout — the episode ends only on death) — a DENSE survival
+#     scenario. Discrete(3): only MOVE_LEFT/MOVE_RIGHT (strafe to dodge fireballs), a NEW 2-strafe keymap
+#     (the wrapper maps idx 1→MOVE_RIGHT, 2→MOVE_LEFT — reversed vs available_buttons, button-probed). The
+#     running survival count climbs monotonically (dense) → a valid reading → sparse_reward=False. IDLE
+#     stands still and dies at ~204 tics (probed mean 204, random ~240) → min_score=200 floor; a strong
+#     dodger survives far longer → solved_score=1000 (the map spawns endless monsters, so the true ceiling
+#     is open — 1000 is "clearly skilled", like Health Gathering's 2000).
+# Adding more of the ~9 named VizDoom scenarios later is a one-row data change here (add a sparse flag).
 # ---------------------------------------------------------------------------
 
 
@@ -1601,6 +1614,7 @@ def _vizdoom_spec(
     default_total_timesteps: int,
     desc_en: str,
     desc_cz: str,
+    sparse_reward: bool = False,
 ) -> EnvSpec:
     """Build one VizDoom EnvSpec from a data row (the family is otherwise identical)."""
     return EnvSpec(
@@ -1617,6 +1631,7 @@ def _vizdoom_spec(
         min_score=min_score,
         solved_score=solved_score,
         default_total_timesteps=default_total_timesteps,
+        sparse_reward=sparse_reward,  # True for one-shot/goal scenarios (Predict Position) → "measuring…" meter (ADR-030)
         play_step_scale=1,  # real-time FPS; the episode ends on the scenario goal/timeout, the speed slider paces it
         human_playable=True,
         competitive=False,
@@ -1626,9 +1641,9 @@ def _vizdoom_spec(
     )
 
 
-# id, gym_id, display, difficulty, min_score, solved_score, default_total_timesteps, desc EN, desc CZ
+# id, gym_id, display, difficulty, min_score, solved_score, default_total_timesteps, desc EN, desc CZ, sparse
 _VIZDOOM_SCENARIOS: list[
-    tuple[str, str, str, Literal["beginner", "intermediate", "advanced"], float, float, int, str, str]
+    tuple[str, str, str, Literal["beginner", "intermediate", "advanced"], float, float, int, str, str, bool]
 ] = [
     ("doom_basic", "VizdoomBasic-v1", "Doom: Basic", "beginner", -300.0, 90.0, 500_000,
      "VizDoom's classic first task: a single monster stands along the far wall of a bare room. Strafe "
@@ -1636,28 +1651,28 @@ _VIZDOOM_SCENARIOS: list[
      "highest. The agent sees only the raw 3D view and learns to aim from pixels.",
      "Klasická úvodní úloha VizDoomu: na protější stěně holé místnosti stojí jedna nestvůra. Úkroky "
      "doleva a doprava si ji zarovnejte a zastřelte ji — každý tik stojí bod, takže nejvíc boduje rychlý, "
-     "čistý zásah. Agent vidí jen surový 3D pohled a míření se učí z pixelů."),
+     "čistý zásah. Agent vidí jen surový 3D pohled a míření se učí z pixelů.", False),
     ("doom_defend_center", "VizdoomDefendCenter-v1", "Doom: Defend the Center", "intermediate", -1.0, 20.0, 2_000_000,
      "Pinned in the centre of a circular arena, you cannot move — only turn on the spot and shoot as "
      "monsters close in from every side. Each kill scores a point and ammo is limited, so make every "
      "shot count and survive as long as you can.",
      "Přišpendleni uprostřed kruhové arény se nemůžete pohybovat — jen otáčet na místě a střílet, zatímco "
      "se ze všech stran blíží nestvůry. Každý zásah je bod a střelivo je omezené, takže využijte každou "
-     "ránu a přežijte co nejdéle."),
+     "ránu a přežijte co nejdéle.", False),
     ("doom_health_gathering", "VizdoomHealthGathering-v1", "Doom: Health Gathering", "advanced", 280.0, 2000.0, 3_000_000,
      "The floor is acid and steadily drains your health, so standing still is fatal. Walk around the room "
      "and drive over the green medkits to keep topping your health up — the goal is simply to stay alive "
      "as long as possible. This one demands real 3D navigation.",
      "Podlaha je kyselina a stále ubírá zdraví, takže stát na místě je smrtelné. Choďte po místnosti a "
      "najíždějte na zelené lékárničky, ať si zdraví průběžně doplňujete — cílem je prostě zůstat naživu co "
-     "nejdéle. Tohle vyžaduje skutečnou 3D navigaci."),
+     "nejdéle. Tohle vyžaduje skutečnou 3D navigaci.", False),
     ("doom_defend_line", "VizdoomDefendLine-v1", "Doom: Defend the Line", "intermediate", 1.0, 20.0, 2_000_000,
      "Rooted to the spot at one end of a hall, you face a line of monsters marching straight toward you. "
      "You cannot move — only turn on the spot and shoot as they advance. Every kill scores a point and "
      "ammo is limited, so make each shot count and hold the line as long as you can.",
      "Přikováni na místě na konci chodby čelíte řadě nestvůr, které pochodují přímo na vás. Nemůžete se "
      "pohybovat — jen se otáčet na místě a střílet, jak postupují. Každý zásah je bod a střelivo je "
-     "omezené, takže využijte každou ránu a udržte řadu co nejdéle."),
+     "omezené, takže využijte každou ránu a udržte řadu co nejdéle.", False),
     ("doom_health_gathering_supreme", "VizdoomHealthGatheringSupreme-v1", "Doom: Health Gathering Supreme", "advanced", 280.0, 2000.0, 3_000_000,
      "A harder twist on Health Gathering: the acid floor still drains your health and green medkits still "
      "refill it, but now walls block the way and blue poison vials hurt you if you grab them. Stay alive "
@@ -1666,7 +1681,26 @@ _VIZDOOM_SCENARIOS: list[
      "Těžší varianta Health Gathering: kyselá podlaha stále ubírá zdraví a zelené lékárničky ho doplňují, "
      "jenže teď cestu blokují stěny a modré lahvičky s jedem vám při sebrání ublíží. Zůstaňte naživu co "
      "nejdéle, obcházejte překážky a rozlišujte lékárničky od jedu — nejtěžší navigační výzva této "
-     "rodiny."),
+     "rodiny.", False),
+    # G8d-2 — Predict Position: the family's first SPARSE scenario (living_reward=-0.001, +1 for the
+    # rocket kill, one shot ends the episode). Same buttons as the defend pair → reuses that keymap.
+    ("doom_predict_position", "VizdoomPredictPosition-v1", "Doom: Predict Position", "advanced", -0.3, 0.9, 2_000_000,
+     "A single monster paces back and forth on the far side of the hall and you hold a slow rocket "
+     "launcher. Turn to line up your shot and fire — but the rocket takes time to fly, so you must aim "
+     "ahead of where the monster is moving and lead the target. One well-timed shot wins; miss, and the "
+     "chance is gone.",
+     "Na druhé straně chodby přechází sem a tam jedna nestvůra a vy držíte pomalý raketomet. Otočte se, "
+     "zamiřte a vystřelte — jenže raketa nějakou dobu letí, takže musíte mířit před nestvůru a předvídat, "
+     "kam se pohne. Jedna dobře načasovaná rána vyhrává; když minete, šance je pryč.", True),
+    # G8d-2 — Take Cover: a DENSE survival scenario (living_reward=+1, no timeout). Discrete(3): only
+    # MOVE_LEFT/MOVE_RIGHT — a NEW 2-strafe keymap (idx 1→MOVE_RIGHT, 2→MOVE_LEFT, button-probed).
+    ("doom_take_cover", "VizdoomTakeCover-v1", "Doom: Take Cover", "intermediate", 200.0, 1000.0, 2_000_000,
+     "Monsters line the far wall and hurl fireballs at you, and more keep appearing. You cannot shoot — "
+     "you can only strafe left and right to dodge. There is no goal but survival: stay alive as long as "
+     "you can, reading the incoming fire and slipping between the shots.",
+     "U protější stěny stojí nestvůry a chrlí na vás ohnivé koule a stále přibývají další. Nemůžete "
+     "střílet — jen uhýbat úkroky doleva a doprava. Není žádný cíl kromě přežití: zůstaňte naživu co "
+     "nejdéle, sledujte přilétající střely a proplétejte se mezi nimi.", False),
 ]
 
 for _vzd_row in _VIZDOOM_SCENARIOS:

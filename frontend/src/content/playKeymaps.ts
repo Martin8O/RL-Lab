@@ -275,6 +275,17 @@ const VIZDOOM_HEALTH_KEYMAP: PlayKeymap = {
   idleAction: 0, // NO-OP — releasing all keys stands still
 }
 
+// Take Cover (G8d-2) — a NEW 2-strafe map. Discrete(3): the wrapper reverses the button order, so
+// 0 NO-OP · 1 MOVE_RIGHT · 2 MOVE_LEFT (button-probed in Local/_probe_vizdoom_g8d2.py). Strafe only —
+// there is no attack; you dodge fireballs left/right.
+const VIZDOOM_TAKECOVER_KEYMAP: PlayKeymap = {
+  bindings: [
+    { keys: ['ArrowRight', 'd', 'D'], action: 1 }, // MOVE_RIGHT (strafe)
+    { keys: ['ArrowLeft', 'a', 'A'], action: 2 }, // MOVE_LEFT (strafe)
+  ],
+  idleAction: 0, // NO-OP — releasing all keys stands still (and gets you hit)
+}
+
 export const PLAY_KEYMAPS: Record<string, PlayKeymap> = {
   // CartPole: 0 = push left, 1 = push right. No idle action — the cart always moves.
   cartpole: {
@@ -342,6 +353,9 @@ export const PLAY_KEYMAPS: Record<string, PlayKeymap> = {
   // G8d-1 — same Discrete(4) button map as their siblings (button-probe confirmed), so reuse verbatim:
   doom_defend_line: VIZDOOM_DEFEND_KEYMAP, // TURN_LEFT/TURN_RIGHT/ATTACK, identical to Defend the Center
   doom_health_gathering_supreme: VIZDOOM_HEALTH_KEYMAP, // MOVE_FORWARD/TURN_RIGHT/TURN_LEFT, like Health Gathering
+  // G8d-2 — predict_position reuses the turn+attack map; take_cover gets its own new 2-strafe map:
+  doom_predict_position: VIZDOOM_DEFEND_KEYMAP, // TURN_LEFT/TURN_RIGHT/ATTACK, identical to Defend the Center
+  doom_take_cover: VIZDOOM_TAKECOVER_KEYMAP, // MOVE_LEFT/MOVE_RIGHT strafe only (Discrete(3))
   // MuJoCo (G5a) — per-joint torque vector control (see the per-env keymaps above).
   reacher: REACHER_KEYMAP,
   swimmer: SWIMMER_KEYMAP,

@@ -27,6 +27,8 @@ SCENARIOS = [
     "doom_health_gathering",
     "doom_defend_line",  # G8d-1
     "doom_health_gathering_supreme",  # G8d-1
+    "doom_predict_position",  # G8d-2
+    "doom_take_cover",  # G8d-2
 ]
 
 
@@ -35,7 +37,7 @@ SCENARIOS = [
 
 def test_vizdoom_family_registered() -> None:
     fam = [e for e in list_envs() if e.family == "vizdoom"]
-    assert len(fam) == 5, "G8b registers 3 VizDoom scenarios; G8d-1 adds 2 more"
+    assert len(fam) == 7, "G8b registers 3 VizDoom scenarios; G8d-1 adds 2, G8d-2 adds 2 more"
     for spec in fam:
         assert spec.gym_id.startswith("Vizdoom") and spec.gym_id.endswith("-v1")  # v0 deprecated in 1.3.0
         assert spec.obs_type == "image"  # a Dict screen buffer → screen-extract + WarpFrame → Box(84,84,4)
@@ -69,6 +71,20 @@ def test_vizdoom_sample_specs() -> None:
     supreme = get_env("doom_health_gathering_supreme")
     assert supreme is not None and supreme.gym_id == "VizdoomHealthGatheringSupreme-v1"
     assert supreme.min_score == 280.0 and supreme.solved_score == 2000.0
+
+    # G8d-2 — Predict Position: SPARSE (one rocket, +1 kill / miss; -0.001/tic). Idle never fires and
+    # eats the full 300-tic timeout for exactly -0.3 (the floor); a reliable lead-and-hit tops ~+0.95.
+    predict = get_env("doom_predict_position")
+    assert predict is not None and predict.gym_id == "VizdoomPredictPosition-v1"
+    assert predict.min_score == -0.3 and predict.solved_score == 0.9
+    assert predict.sparse_reward is True  # running score isn't a valid mid-episode reading → measuring… meter
+
+    # G8d-2 — Take Cover: DENSE survival (living_reward=+1, no timeout). Idle stands still and dies at
+    # ~204 tics → min 200; a strong dodger survives far longer → solved 1000. Running score IS valid.
+    cover = get_env("doom_take_cover")
+    assert cover is not None and cover.gym_id == "VizdoomTakeCover-v1"
+    assert cover.min_score == 200.0 and cover.solved_score == 1000.0
+    assert cover.sparse_reward is False
 
 
 def test_vizdoom_not_in_offpolicy_budgets() -> None:
