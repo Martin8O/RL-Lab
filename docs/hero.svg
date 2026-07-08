@@ -27,7 +27,7 @@
 <path d="M25.5,-29 L27.5,-24 L32.5,-22 L27.5,-20 L25.5,-15 L23.5,-20 L18.5,-22 L23.5,-24 Z" fill="#FAC775"/>
 </g>
 </g><text x="200" y="116" font-family="'IBM Plex Sans','Inter','Segoe UI',system-ui,sans-serif" font-weight="700" font-size="50" fill="#F6F4FF">RL <tspan fill="#F2AE43">Lab</tspan></text>
-<text x="202" y="148" font-family="'IBM Plex Sans','Inter','Segoe UI',system-ui,sans-serif" font-weight="400" font-size="15" fill="#AEB0CC">Train, watch &amp; play — CartPole to Atari, physics &amp; board games.</text>
+<text x="202" y="148" font-family="'IBM Plex Sans','Inter','Segoe UI',system-ui,sans-serif" font-weight="400" font-size="15" fill="#AEB0CC">Train, watch &amp; play — Atari to Doom, physics &amp; board games.</text>
 <g font-family="'IBM Plex Sans','Inter','Segoe UI',system-ui,sans-serif" font-size="13" font-weight="500">
 <rect x="200" y="174" width="96" height="28" rx="14" fill="#191E30" stroke="#33304F"/>
 <text x="248" y="192" text-anchor="middle"><tspan fill="#FAC775">100+</tspan><tspan fill="#C9CBE0"> games</tspan></text>

@@ -23,7 +23,7 @@
   <img alt="Vite 8" src="https://img.shields.io/badge/Vite-8-646CFF?logo=vite&logoColor=white">
   <br>
   <img alt="100+ environments" src="https://img.shields.io/badge/environments-100%2B-6e7bff">
-  <img alt="8 families" src="https://img.shields.io/badge/families-8-6e7bff">
+  <img alt="9 families" src="https://img.shields.io/badge/families-9-6e7bff">
   <img alt="9 algorithms" src="https://img.shields.io/badge/algorithms-9-6e7bff">
   <img alt="tests" src="https://img.shields.io/badge/tests-421%20py%20%C2%B7%2074%20ts-3fb950">
   <img alt="i18n" src="https://img.shields.io/badge/CZ%20%2F%20EN-bilingual-e3b341">
@@ -34,8 +34,8 @@
 ## Trained agents, live
 
 Every clip below is a real policy trained inside RL Lab, replayed from a saved checkpoint — a neuroevolution
-lander, SAC/PPO MuJoCo robots, a PPO race car, a cooperative multi-agent swarm, Atari from pixels, and an
-AlphaZero board player. The badge on each shows the algorithm and the skill score that run reached.
+lander, SAC/PPO MuJoCo robots, a PPO race car, a cooperative multi-agent swarm, Atari from pixels, a Doom
+agent fighting from the first-person view, and an AlphaZero board player. The badge on each shows the algorithm and the skill score that run reached.
 
 <table>
   <tr>
@@ -46,12 +46,12 @@ AlphaZero board player. The badge on each shows the algorithm and the skill scor
   <tr>
     <td align="center"><img src="docs/media/checkers.gif" width="250" alt="Checkers — AlphaZero"></td>
     <td align="center"><img src="docs/media/bipedalwalker.gif" width="250" alt="Bipedal Walker — PPO"></td>
-    <td align="center"><img src="docs/media/pong.gif" width="250" alt="Pong — PPO"></td>
+    <td align="center"><img src="docs/media/doom.gif" width="250" alt="Doom: Defend the Center — PPO from pixels"></td>
   </tr>
   <tr>
     <td align="center"><img src="docs/media/humanoid.gif" width="250" alt="Humanoid — SAC"></td>
     <td align="center"><img src="docs/media/pursuit.gif" width="250" alt="Pursuit — cooperative multi-agent PPO"></td>
-    <td align="center"><img src="docs/media/walker2d.gif" width="250" alt="Walker2D — PPO"></td>
+    <td align="center"><img src="docs/media/pong.gif" width="250" alt="Pong — PPO"></td>
   </tr>
 </table>
 
@@ -89,7 +89,7 @@ navigating the grid, the skill meter rising from *Child* to *Superhuman*, and th
 
 | Capability | What you get |
 | :-- | :-- |
-| 🎮 **100+ environments** | Eight families — Classic Control → Toy Text → MiniGrid → Box2D → Atari → MuJoCo → board games → multi-agent — all behind one data-driven registry. |
+| 🎮 **100+ environments** | Nine families — Classic Control → Toy Text → MiniGrid → Box2D → Atari → MuJoCo → board games → multi-agent → Doom — all behind one data-driven registry. |
 | 🧠 **9 algorithms** | PPO · neuroevolution · tabular Q-learning · AlphaZero · SAC · TD3 · DQN · A2C · QR-DQN, gated per-environment with a ★ recommended pick for each game. |
 | 📈 **Live training** | Realtime reward / loss / fitness charts with EMA smoothing, a "solved @" marker, and a multi-run compare overlay. |
 | 👀 **Watch it learn** | The running policy renders live — client-side SVG for vector envs, server-streamed frames for pixels / MuJoCo — with visual on/off and time-acceleration. |
@@ -104,12 +104,12 @@ navigating the grid, the skill meter rising from *Child* to *Superhuman*, and th
 
 ## Environments
 
-**100+ environments across eight families.** The registry
+**100+ environments across nine families.** The registry
 ([`backend/app/envs/registry.py`](backend/app/envs/registry.py)) is the single source of truth — an `EnvSpec`
 row does most of the work, so most new games are a data-only addition.
 
 <p align="center">
-  <img src="docs/media/env-picker.png" width="100%" alt="Environment picker flyout showing all eight families with game counts">
+  <img src="docs/media/env-picker.png" width="100%" alt="Environment picker flyout showing all nine families with game counts">
 </p>
 
 | Family | Count | Examples | Notes |
@@ -122,6 +122,7 @@ row does most of the work, so most new games are a data-only addition.
 | **MuJoCo** | 7 | Hopper, Walker2d, HalfCheetah, Ant, Humanoid … | continuous torques; SAC is the ★ pick |
 | **Board games** | 6 | Tic-Tac-Toe, Connect Four, Othello, Breakthrough, Checkers, Chess | OpenSpiel; MaskablePPO / AlphaZero vs an MCTS teacher |
 | **Multi-agent** | 7 | simple_spread, simple_tag, Pursuit, Multiwalker, Waterworld | PettingZoo + SuperSuit param-sharing / self-play |
+| **Doom** | 7 | Basic, Defend the Center, Defend the Line, Health Gathering, Take Cover, Predict Position | 3D FPS from pixels (ViZDoom) → CNN policy on CUDA |
 
 See [`docs/adding-an-environment.md`](docs/adding-an-environment.md) and the
 [extensibility seams](docs/architecture.md#the-extensibility-seams).
