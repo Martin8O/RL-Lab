@@ -22,7 +22,7 @@
       "runtimeArgs": ["-m", "uvicorn", "app.main:app", "--app-dir", "backend", "--port", "8000", "--reload"],
       "cwd": "D:\\Projekty\\RL",
       "port": 8000,
-      "autoPort": false
+      "autoPort": true
     }
   ]
 }
