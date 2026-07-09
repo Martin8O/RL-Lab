@@ -54,6 +54,7 @@
     "algo_a2c": "A2C",
     "algo_qrdqn": "QR-DQN",
     "params_title": "PPO Hyperparameters",
+    "locked_while_running": "Locked while training — press Stop to change",
     "evo_params_title": "Evolution Settings",
     "q_params_title": "Q-learning Settings",
     "az_params_title": "AlphaZero Settings",

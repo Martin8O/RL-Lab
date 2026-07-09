@@ -161,13 +161,13 @@ function ParamSlider({ id, label, value, min, max, step, recommended, disabled, 
         <span style={{
           fontFamily: 'var(--font-mono)', fontFeatureSettings: 'var(--ff-tabular)',
           fontSize: 'var(--fs-label)', letterSpacing: 'var(--ls-tight)',
-          color: isRec ? 'var(--success)' : 'var(--text-strong)',
+          color: disabled ? 'var(--text-faint)' : isRec ? 'var(--success)' : 'var(--text-strong)',
         }}>
           {formatValue(id, value)}
         </span>
       </div>
-      {/* Slider + recommended tick */}
-      <div style={{ position: 'relative' }}>
+      {/* Slider + recommended tick — dims while a run locks the config (opacity keeps the ⓘ popup legible) */}
+      <div style={{ position: 'relative', opacity: disabled ? 0.45 : 1, transition: 'var(--t-colors)' }}>
         <input
           type="range"
           aria-label={label}
@@ -482,13 +482,27 @@ export default function Sidebar() {
           {isEvo ? t('sidebar.evo_params_title') : isQ ? t('sidebar.q_params_title') : isAz ? t('sidebar.az_params_title') : isSac ? t('sidebar.sac_params_title') : isTd3 ? t('sidebar.td3_params_title') : isDqn ? t('sidebar.dqn_params_title') : isA2c ? t('sidebar.a2c_params_title') : isQrdqn ? t('sidebar.qrdqn_params_title') : t('sidebar.params_title')}
         </div>
 
+        {/* While a run holds the config (train/pause/stopping), the params below lock like the env/algo/
+            seed/steps already do — a small notice so a mid-run edit doesn't look like it took effect. */}
+        {isActive && (
+          <div role="note" style={{
+            display: 'flex', alignItems: 'center', gap: 6, marginBottom: 'var(--space-4)',
+            padding: '6px 10px', borderRadius: 'var(--radius-md)',
+            background: 'var(--surface-inset)', border: '1px solid var(--border-default)',
+            fontSize: 'var(--fs-meta)', color: 'var(--text-muted)',
+          }}>
+            <span aria-hidden>🔒</span>
+            <span>{t('sidebar.locked_while_running')}</span>
+          </div>
+        )}
+
         {algo === 'ppo' && (
           <>
             {/* Competitive multi-agent self-play (simple_tag, G7b-2): the round schedule — how many
                 times the two species alternate (predators learn vs. frozen prey, then prey vs. frozen
                 predators, …). Only simple_tag defines `rounds`, so it shows just for those envs. */}
             {ppoDefs.rounds && (
-              <ParamSlider
+              <ParamSlider disabled={isActive}
                 id="rounds" label={t('sidebar.rounds')}
                 value={selfPlayParams.rounds}
                 min={ppoDefs.rounds.min!} max={ppoDefs.rounds.max!} step={ppoDefs.rounds.step!}
@@ -498,7 +512,7 @@ export default function Sidebar() {
             )}
 
             {ppoDefs.learning_rate && (
-              <ParamSlider
+              <ParamSlider disabled={isActive}
                 id="learning_rate" label={t('sidebar.learning_rate')}
                 value={hyperparams.learning_rate}
                 min={ppoDefs.learning_rate.min!} max={ppoDefs.learning_rate.max!} step={0.01}
@@ -508,7 +522,7 @@ export default function Sidebar() {
             )}
 
             {ppoDefs.gamma && (
-              <ParamSlider
+              <ParamSlider disabled={isActive}
                 id="gamma" label={t('sidebar.gamma')}
                 value={hyperparams.gamma}
                 min={ppoDefs.gamma.min!} max={ppoDefs.gamma.max!} step={ppoDefs.gamma.step!}
@@ -518,7 +532,7 @@ export default function Sidebar() {
             )}
 
             {ppoDefs.clip_range && (
-              <ParamSlider
+              <ParamSlider disabled={isActive}
                 id="clip_range" label={t('sidebar.clip_range')}
                 value={hyperparams.clip_range}
                 min={ppoDefs.clip_range.min!} max={ppoDefs.clip_range.max!} step={ppoDefs.clip_range.step!}
@@ -528,7 +542,7 @@ export default function Sidebar() {
             )}
 
             {ppoDefs.ent_coef && (
-              <ParamSlider
+              <ParamSlider disabled={isActive}
                 id="ent_coef" label={t('sidebar.ent_coef')}
                 value={hyperparams.ent_coef}
                 min={ppoDefs.ent_coef.min!} max={ppoDefs.ent_coef.max!} step={ppoDefs.ent_coef.step!}
@@ -538,7 +552,7 @@ export default function Sidebar() {
             )}
 
             {ppoDefs.n_hidden_layers && (
-              <ParamSlider
+              <ParamSlider disabled={isActive}
                 id="n_hidden_layers" label={t('sidebar.n_hidden_layers')}
                 value={hyperparams.n_hidden_layers}
                 min={ppoDefs.n_hidden_layers.min!} max={ppoDefs.n_hidden_layers.max!} step={ppoDefs.n_hidden_layers.step!}
@@ -548,7 +562,7 @@ export default function Sidebar() {
             )}
 
             {ppoDefs.neurons_per_layer && (
-              <ParamSlider
+              <ParamSlider disabled={isActive}
                 id="neurons_per_layer" label={t('sidebar.neurons_per_layer')}
                 value={hyperparams.neurons_per_layer}
                 min={ppoDefs.neurons_per_layer.min!} max={ppoDefs.neurons_per_layer.max!} step={ppoDefs.neurons_per_layer.step!}
@@ -558,7 +572,7 @@ export default function Sidebar() {
             )}
 
             {ppoDefs.activation && (
-              <ActivationToggle
+              <ActivationToggle disabled={isActive}
                 value={hyperparams.activation}
                 label={t('sidebar.activation')}
                 onChange={(v) => setHyperparams({ activation: v })}
@@ -570,7 +584,7 @@ export default function Sidebar() {
         {isEvo && (
           <>
             {evoDefs.population_size && (
-              <ParamSlider
+              <ParamSlider disabled={isActive}
                 id="population_size" label={t('sidebar.population_size')}
                 value={evolutionParams.population_size}
                 min={evoDefs.population_size.min!} max={evoDefs.population_size.max!} step={evoDefs.population_size.step!}
@@ -580,7 +594,7 @@ export default function Sidebar() {
             )}
 
             {evoDefs.top_k_parents && (
-              <ParamSlider
+              <ParamSlider disabled={isActive}
                 id="top_k_parents" label={t('sidebar.top_k_parents')}
                 value={evolutionParams.top_k_parents}
                 min={evoDefs.top_k_parents.min!} max={evoDefs.top_k_parents.max!} step={evoDefs.top_k_parents.step!}
@@ -590,7 +604,7 @@ export default function Sidebar() {
             )}
 
             {evoDefs.mutation_rate && (
-              <ParamSlider
+              <ParamSlider disabled={isActive}
                 id="mutation_rate" label={t('sidebar.mutation_rate')}
                 value={evolutionParams.mutation_rate}
                 min={evoDefs.mutation_rate.min!} max={evoDefs.mutation_rate.max!} step={evoDefs.mutation_rate.step!}
@@ -600,7 +614,7 @@ export default function Sidebar() {
             )}
 
             {evoDefs.crossover_rate && (
-              <ParamSlider
+              <ParamSlider disabled={isActive}
                 id="crossover_rate" label={t('sidebar.crossover_rate')}
                 value={evolutionParams.crossover_rate}
                 min={evoDefs.crossover_rate.min!} max={evoDefs.crossover_rate.max!} step={evoDefs.crossover_rate.step!}
@@ -610,7 +624,7 @@ export default function Sidebar() {
             )}
 
             {evoDefs.generations && (
-              <ParamSlider
+              <ParamSlider disabled={isActive}
                 id="generations" label={t('sidebar.generations')}
                 value={evolutionParams.generations}
                 min={evoDefs.generations.min!} max={evoDefs.generations.max!} step={evoDefs.generations.step!}
@@ -624,7 +638,7 @@ export default function Sidebar() {
         {isQ && (
           <>
             {qlDefs.learning_rate && (
-              <ParamSlider
+              <ParamSlider disabled={isActive}
                 id="q_learning_rate" label={t('sidebar.q_learning_rate')}
                 value={qLearningParams.learning_rate}
                 min={qlDefs.learning_rate.min!} max={qlDefs.learning_rate.max!} step={qlDefs.learning_rate.step!}
@@ -634,7 +648,7 @@ export default function Sidebar() {
             )}
 
             {qlDefs.gamma && (
-              <ParamSlider
+              <ParamSlider disabled={isActive}
                 id="gamma" label={t('sidebar.gamma')}
                 value={qLearningParams.gamma}
                 min={qlDefs.gamma.min!} max={qlDefs.gamma.max!} step={qlDefs.gamma.step!}
@@ -644,7 +658,7 @@ export default function Sidebar() {
             )}
 
             {qlDefs.epsilon_start && (
-              <ParamSlider
+              <ParamSlider disabled={isActive}
                 id="epsilon_start" label={t('sidebar.epsilon_start')}
                 value={qLearningParams.epsilon_start}
                 min={qlDefs.epsilon_start.min!} max={qlDefs.epsilon_start.max!} step={qlDefs.epsilon_start.step!}
@@ -654,7 +668,7 @@ export default function Sidebar() {
             )}
 
             {qlDefs.epsilon_end && (
-              <ParamSlider
+              <ParamSlider disabled={isActive}
                 id="epsilon_end" label={t('sidebar.epsilon_end')}
                 value={qLearningParams.epsilon_end}
                 min={qlDefs.epsilon_end.min!} max={qlDefs.epsilon_end.max!} step={qlDefs.epsilon_end.step!}
@@ -664,7 +678,7 @@ export default function Sidebar() {
             )}
 
             {qlDefs.epsilon_decay && (
-              <ParamSlider
+              <ParamSlider disabled={isActive}
                 id="epsilon_decay" label={t('sidebar.epsilon_decay')}
                 value={qLearningParams.epsilon_decay}
                 min={qlDefs.epsilon_decay.min!} max={qlDefs.epsilon_decay.max!} step={qlDefs.epsilon_decay.step!}
@@ -674,7 +688,7 @@ export default function Sidebar() {
             )}
 
             {qlDefs.episodes && (
-              <ParamSlider
+              <ParamSlider disabled={isActive}
                 id="episodes" label={t('sidebar.episodes')}
                 value={qLearningParams.episodes}
                 min={qlDefs.episodes.min!} max={qlDefs.episodes.max!} step={qlDefs.episodes.step!}
@@ -691,7 +705,7 @@ export default function Sidebar() {
         {isAz && (
           <>
             {azDefs.iterations && (
-              <ParamSlider
+              <ParamSlider disabled={isActive}
                 id="iterations" label={t('sidebar.iterations')}
                 value={alphaZeroParams.iterations}
                 min={azDefs.iterations.min!} max={azDefs.iterations.max!} step={azDefs.iterations.step!}
@@ -701,7 +715,7 @@ export default function Sidebar() {
             )}
 
             {azDefs.gumbel_sims && (
-              <ParamSlider
+              <ParamSlider disabled={isActive}
                 id="gumbel_sims" label={t('sidebar.gumbel_sims')}
                 value={alphaZeroParams.gumbel_sims}
                 min={azDefs.gumbel_sims.min!} max={azDefs.gumbel_sims.max!} step={azDefs.gumbel_sims.step!}
@@ -711,7 +725,7 @@ export default function Sidebar() {
             )}
 
             {azDefs.gumbel_considered && (
-              <ParamSlider
+              <ParamSlider disabled={isActive}
                 id="gumbel_considered" label={t('sidebar.gumbel_considered')}
                 value={alphaZeroParams.gumbel_considered}
                 min={azDefs.gumbel_considered.min!} max={azDefs.gumbel_considered.max!} step={azDefs.gumbel_considered.step!}
@@ -721,7 +735,7 @@ export default function Sidebar() {
             )}
 
             {azDefs.games_per_iter && (
-              <ParamSlider
+              <ParamSlider disabled={isActive}
                 id="games_per_iter" label={t('sidebar.games_per_iter')}
                 value={alphaZeroParams.games_per_iter}
                 min={azDefs.games_per_iter.min!} max={azDefs.games_per_iter.max!} step={azDefs.games_per_iter.step!}
@@ -731,7 +745,7 @@ export default function Sidebar() {
             )}
 
             {azDefs.learning_rate && (
-              <ParamSlider
+              <ParamSlider disabled={isActive}
                 id="az_learning_rate" label={t('sidebar.learning_rate')}
                 value={alphaZeroParams.learning_rate}
                 min={azDefs.learning_rate.min!} max={azDefs.learning_rate.max!} step={0.0001}
@@ -741,7 +755,7 @@ export default function Sidebar() {
             )}
 
             {azDefs.actor_processes && (
-              <ParamSlider
+              <ParamSlider disabled={isActive}
                 id="actor_processes" label={t('sidebar.actor_processes')}
                 value={alphaZeroParams.actor_processes}
                 min={azDefs.actor_processes.min!} max={azDefs.actor_processes.max!} step={azDefs.actor_processes.step!}
@@ -759,7 +773,7 @@ export default function Sidebar() {
         {isSac && (
           <>
             {sacDefs.learning_rate && (
-              <ParamSlider
+              <ParamSlider disabled={isActive}
                 id="learning_rate" label={t('sidebar.learning_rate')}
                 value={sacParams.learning_rate}
                 min={sacDefs.learning_rate.min!} max={sacDefs.learning_rate.max!} step={0.01}
@@ -769,7 +783,7 @@ export default function Sidebar() {
             )}
 
             {sacDefs.gamma && (
-              <ParamSlider
+              <ParamSlider disabled={isActive}
                 id="gamma" label={t('sidebar.gamma')}
                 value={sacParams.gamma}
                 min={sacDefs.gamma.min!} max={sacDefs.gamma.max!} step={sacDefs.gamma.step!}
@@ -779,7 +793,7 @@ export default function Sidebar() {
             )}
 
             {sacDefs.tau && (
-              <ParamSlider
+              <ParamSlider disabled={isActive}
                 id="sac_tau" label={t('sidebar.sac_tau')}
                 value={sacParams.tau}
                 min={sacDefs.tau.min!} max={sacDefs.tau.max!} step={sacDefs.tau.step!}
@@ -789,7 +803,7 @@ export default function Sidebar() {
             )}
 
             {sacDefs.buffer_size && (
-              <ParamSlider
+              <ParamSlider disabled={isActive}
                 id="sac_buffer_size" label={t('sidebar.sac_buffer_size')}
                 value={sacParams.buffer_size}
                 min={sacDefs.buffer_size.min!} max={sacDefs.buffer_size.max!} step={sacDefs.buffer_size.step!}
@@ -799,7 +813,7 @@ export default function Sidebar() {
             )}
 
             {sacDefs.train_freq && (
-              <ParamSlider
+              <ParamSlider disabled={isActive}
                 id="sac_train_freq" label={t('sidebar.sac_train_freq')}
                 value={sacParams.train_freq}
                 min={sacDefs.train_freq.min!} max={sacDefs.train_freq.max!} step={sacDefs.train_freq.step!}
@@ -818,6 +832,7 @@ export default function Sidebar() {
                 </div>
                 <Segmented
                   value={sacParams.ent_coef}
+                  disabled={isActive}
                   onChange={(v) => setSacParams({ ent_coef: v })}
                   options={sacEntChoices.map((c) => ({
                     id: c,
@@ -837,7 +852,7 @@ export default function Sidebar() {
         {isTd3 && (
           <>
             {td3Defs.learning_rate && (
-              <ParamSlider
+              <ParamSlider disabled={isActive}
                 id="learning_rate" label={t('sidebar.learning_rate')}
                 value={td3Params.learning_rate}
                 min={td3Defs.learning_rate.min!} max={td3Defs.learning_rate.max!} step={0.01}
@@ -847,7 +862,7 @@ export default function Sidebar() {
             )}
 
             {td3Defs.gamma && (
-              <ParamSlider
+              <ParamSlider disabled={isActive}
                 id="gamma" label={t('sidebar.gamma')}
                 value={td3Params.gamma}
                 min={td3Defs.gamma.min!} max={td3Defs.gamma.max!} step={td3Defs.gamma.step!}
@@ -857,7 +872,7 @@ export default function Sidebar() {
             )}
 
             {td3Defs.tau && (
-              <ParamSlider
+              <ParamSlider disabled={isActive}
                 id="td3_tau" label={t('sidebar.td3_tau')}
                 value={td3Params.tau}
                 min={td3Defs.tau.min!} max={td3Defs.tau.max!} step={td3Defs.tau.step!}
@@ -867,7 +882,7 @@ export default function Sidebar() {
             )}
 
             {td3Defs.buffer_size && (
-              <ParamSlider
+              <ParamSlider disabled={isActive}
                 id="td3_buffer_size" label={t('sidebar.td3_buffer_size')}
                 value={td3Params.buffer_size}
                 min={td3Defs.buffer_size.min!} max={td3Defs.buffer_size.max!} step={td3Defs.buffer_size.step!}
@@ -877,7 +892,7 @@ export default function Sidebar() {
             )}
 
             {td3Defs.train_freq && (
-              <ParamSlider
+              <ParamSlider disabled={isActive}
                 id="td3_train_freq" label={t('sidebar.td3_train_freq')}
                 value={td3Params.train_freq}
                 min={td3Defs.train_freq.min!} max={td3Defs.train_freq.max!} step={td3Defs.train_freq.step!}
@@ -887,7 +902,7 @@ export default function Sidebar() {
             )}
 
             {td3Defs.train_noise && (
-              <ParamSlider
+              <ParamSlider disabled={isActive}
                 id="td3_train_noise" label={t('sidebar.td3_train_noise')}
                 value={td3Params.train_noise}
                 min={td3Defs.train_noise.min!} max={td3Defs.train_noise.max!} step={td3Defs.train_noise.step!}
@@ -906,7 +921,7 @@ export default function Sidebar() {
         {isDqn && (
           <>
             {dqnDefs.learning_rate && (
-              <ParamSlider
+              <ParamSlider disabled={isActive}
                 id="learning_rate" label={t('sidebar.learning_rate')}
                 value={dqnParams.learning_rate}
                 min={dqnDefs.learning_rate.min!} max={dqnDefs.learning_rate.max!} step={0.01}
@@ -916,7 +931,7 @@ export default function Sidebar() {
             )}
 
             {dqnDefs.gamma && (
-              <ParamSlider
+              <ParamSlider disabled={isActive}
                 id="gamma" label={t('sidebar.gamma')}
                 value={dqnParams.gamma}
                 min={dqnDefs.gamma.min!} max={dqnDefs.gamma.max!} step={dqnDefs.gamma.step!}
@@ -926,7 +941,7 @@ export default function Sidebar() {
             )}
 
             {dqnDefs.buffer_size && (
-              <ParamSlider
+              <ParamSlider disabled={isActive}
                 id="dqn_buffer_size" label={t('sidebar.dqn_buffer_size')}
                 value={dqnParams.buffer_size}
                 min={dqnDefs.buffer_size.min!} max={dqnDefs.buffer_size.max!} step={dqnDefs.buffer_size.step!}
@@ -936,7 +951,7 @@ export default function Sidebar() {
             )}
 
             {dqnDefs.train_freq && (
-              <ParamSlider
+              <ParamSlider disabled={isActive}
                 id="dqn_train_freq" label={t('sidebar.dqn_train_freq')}
                 value={dqnParams.train_freq}
                 min={dqnDefs.train_freq.min!} max={dqnDefs.train_freq.max!} step={dqnDefs.train_freq.step!}
@@ -946,7 +961,7 @@ export default function Sidebar() {
             )}
 
             {dqnDefs.target_update_interval && (
-              <ParamSlider
+              <ParamSlider disabled={isActive}
                 id="dqn_target_update" label={t('sidebar.dqn_target_update')}
                 value={dqnParams.target_update_interval}
                 min={dqnDefs.target_update_interval.min!} max={dqnDefs.target_update_interval.max!} step={dqnDefs.target_update_interval.step!}
@@ -956,7 +971,7 @@ export default function Sidebar() {
             )}
 
             {dqnDefs.exploration_fraction && (
-              <ParamSlider
+              <ParamSlider disabled={isActive}
                 id="dqn_exploration_fraction" label={t('sidebar.dqn_exploration_fraction')}
                 value={dqnParams.exploration_fraction}
                 min={dqnDefs.exploration_fraction.min!} max={dqnDefs.exploration_fraction.max!} step={dqnDefs.exploration_fraction.step!}
@@ -966,7 +981,7 @@ export default function Sidebar() {
             )}
 
             {dqnDefs.exploration_final_eps && (
-              <ParamSlider
+              <ParamSlider disabled={isActive}
                 id="dqn_exploration_final_eps" label={t('sidebar.dqn_exploration_final_eps')}
                 value={dqnParams.exploration_final_eps}
                 min={dqnDefs.exploration_final_eps.min!} max={dqnDefs.exploration_final_eps.max!} step={dqnDefs.exploration_final_eps.step!}
@@ -984,7 +999,7 @@ export default function Sidebar() {
         {isA2c && (
           <>
             {a2cDefs.learning_rate && (
-              <ParamSlider
+              <ParamSlider disabled={isActive}
                 id="learning_rate" label={t('sidebar.learning_rate')}
                 value={a2cParams.learning_rate}
                 min={a2cDefs.learning_rate.min!} max={a2cDefs.learning_rate.max!} step={0.01}
@@ -994,7 +1009,7 @@ export default function Sidebar() {
             )}
 
             {a2cDefs.gamma && (
-              <ParamSlider
+              <ParamSlider disabled={isActive}
                 id="gamma" label={t('sidebar.gamma')}
                 value={a2cParams.gamma}
                 min={a2cDefs.gamma.min!} max={a2cDefs.gamma.max!} step={a2cDefs.gamma.step!}
@@ -1004,7 +1019,7 @@ export default function Sidebar() {
             )}
 
             {a2cDefs.n_steps && (
-              <ParamSlider
+              <ParamSlider disabled={isActive}
                 id="a2c_n_steps" label={t('sidebar.a2c_n_steps')}
                 value={a2cParams.n_steps}
                 min={a2cDefs.n_steps.min!} max={a2cDefs.n_steps.max!} step={a2cDefs.n_steps.step!}
@@ -1014,7 +1029,7 @@ export default function Sidebar() {
             )}
 
             {a2cDefs.gae_lambda && (
-              <ParamSlider
+              <ParamSlider disabled={isActive}
                 id="a2c_gae_lambda" label={t('sidebar.a2c_gae_lambda')}
                 value={a2cParams.gae_lambda}
                 min={a2cDefs.gae_lambda.min!} max={a2cDefs.gae_lambda.max!} step={a2cDefs.gae_lambda.step!}
@@ -1024,7 +1039,7 @@ export default function Sidebar() {
             )}
 
             {a2cDefs.ent_coef && (
-              <ParamSlider
+              <ParamSlider disabled={isActive}
                 id="ent_coef" label={t('sidebar.ent_coef')}
                 value={a2cParams.ent_coef}
                 min={a2cDefs.ent_coef.min!} max={a2cDefs.ent_coef.max!} step={a2cDefs.ent_coef.step!}
@@ -1034,7 +1049,7 @@ export default function Sidebar() {
             )}
 
             {a2cDefs.n_hidden_layers && (
-              <ParamSlider
+              <ParamSlider disabled={isActive}
                 id="n_hidden_layers" label={t('sidebar.n_hidden_layers')}
                 value={a2cParams.n_hidden_layers}
                 min={a2cDefs.n_hidden_layers.min!} max={a2cDefs.n_hidden_layers.max!} step={a2cDefs.n_hidden_layers.step!}
@@ -1044,7 +1059,7 @@ export default function Sidebar() {
             )}
 
             {a2cDefs.neurons_per_layer && (
-              <ParamSlider
+              <ParamSlider disabled={isActive}
                 id="neurons_per_layer" label={t('sidebar.neurons_per_layer')}
                 value={a2cParams.neurons_per_layer}
                 min={a2cDefs.neurons_per_layer.min!} max={a2cDefs.neurons_per_layer.max!} step={a2cDefs.neurons_per_layer.step!}
@@ -1054,7 +1069,7 @@ export default function Sidebar() {
             )}
 
             {a2cDefs.activation && (
-              <ActivationToggle
+              <ActivationToggle disabled={isActive}
                 value={a2cParams.activation}
                 label={t('sidebar.activation')}
                 onChange={(v) => setA2cParams({ activation: v })}
@@ -1070,7 +1085,7 @@ export default function Sidebar() {
         {isQrdqn && (
           <>
             {qrdqnDefs.learning_rate && (
-              <ParamSlider
+              <ParamSlider disabled={isActive}
                 id="learning_rate" label={t('sidebar.learning_rate')}
                 value={qrdqnParams.learning_rate}
                 min={qrdqnDefs.learning_rate.min!} max={qrdqnDefs.learning_rate.max!} step={0.01}
@@ -1080,7 +1095,7 @@ export default function Sidebar() {
             )}
 
             {qrdqnDefs.gamma && (
-              <ParamSlider
+              <ParamSlider disabled={isActive}
                 id="gamma" label={t('sidebar.gamma')}
                 value={qrdqnParams.gamma}
                 min={qrdqnDefs.gamma.min!} max={qrdqnDefs.gamma.max!} step={qrdqnDefs.gamma.step!}
@@ -1090,7 +1105,7 @@ export default function Sidebar() {
             )}
 
             {qrdqnDefs.n_quantiles && (
-              <ParamSlider
+              <ParamSlider disabled={isActive}
                 id="qrdqn_n_quantiles" label={t('sidebar.qrdqn_n_quantiles')}
                 value={qrdqnParams.n_quantiles}
                 min={qrdqnDefs.n_quantiles.min!} max={qrdqnDefs.n_quantiles.max!} step={qrdqnDefs.n_quantiles.step!}
@@ -1100,7 +1115,7 @@ export default function Sidebar() {
             )}
 
             {qrdqnDefs.buffer_size && (
-              <ParamSlider
+              <ParamSlider disabled={isActive}
                 id="dqn_buffer_size" label={t('sidebar.dqn_buffer_size')}
                 value={qrdqnParams.buffer_size}
                 min={qrdqnDefs.buffer_size.min!} max={qrdqnDefs.buffer_size.max!} step={qrdqnDefs.buffer_size.step!}
@@ -1110,7 +1125,7 @@ export default function Sidebar() {
             )}
 
             {qrdqnDefs.train_freq && (
-              <ParamSlider
+              <ParamSlider disabled={isActive}
                 id="dqn_train_freq" label={t('sidebar.dqn_train_freq')}
                 value={qrdqnParams.train_freq}
                 min={qrdqnDefs.train_freq.min!} max={qrdqnDefs.train_freq.max!} step={qrdqnDefs.train_freq.step!}
@@ -1120,7 +1135,7 @@ export default function Sidebar() {
             )}
 
             {qrdqnDefs.target_update_interval && (
-              <ParamSlider
+              <ParamSlider disabled={isActive}
                 id="dqn_target_update" label={t('sidebar.dqn_target_update')}
                 value={qrdqnParams.target_update_interval}
                 min={qrdqnDefs.target_update_interval.min!} max={qrdqnDefs.target_update_interval.max!} step={qrdqnDefs.target_update_interval.step!}
@@ -1130,7 +1145,7 @@ export default function Sidebar() {
             )}
 
             {qrdqnDefs.exploration_fraction && (
-              <ParamSlider
+              <ParamSlider disabled={isActive}
                 id="dqn_exploration_fraction" label={t('sidebar.dqn_exploration_fraction')}
                 value={qrdqnParams.exploration_fraction}
                 min={qrdqnDefs.exploration_fraction.min!} max={qrdqnDefs.exploration_fraction.max!} step={qrdqnDefs.exploration_fraction.step!}
@@ -1140,7 +1155,7 @@ export default function Sidebar() {
             )}
 
             {qrdqnDefs.exploration_final_eps && (
-              <ParamSlider
+              <ParamSlider disabled={isActive}
                 id="dqn_exploration_final_eps" label={t('sidebar.dqn_exploration_final_eps')}
                 value={qrdqnParams.exploration_final_eps}
                 min={qrdqnDefs.exploration_final_eps.min!} max={qrdqnDefs.exploration_final_eps.max!} step={qrdqnDefs.exploration_final_eps.step!}

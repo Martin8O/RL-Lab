@@ -764,13 +764,13 @@ export const PLAY_GUIDES: Record<string, PlayGuide> = {
   frozenlake: {
     goal: {
       en: 'Cross the frozen lake from the start (top-left) to the goal flag (bottom-right) without '
-        + 'stepping into a hole (the dark circles). The ice is slippery: you only go the way you press '
-        + 'about one time in three — the other two thirds the ice slides you to one side (never '
+        + 'stepping into a hole (the dark circles). The ice is slippery: you go where you press only '
+        + 'about 1 in 3 moves — the other 2 in 3, the ice slides you to one side (never '
         + 'straight backwards). Reaching the goal scores 1; falling in a hole or running out of moves '
         + 'scores 0. (Want a version that always goes where you point? Pick "FrozenLake (4×4, no slip)".)',
       cz: 'Přejděte zamrzlé jezero ze startu (vlevo nahoře) k vlajce cíle (vpravo dole), aniž byste '
         + 'šlápli do díry (tmavé kruhy). Led klouže: tam, kam zmáčknete, půjdete jen asi jednou ze tří '
-        + 'pokusů — ve zbylých dvou třetinách vás led smekne do strany (nikdy ne rovnou zpět). Dosažení '
+        + 'kroků — ve zbylých dvou ze tří vás led smekne do strany (nikdy ne rovnou zpět). Dosažení '
         + 'cíle dá 1 bod; pád do díry nebo vyčerpání tahů dá 0. (Chcete verzi, kde jdete vždy tam, kam '
         + 'míříte? Zvolte „FrozenLake (4×4, bez kluzu)".)',
     },
@@ -819,12 +819,12 @@ export const PLAY_GUIDES: Record<string, PlayGuide> = {
     goal: {
       en: 'The bigger 8×8 frozen lake — more holes and a longer slippery path from the start '
         + '(top-left) to the goal flag (bottom-right). Same rules and the same slippery ice as the 4×4: '
-        + 'you go where you press only about one time in three, the rest you slide sideways — over this '
+        + 'you go where you press only about 1 in 3 moves, the other 2 in 3 you slide sideways — over this '
         + 'longer path that adds up, so expect to be pushed off course often. Reaching the goal scores '
         + '1; falling in a hole or running out of moves scores 0.',
       cz: 'Větší zamrzlé jezero 8×8 — víc děr a delší kluzká cesta ze startu (vlevo nahoře) k vlajce '
         + 'cíle (vpravo dole). Stejná pravidla i stejně kluzký led jako u 4×4: tam, kam zmáčknete, '
-        + 'půjdete jen asi jednou ze tří, jinak vás to smekne do strany — na delší cestě se to nasčítá, '
+        + 'půjdete jen asi jednou ze tří kroků, ve zbylých dvou ze tří vás to smekne do strany — na delší cestě se to nasčítá, '
         + 'takže čekejte, že vás to bude často srážet z kurzu. Dosažení cíle dá 1 bod; pád do díry nebo '
         + 'vyčerpání tahů dá 0.',
     },
