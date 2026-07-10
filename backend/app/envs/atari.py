@@ -57,7 +57,9 @@ def make_atari(
     the observation, so the obs stays byte-identical to the clipped paths — the policy doesn't see
     reward at inference, so an unclipped AI-play env can't drift the CnnPolicy.
     """
-    import ale_py  # noqa: F401 — import side effect registers the "ALE/*" namespace
+    from app.services.system_info import require_ale_py
+
+    require_ale_py()  # import ale_py (registers "ALE/*") or raise a clean typed error (R1/ADR-101)
     from stable_baselines3.common.env_util import make_atari_env
     from stable_baselines3.common.vec_env import VecFrameStack
 

@@ -13,7 +13,7 @@ from app.envs.registry import get_env, list_envs
 from app.main import app
 from app.services.client_render import client_state
 from app.services.preview_streamer import encode_frame
-from app.services.system_info import gpu_available
+from app.services.system_info import atari_available, gpu_available
 from fastapi.testclient import TestClient
 
 client = TestClient(app)
@@ -84,6 +84,38 @@ def test_system_reports_gpu_flag() -> None:
     body = client.get("/api/system").json()
     assert isinstance(body["gpu_available"], bool)
     assert body["gpu_available"] == gpu_available()
+
+
+# -- R1: ale-py capability flag + the missing-package safety net -------------
+
+
+def test_system_reports_atari_flag() -> None:
+    """R1: /api/system exposes whether the optional ale-py package is installed, so the UI can gate
+    the Atari family (ADR-101 made it opt-in) instead of crashing on select/run."""
+    body = client.get("/api/system").json()
+    assert isinstance(body["atari_available"], bool)
+    assert body["atari_available"] == atari_available()
+
+
+def test_require_ale_py_raises_typed_error_when_missing(monkeypatch: pytest.MonkeyPatch) -> None:
+    """With ale-py absent, the guarded import raises a clean, actionable RuntimeError (never a raw
+    ImportError) — the safety net if the UI gate is bypassed by a direct call. ale-py IS installed in
+    the dev venv, so the missing path is exercised by forcing the flag False (never uninstalling)."""
+    import app.services.system_info as si
+
+    monkeypatch.setattr(si, "atari_available", lambda: False)
+    with pytest.raises(RuntimeError, match="ale-py"):
+        si.require_ale_py()
+
+
+def test_make_env_atari_surfaces_typed_error_when_missing(monkeypatch: pytest.MonkeyPatch) -> None:
+    """End-to-end backstop: building an ALE env with ale-py forced absent surfaces the typed
+    RuntimeError through the factory, not a raw ImportError (R1)."""
+    import app.services.system_info as si
+
+    monkeypatch.setattr(si, "atari_available", lambda: False)
+    with pytest.raises(RuntimeError, match="ale-py"):
+        make_env("pong", render_mode="rgb_array", play_scale=1)
 
 
 @pytest.mark.skipif(gpu_available(), reason="a CUDA machine can actually train Atari")

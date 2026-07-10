@@ -91,7 +91,9 @@ def make_env(
     # any gym.spec()/gym.make() touches the id, so the ALE import cost is paid only when an Atari env
     # is actually built (G4a; image obs → CnnPolicy/GPU).
     if gid.startswith("ALE/"):
-        import ale_py  # noqa: F401 — import side effect registers the ALE namespace
+        from app.services.system_info import require_ale_py
+
+        require_ale_py()  # import ale_py (registers ALE/*) or raise a clean typed error (R1/ADR-101)
     # MiniGrid envs are registered the same way — by import side effect — so import lazily here, before
     # gym.spec()/gym.make() touches the id (the family has no native gym TimeLimit; it self-truncates). G2c.
     if gid.startswith("MiniGrid"):

@@ -376,6 +376,7 @@ interface AppState {
   // ─ ephemeral (not persisted) ───────────────────────────────
   backendStatus:   BackendStatus
   gpuAvailable:    boolean     // G4a: CUDA present? gates GPU-only training (Atari) in the UI
+  atariAvailable:  boolean     // R1: optional ale-py installed? gates the Atari family (ADR-101)
   envs:            EnvSpec[]
   trainState:      TrainState
   metricsHistory:  TrainingMetrics[]
@@ -413,6 +414,7 @@ interface AppState {
   setTheme:           (t: Theme)                        => void
   setBackendStatus:   (s: BackendStatus)                => void
   setGpuAvailable:    (v: boolean)                      => void
+  setAtariAvailable:  (v: boolean)                      => void
   setEnvs:            (envs: EnvSpec[])                 => void
   setSelectedEnvId:   (id: string | null)               => void
   setAlgo:            (a: Algo)                          => void
@@ -500,6 +502,7 @@ export const useAppStore = create<AppState>()(
 
       backendStatus:   'connecting',
       gpuAvailable:    false,
+      atariAvailable:  true,   // assume present until /api/system says otherwise (dev + default GPU build have it)
       envs:            [],
       trainState:      'idle',
       metricsHistory:  [],
@@ -534,6 +537,7 @@ export const useAppStore = create<AppState>()(
       setTheme:          (theme)          => set({ theme }),
       setBackendStatus:  (backendStatus)  => set({ backendStatus }),
       setGpuAvailable:   (gpuAvailable)   => set({ gpuAvailable }),
+      setAtariAvailable: (atariAvailable) => set({ atariAvailable }),
       setEnvs:           (envs)           => set({ envs }),
       // Switching game also snaps the sidebar params + step budget to the new env's ★ recommended
       // values (CartPole and LunarLander want very different settings). The env selector is disabled

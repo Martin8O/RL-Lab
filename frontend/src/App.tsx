@@ -24,6 +24,7 @@ export default function App() {
   const setEnvSkill   = useAppStore((s) => s.setEnvSkill)
   const setPlayScores = useAppStore((s) => s.setPlayScores)
   const setGpuAvailable = useAppStore((s) => s.setGpuAvailable)
+  const setAtariAvailable = useAppStore((s) => s.setAtariAvailable)
   const { i18n } = useTranslation()
 
   useEffect(() => {
@@ -52,11 +53,14 @@ export default function App() {
     void fetchHighScores().then(setHighScores).catch(() => {})
   }, [backendStatus, setHighScores])
 
-  // Detect GPU availability once backend is up — gates GPU-only training (Atari) in the UI (G4a).
+  // Detect runtime capabilities once backend is up — GPU presence gates GPU-only training (Atari,
+  // G4a); ale-py presence gates the whole Atari family (R1/ADR-101, opt-in package). One fetch, both.
   useEffect(() => {
     if (backendStatus !== 'online') return
-    void fetchSystem().then((s) => setGpuAvailable(s.gpu_available)).catch(() => {})
-  }, [backendStatus, setGpuAvailable])
+    void fetchSystem()
+      .then((s) => { setGpuAvailable(s.gpu_available); setAtariAvailable(s.atari_available) })
+      .catch(() => {})
+  }, [backendStatus, setGpuAvailable, setAtariAvailable])
 
   // Skill-band thresholds for the selected env (single source for the skill meter + play rating).
   useEffect(() => {

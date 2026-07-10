@@ -80,10 +80,13 @@ export interface EnvSpec {
 // --- System capabilities (G4a) ---------------------------------------------
 // Mirrors backend/app/schemas/system.py — keep both sides in sync.
 
-/** Runtime hardware facts used to gate features. `gpu_available` decides whether GPU-only
- *  training (Atari and other image-obs envs) can run on this machine. */
+/** Runtime capability facts used to gate features. `gpu_available` decides whether GPU-only
+ *  training (Atari and other image-obs envs) can run on this machine; `atari_available` is whether
+ *  the optional ale-py package is installed — false on a default install (ADR-101), gating the
+ *  Atari family in the UI so it never crashes on select/run (R1). */
 export interface SystemInfo {
   gpu_available: boolean
+  atari_available: boolean
 }
 
 // --- Training (B2) ---------------------------------------------------------

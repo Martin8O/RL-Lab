@@ -1,5 +1,5 @@
 import { useLayoutEffect, useMemo, useRef, useState } from 'react'
-import type { CSSProperties } from 'react'
+import type { CSSProperties, MouseEvent as ReactMouseEvent } from 'react'
 import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import { useAppStore } from '../store/useAppStore'
@@ -15,12 +15,30 @@ export default function EnvSelector({ disabled }: { disabled?: boolean }) {
   const envs           = useAppStore((s) => s.envs)
   const selectedEnvId  = useAppStore((s) => s.selectedEnvId)
   const locale         = useAppStore((s) => s.locale)
+  const atariAvailable = useAppStore((s) => s.atariAvailable)
   const setSelectedEnvId = useAppStore((s) => s.setSelectedEnvId)
 
   const [open, setOpen] = useState(false)
   const [rect, setRect] = useState<DOMRect | null>(null)
   const triggerRef = useRef<HTMLButtonElement | null>(null)
   const popoverRef = useRef<HTMLDivElement | null>(null)
+
+  // R1: the Atari family is locked when the optional ale-py package isn't installed (ADR-101). The
+  // category + every Atari game render greyed + unclickable, and hovering one pops the "install ale-py"
+  // hint. A category id or an env with family "atari" is locked; nothing else ever is.
+  const atariLocked = !atariAvailable
+  const isLocked = (family: string) => family === 'atari' && atariLocked
+
+  // Position of the hover-hint popup (fixed coords), or null when nothing locked is hovered. Anchored to
+  // the RIGHT of the whole flyout so it clears the games column (whichever row — category or game — is
+  // hovered), never overlapping the menu.
+  const [hint, setHint] = useState<{ top: number; left: number } | null>(null)
+  const showHint = (e: ReactMouseEvent<HTMLButtonElement>) => {
+    const row = e.currentTarget.getBoundingClientRect()
+    const fly = popoverRef.current?.getBoundingClientRect()
+    setHint({ top: row.top, left: (fly ? fly.right : row.right) + 8 })
+  }
+  const clearHint = () => setHint(null)
 
   const selected = envs.find((e) => e.id === selectedEnvId)
 
@@ -87,7 +105,9 @@ export default function EnvSelector({ disabled }: { disabled?: boolean }) {
         onClick={() => (open ? setOpen(false) : openMenu())}
         onMouseEnter={(e) => { if (!disabled && envs.length > 0) { e.currentTarget.style.borderColor = 'var(--border-strong)'; e.currentTarget.style.background = 'var(--surface-3)' } }}
         onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border-default)'; e.currentTarget.style.background = 'var(--surface-2)' }}
-        style={{ ...triggerStyle, cursor: disabled || envs.length === 0 ? 'default' : 'pointer' }}
+        style={{ ...triggerStyle, cursor: disabled || envs.length === 0 ? 'default' : 'pointer',
+          // Dim when locked during a run, matching the algo/steps dropdowns + the sliders.
+          opacity: disabled || envs.length === 0 ? 0.5 : 1 }}
       >
         <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {envs.length === 0
@@ -117,36 +137,74 @@ export default function EnvSelector({ disabled }: { disabled?: boolean }) {
         >
           {/* Categories */}
           <div style={{ display: 'flex', flexDirection: 'column', minWidth: 168, padding: 5, borderRight: '1px solid var(--border-default)' }}>
-            {groups.map((g) => (
+            {groups.map((g) => {
+              const locked = isLocked(g.id)
+              return (
               <button
                 key={g.id}
                 role="menuitem"
-                onMouseEnter={() => setActiveCat(g.id)}
+                aria-disabled={locked || undefined}
+                // Still reveal the (greyed) games so the catalogue stays browseable; a locked category
+                // just pops the install hint instead of being selectable.
+                onMouseEnter={(e) => { setActiveCat(g.id); if (locked) showHint(e); else clearHint() }}
                 onFocus={() => setActiveCat(g.id)}
                 onClick={() => setActiveCat(g.id)}
-                className={g.id === activeCat ? 'menu-row is-active' : 'menu-row'}
-                style={rowStyle(g.id === activeCat)}
+                className={locked ? undefined : (g.id === activeCat ? 'menu-row is-active' : 'menu-row')}
+                style={{ ...rowStyle(g.id === activeCat), ...(locked ? lockedRow : null) }}
               >
-                <span style={ellipsis}>{categoryLabel(g.id)[locale]}</span>
+                <span style={ellipsis}>
+                  {locked && <span aria-hidden style={{ marginRight: 5 }}>🔒</span>}
+                  {categoryLabel(g.id)[locale]}
+                </span>
                 <span aria-hidden style={{ color: 'var(--text-faint)', fontSize: 11, flexShrink: 0 }}>{g.items.length} ›</span>
               </button>
-            ))}
+              )
+            })}
           </div>
           {/* Games in the hovered category */}
           <div style={{ display: 'flex', flexDirection: 'column', minWidth: 196, maxHeight: 340, overflowY: 'auto', padding: 5 }}>
-            {activeItems.map((e) => (
+            {activeItems.map((e) => {
+              const locked = isLocked(e.family)
+              return (
               <button
                 key={e.id}
                 role="menuitem"
-                onClick={() => { setSelectedEnvId(e.id); setOpen(false) }}
-                className={e.id === selectedEnvId ? 'menu-row is-selected' : 'menu-row'}
-                style={rowStyle(e.id === selectedEnvId, true)}
+                aria-disabled={locked || undefined}
+                // Locked (no ale-py): don't select, just keep the hint up; otherwise select + close.
+                onClick={() => { if (locked) return; setSelectedEnvId(e.id); setOpen(false) }}
+                onMouseEnter={(ev) => { if (locked) showHint(ev); else clearHint() }}
+                className={locked ? undefined : (e.id === selectedEnvId ? 'menu-row is-selected' : 'menu-row')}
+                style={{ ...rowStyle(e.id === selectedEnvId, true), ...(locked ? lockedRow : null) }}
               >
-                <span style={ellipsis}>{e.display_name[locale]}</span>
+                <span style={ellipsis}>
+                  {locked && <span aria-hidden style={{ marginRight: 5 }}>🔒</span>}
+                  {e.display_name[locale]}
+                </span>
                 {e.id === selectedEnvId && <span aria-hidden style={{ color: 'var(--accent)', fontSize: 11, flexShrink: 0 }}>✓</span>}
               </button>
-            ))}
+              )
+            })}
           </div>
+        </div>,
+        document.body,
+      )}
+
+      {/* R1: hover-hint for a locked (no ale-py) Atari row. A small neutral info card to the right of
+          the flyout; pointer-events off so it never eats the hover that keeps it open. */}
+      {open && hint && createPortal(
+        <div
+          role="tooltip"
+          className="glass"
+          style={{
+            position: 'fixed', top: hint.top, left: hint.left, zIndex: 1001, maxWidth: 240,
+            padding: '8px 10px', background: 'var(--surface-glass)',
+            border: '1px solid var(--border-default)', borderRadius: 'var(--radius-md)',
+            boxShadow: 'var(--shadow-popover)', pointerEvents: 'none',
+            fontSize: 'var(--fs-meta)', lineHeight: 1.45, color: 'var(--text-default)',
+            animation: 'lab-rise var(--dur-2) var(--ease-out)',
+          }}
+        >
+          {t('sidebar.atari_needs_ale')}
         </div>,
         document.body,
       )}
@@ -175,6 +233,9 @@ const triggerStyle: CSSProperties = {
   transition: 'var(--t-colors)',
 }
 const ellipsis: CSSProperties = { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }
+// A locked row (R1: Atari with no ale-py) — greyed + not-allowed, no hover highlight (className is
+// dropped so the .menu-row :hover can't imply it's clickable).
+const lockedRow: CSSProperties = { opacity: 0.55, cursor: 'not-allowed', color: 'var(--text-faint)' }
 
 // Background + border live in the `.menu-row` CSS classes (index.css) so :hover can win — an
 // inline background would override it (CSS specificity: inline beats stylesheet pseudo-classes).

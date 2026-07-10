@@ -122,6 +122,9 @@ export default function LabSelect({ value, options, onChange, ariaLabel, disable
           borderRadius: 'var(--radius-md)', color: 'var(--text-strong)',
           fontFamily: 'var(--font-sans)', fontSize: 'var(--fs-label)', textAlign: 'left',
           cursor: disabled || options.length === 0 ? 'default' : 'pointer',
+          // Dim when locked (e.g. a run holds the config) so a disabled dropdown reads as inert,
+          // matching the dimmed sliders/seed — otherwise env/algo/steps stay bright while sliders fade.
+          opacity: disabled || options.length === 0 ? 0.5 : 1,
           minWidth: 0,
           ...style,
         }}

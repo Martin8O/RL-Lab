@@ -119,7 +119,8 @@
     "train_needs_gpu": "Trénink této hry vyžaduje GPU (k dispozici na stolním PC). Zatím si ji můžete zahrát ručně — použijte tlačítko Hrát níže.",
     "train_not_implemented": "Trénink této hry zatím není hotový — hry z obrazu potřebují GPU trenér (CnnPolicy), který přijde v některé z dalších verzí. Zatím si ji můžete zahrát ručně — použijte tlačítko Hrát níže.",
     "train_not_implemented_ma": "Trénink tohoto světa přijde v některém z dalších kroků — každý druh potřebuje vlastní „mozek“. Zatím můžete jen sledovat, jak se neučený svět pohybuje (nedá se hrát ručně — roj nemá jednoho řidiče).",
-    "train_not_implemented_board": "Trénink self-play pro deskové hry přijde v některém z dalších kroků. Zatím hrajte proti vestavěné AI tlačítkem Hrát níže — vyberte si stranu a obtížnost."
+    "train_not_implemented_board": "Trénink self-play pro deskové hry přijde v některém z dalších kroků. Zatím hrajte proti vestavěné AI tlačítkem Hrát níže — vyberte si stranu a obtížnost.",
+    "atari_needs_ale": "Atari prostředí vyžadují volitelný balíček ale-py. Instalace: pip install ale-py"
   },
   "stats": {
     "progress": "Postup",

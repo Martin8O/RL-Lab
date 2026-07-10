@@ -1221,16 +1221,18 @@ export default function Sidebar() {
         )}
       </div>
 
-      {/* Train-gated note: the game can't be trained here yet. Three reasons — a missing GPU (the vector
-          heavies, still human-playable), an unbuilt image trainer (Atari/CarRacing, still playable), or a
-          watch-only multi-agent env whose per-species trainer isn't built yet (simple_tag, G7b). */}
+      {/* Train-gated note: the game can't be trained here yet. Reasons — the optional ale-py package
+          missing so the Atari family is unusable (R1/ADR-101), a missing GPU (the vector heavies, still
+          human-playable), an unbuilt image trainer (Atari/CarRacing, still playable), or a watch-only
+          multi-agent env whose per-species trainer isn't built yet (simple_tag, G7b). */}
       {trainGated && !isActive && (
         <div style={{
           padding: '0 var(--space-5)', flexShrink: 0,
           fontSize: 'var(--fs-meta)', lineHeight: 1.45, color: 'var(--text-muted)',
         }}>
           {t(
-            trainGatedReason === 'not_implemented_ma' ? 'sidebar.train_not_implemented_ma'
+            trainGatedReason === 'no_atari' ? 'sidebar.atari_needs_ale'
+            : trainGatedReason === 'not_implemented_ma' ? 'sidebar.train_not_implemented_ma'
             : trainGatedReason === 'not_implemented_board' ? 'sidebar.train_not_implemented_board'
             : trainGatedReason === 'not_implemented' ? 'sidebar.train_not_implemented'
             : 'sidebar.train_needs_gpu',

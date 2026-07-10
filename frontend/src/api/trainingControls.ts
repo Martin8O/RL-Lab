@@ -57,8 +57,9 @@ export interface RunControls {
    *  whose per-species trainer isn't built yet (simple_tag, G7b) — not pixel-based and not hand-playable,
    *  so it needs its own note; `'not_implemented_board'` = a board game whose self-play trainer isn't
    *  built yet (G6b) — it IS hand-playable (vs the built-in AI), so its note points to the Play button;
-   *  `null` = not gated. */
-  trainGatedReason: 'no_gpu' | 'not_implemented' | 'not_implemented_ma' | 'not_implemented_board' | null
+   *  `'no_atari'` = an Atari env with the optional ale-py package not installed (R1/ADR-101) — the env
+   *  can't run or be played here at all, so this outranks the others; `null` = not gated. */
+  trainGatedReason: 'no_gpu' | 'no_atari' | 'not_implemented' | 'not_implemented_ma' | 'not_implemented_board' | null
 }
 
 export function useRunControls(): RunControls {
@@ -68,6 +69,7 @@ export function useRunControls(): RunControls {
   const envs            = useAppStore((s) => s.envs)
   const trainState      = useAppStore((s) => s.trainState)
   const gpuAvailable    = useAppStore((s) => s.gpuAvailable)
+  const atariAvailable  = useAppStore((s) => s.atariAvailable)
   const clearMetrics    = useAppStore((s) => s.clearMetrics)
   const setTrainState   = useAppStore((s) => s.setTrainState)
 
@@ -90,9 +92,14 @@ export function useRunControls(): RunControls {
   // cases it IS hand-playable now (vs the built-in MCTS AI), so its gate note points to Play.
   const isBoard         = !!selectedEnv && selectedEnv.family === 'board'
   const needsAbsentGpu  = !!selectedEnv && selectedEnv.hw_requirement === 'gpu' && !gpuAvailable
-  const trainGated      = notImplemented || needsAbsentGpu
-  const trainGatedReason: 'no_gpu' | 'not_implemented' | 'not_implemented_ma' | 'not_implemented_board' | null =
-    notImplemented
+  // R1: the Atari family with no ale-py installed (ADR-101 made it opt-in). Unlike the GPU/impl gates
+  // the env is *unusable* here — no train, no human/AI play — so it takes top priority for the note.
+  const atariMissing    = !!selectedEnv && selectedEnv.family === 'atari' && !atariAvailable
+  const trainGated      = atariMissing || notImplemented || needsAbsentGpu
+  const trainGatedReason: 'no_gpu' | 'no_atari' | 'not_implemented' | 'not_implemented_ma' | 'not_implemented_board' | null =
+    atariMissing
+      ? 'no_atari'
+      : notImplemented
       ? (watchOnlyMa ? 'not_implemented_ma' : isBoard ? 'not_implemented_board' : 'not_implemented')
       : needsAbsentGpu ? 'no_gpu' : null
   const canRun          = !!selectedEnvId && envs.length > 0 && !trainGated

@@ -119,7 +119,8 @@
     "train_needs_gpu": "Training this game needs a GPU (available on the desktop). You can still play it by hand now — use the Play button below.",
     "train_not_implemented": "Training for this game isn't built yet — pixel-based games need the GPU (CnnPolicy) trainer that's coming in a later version. You can still play it by hand now — use the Play button below.",
     "train_not_implemented_ma": "Training for this world is coming in a later step — each species needs its own brain. For now you can just watch the untrained world move (it isn't hand-playable — a swarm has no single driver).",
-    "train_not_implemented_board": "Self-play training for board games is coming in a later step. For now, play against the built-in AI with the Play button below — pick a side and a difficulty."
+    "train_not_implemented_board": "Self-play training for board games is coming in a later step. For now, play against the built-in AI with the Play button below — pick a side and a difficulty.",
+    "atari_needs_ale": "Atari environments need the optional ale-py package. Install: pip install ale-py"
   },
   "stats": {
     "progress": "Progress",

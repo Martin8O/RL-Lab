@@ -53,6 +53,7 @@ export default function PlayControls() {
   const setBoardSide     = useAppStore((s) => s.setBoardSide)
   const setBoardStrength = useAppStore((s) => s.setBoardStrength)
   const checkpointsNonce = useAppStore((s) => s.checkpointsNonce)
+  const atariAvailable   = useAppStore((s) => s.atariAvailable)
 
   const [checkpoints, setCheckpoints] = useState<CheckpointMeta[]>([])
   const [error, setError] = useState<string | null>(null)
@@ -102,7 +103,11 @@ export default function PlayControls() {
     if (!stillValid) setPlayCheckpointId(envCheckpoints[0]?.id ?? null)
   }, [selectedEnvId, checkpoints]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const ready     = backendStatus === 'online' && !trainLive
+  // R1: an Atari env with the optional ale-py package not installed (ADR-101) can't build its env at
+  // all — human play (raw JPEG) and AI play both go through it — so gate both Play buttons here, with
+  // the sidebar note already telling the user how to install it.
+  const atariMissing = env?.family === 'atari' && !atariAvailable
+  const ready     = backendStatus === 'online' && !trainLive && !atariMissing
   const canHuman  = ready && humanPlayable
   const aiReady   = !!playCheckpointId && envCheckpoints.length > 0
   // Board "AI plays" = watch the built-in MCTS play itself → no checkpoint needed; every other env
@@ -199,7 +204,7 @@ export default function PlayControls() {
           <button
             onClick={() => handlePlay('human')}
             disabled={!canHuman}
-            title={!humanPlayable ? t('play.not_playable') : trainLive ? t('play.busy_training') : undefined}
+            title={atariMissing ? t('sidebar.atari_needs_ale') : !humanPlayable ? t('play.not_playable') : trainLive ? t('play.busy_training') : undefined}
             className={canHuman ? 'btn-cta' : undefined}
             style={{
               display: 'inline-flex', alignItems: 'center', gap: 6,
@@ -220,7 +225,7 @@ export default function PlayControls() {
           <button
             onClick={() => handlePlay('ai')}
             disabled={!canAi}
-            title={trainLive ? t('play.busy_training') : (!isBoard && !aiReady) ? t('play.no_checkpoints') : undefined}
+            title={atariMissing ? t('sidebar.atari_needs_ale') : trainLive ? t('play.busy_training') : (!isBoard && !aiReady) ? t('play.no_checkpoints') : undefined}
             style={{
               display: 'inline-flex', alignItems: 'center', gap: 6,
               height: 'var(--control-sm)', padding: '0 12px', borderRadius: 'var(--radius-md)',
