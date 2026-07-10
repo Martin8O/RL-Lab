@@ -26,6 +26,8 @@ colour frame for the JPEG even though the CnnPolicy consumes the stacked tensor.
 from __future__ import annotations
 
 import os
+import threading
+import time
 from typing import TYPE_CHECKING, Any
 
 # gymnasium is imported at module level (the VizDoom screen wrapper subclasses gym.ObservationWrapper,
@@ -110,21 +112,65 @@ class _VizdoomScreen(gym.ObservationWrapper):
         return observation["screen"]
 
 
+# --- ViZDoom window suppression (Windows-only) --------------------------------------------------
+# ViZDoom 1.3.0 **ignores** ``DoomGame.set_window_visible(False)`` on Windows (proven,
+# ``Local/_probe_doom_window3.py``: the "VIZDOOM 1.3.0 …" window appears just the same with the flag
+# False as True) and renders through a real on-screen window, so a Doom window pops up on every
+# ``game.init()`` — trainer workers, preview/AI-play, human play, the test suite. Neither the flag
+# nor ``SDL_VIDEODRIVER=dummy`` (ViZDoom doesn't use SDL for its window) suppresses it.
+#
+# The one thing that works (``Local/_probe_doom_window8.py``): a tiny background thread that polls the
+# top-level windows and ``ShowWindow(SW_HIDE)``-hides any titled "vizdoom". Once hidden the engine does
+# NOT re-show it, and its offscreen GL ``screen_buffer`` keeps rendering intact (frames bit-unchanged) —
+# so the obs/JPEG are unaffected and the window is gone. Poll ~1 ms for a few seconds around each env
+# build (catches the init flash within a frame → ~1100 on-screen samples drop to ~30), idle-poll slowly
+# otherwise so a long training run costs almost no CPU. Non-Windows ViZDoom honours the flag → no-op.
+_HIDER_STARTED = False
+_HIDER_LOCK = threading.Lock()
+_HIDER_KICK_UNTIL = 0.0
+
+
+def _vizdoom_window_hider() -> None:
+    """Daemon loop: SW_HIDE any visible top-level window titled 'vizdoom' (Windows-only)."""
+    import ctypes
+    import ctypes.wintypes as wt
+
+    user32 = ctypes.windll.user32
+    sw_hide = 0
+    enum_proc = ctypes.WINFUNCTYPE(wt.BOOL, wt.HWND, wt.LPARAM)
+    title = ctypes.create_unicode_buffer(512)
+
+    def _cb(hwnd: int, _lparam: int) -> bool:
+        if user32.IsWindowVisible(hwnd):
+            user32.GetWindowTextW(hwnd, title, 512)
+            if title.value and "vizdoom" in title.value.lower():
+                user32.ShowWindow(hwnd, sw_hide)
+        return True
+
+    cb = enum_proc(_cb)
+    while True:
+        user32.EnumWindows(cb, 0)
+        time.sleep(0.001 if time.monotonic() < _HIDER_KICK_UNTIL else 0.05)
+
+
 def silence_vizdoom_window() -> None:
-    """Force SDL into its headless ``dummy`` video driver before any ZDoom engine starts.
+    """Keep the ViZDoom game window off-screen (Windows-only; see the block comment above).
 
-    The Gymnasium wrapper already calls ``set_window_visible(False)``, but on Windows SDL still
-    creates the window *shown* and hides it a frame later, so a ViZDoom window flashes on screen
-    each time ``game.init()`` runs (every env build — trainer workers, preview/AI-play, human play,
-    the test suite). ``SDL_VIDEODRIVER=dummy`` makes SDL never open a real window at all.
-
-    Proven safe (``Local/_probe_doom_window.py``): ViZDoom renders its ``screen_buffer`` via its own
-    offscreen GL path, so the observation + ``rgb_array`` frame are **bit-identical** with the dummy
-    driver — the server never shows a real window for *any* env (all frames are streamed as JPEG), so
-    this only removes the flash. ``setdefault`` keeps any explicit override intact; setting it before
-    ``gym.make`` also reaches the ``SubprocVecEnv`` trainer workers (each re-runs this on build).
+    Called just before each Doom ``gym.make`` on every build path (trainer ``SubprocVecEnv`` workers,
+    preview/AI-play, human play, tests), so it starts the hider in whichever process actually builds a
+    ZDoom engine and "kicks" it into fast-poll for the imminent ``game.init()``. Idempotent + cheap.
     """
-    os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
+    global _HIDER_STARTED, _HIDER_KICK_UNTIL
+    if os.name != "nt":
+        return  # Linux/macOS ViZDoom respects set_window_visible(False) — no stray window to hide
+    _HIDER_KICK_UNTIL = time.monotonic() + 5.0  # fast-poll window around this build's init
+    if not _HIDER_STARTED:
+        with _HIDER_LOCK:
+            if not _HIDER_STARTED:
+                threading.Thread(
+                    target=_vizdoom_window_hider, name="vizdoom-window-hider", daemon=True
+                ).start()
+                _HIDER_STARTED = True
 
 
 def _make_vizdoom_env(gym_id: str, render_mode: str = "rgb_array") -> gym.Env:
@@ -140,7 +186,7 @@ def _make_vizdoom_env(gym_id: str, render_mode: str = "rgb_array") -> gym.Env:
         gymnasium_wrapper,  # noqa: F401 — import side effect registers the Vizdoom* ids
     )
 
-    silence_vizdoom_window()  # no on-screen window flash when the ZDoom engine inits (Windows)
+    silence_vizdoom_window()  # hide the ZDoom window this init pops up on Windows (see block comment)
     env = gym.make(gym_id, render_mode=render_mode, frame_skip=_VIZDOOM_FRAME_SKIP)
     env = _VizdoomScreen(env)
     return WarpFrame(env, width=_VIZDOOM_FRAME, height=_VIZDOOM_FRAME)

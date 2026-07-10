@@ -106,7 +106,7 @@ def make_env(
 
         from app.envs.image_vec import silence_vizdoom_window
 
-        silence_vizdoom_window()  # headless SDL → no window flash on game.init() (Windows), G8b
+        silence_vizdoom_window()  # hide the ZDoom window this game.init() pops up on Windows, G8b
 
     kwargs: dict[str, Any] = {}
     if spec is not None:
