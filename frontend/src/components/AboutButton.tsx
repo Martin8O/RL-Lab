@@ -14,6 +14,9 @@ export const APP_VERSION = '1.0.0'
 
 const GITHUB_URL = 'https://github.com/Martin8O'
 const WEBSITE_URL = 'http://svobodamartin.dev/'
+// A quiet, optional support link (kept out of the main app UI — the tool stays clean; funding CTAs
+// live on the marketing site). Goes live once GitHub Sponsors is enabled on the account.
+const SPONSOR_URL = 'https://github.com/sponsors/Martin8O'
 
 const InfoIcon = (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
@@ -144,6 +147,20 @@ function AboutModal({ onClose }: { onClose: () => void }) {
               <LinkPill href={WEBSITE_URL} icon={GlobeIcon} label={t('about.website')} sub="svobodamartin.dev" />
               <LinkPill href={GITHUB_URL} icon={GithubIcon} label={t('about.github')} sub="github.com/Martin8O" />
             </div>
+
+            {/* A light, optional support line — a muted note with an inline sponsor link (not a button, so
+                the app stays clean). The link goes live once GitHub Sponsors is enabled (R3). */}
+            <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.6 }}>
+              {t('about.support_note')}{' '}
+              <a
+                href={SPONSOR_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ color: 'var(--text-strong)', fontWeight: 'var(--fw-medium)', textDecoration: 'none', whiteSpace: 'nowrap' }}
+              >
+                {t('about.sponsor')} →
+              </a>
+            </p>
           </div>
 
           <div style={{ height: 1, background: 'var(--border-default)' }} />
