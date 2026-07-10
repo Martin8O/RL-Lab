@@ -1,0 +1,12 @@
+# GitHub "Sponsor" button config. https://docs.github.com/sponsors/sponsoring-open-source/funding-file
+#
+# NOTE: the `github:` line below only lights up the Sponsor button once GitHub Sponsors is enabled
+# on the account (Settings -> Sponsors -> join the program; needs bank/Stripe). Until then GitHub
+# simply hides the button. The other platforms are left commented out — uncomment and fill in a
+# handle when/if you set one up (a low-key tip-jar; keep it secondary to Sponsors).
+
+github: Martin8O
+
+# ko_fi: your_handle              # https://ko-fi.com/<handle>
+# buy_me_a_coffee: your_handle    # https://www.buymeacoffee.com/<handle>
+# custom: ["https://..."]         # any other donate URL

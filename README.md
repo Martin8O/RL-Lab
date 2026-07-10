@@ -27,6 +27,7 @@
   <img alt="9 algorithms" src="https://img.shields.io/badge/algorithms-9-6e7bff">
   <img alt="tests" src="https://img.shields.io/badge/tests-421%20py%20%C2%B7%2074%20ts-3fb950">
   <img alt="i18n" src="https://img.shields.io/badge/CZ%20%2F%20EN-bilingual-e3b341">
+  <img alt="License AGPL-3.0" src="https://img.shields.io/badge/license-AGPL--3.0-4c1">
 </p>
 
 ---
@@ -217,6 +218,7 @@ py -3.11 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
 pip install -r backend/requirements.txt
+pip install -r backend/requirements-atari.txt      # optional: enables the 64 Atari envs (GPL ale-py)
 pip install ruff mypy pytest                       # dev tools
 # GPU: swap the torch wheels to the CUDA 12.8 (Blackwell) index
 pip install --index-url https://download.pytorch.org/whl/cu128 torch
@@ -317,5 +319,25 @@ and the [`rliable`](https://github.com/google-research/rliable) methodology (Aga
 
 ## License
 
-© 2026 Martin Svoboda. Private project — not yet open-sourced; all rights reserved. (An OSS license +
-contributor guide are planned for a public release.)
+Licensed under the **GNU Affero General Public License v3.0** (AGPL-3.0) — see [`LICENSE`](LICENSE).
+
+© 2026 Martin Svoboda.
+
+The AGPL keeps the project open for everyone (learn, teach, self-host, modify) while requiring that
+anyone who runs a modified version as a network service shares their changes back — a strong-copyleft
+choice suited to an educational commons. If you need different terms, reach out.
+
+### Atari environments — optional, not distributed
+
+The 64 Atari (ALE) environments require the **optional** [`ale-py`](https://github.com/Farama-Foundation/Arcade-Learning-Environment)
+package, which is deliberately **not** a dependency of this project — it is not installed by
+`backend/requirements.txt`. To enable Atari, install it yourself:
+
+```powershell
+pip install -r backend/requirements-atari.txt   # (or: pip install ale-py)
+```
+
+Everything else — ~45 environments across Classic Control, Box2D, Toy Text, MiniGrid, MuJoCo,
+board games, and multi-agent — runs with no extra install. **RL&nbsp;Lab ships no game ROMs**; `ale-py`
+supplies its own under its own terms. This project is not affiliated with or endorsed by Atari or the
+Farama Foundation.

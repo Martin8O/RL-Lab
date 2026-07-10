@@ -1,0 +1,14 @@
+# Optional Atari (ALE) support — NOT installed by default.
+#
+# Why it is separate: `ale-py` is licensed GPL-2.0 and bundles copyrighted Atari game ROMs. To keep
+# the default install and any distributed build free of GPL code and third-party ROMs, Atari is opt-in.
+# Installing this file is your own action: you obtain `ale-py` (and the ROMs it bundles) from the
+# official Farama Foundation package under its own terms. RL Lab neither ships nor redistributes ROMs.
+#
+# Enable the 64 Atari environments:
+#   pip install -r backend/requirements-atari.txt
+#
+# The app runs fine without it — the ~45 non-Atari environments need no extra install, and the lazy
+# `import ale_py` only fires when an Atari env is actually built.
+
+ale-py==0.12.0

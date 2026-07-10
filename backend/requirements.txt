@@ -45,7 +45,11 @@ websockets==16.0
 
 # --- ML stack (A1) ---
 absl-py==2.4.0
-ale-py==0.12.0
+# NOTE: ale-py (the Atari/ALE backend) is intentionally NOT pinned here — it is GPL-licensed and
+# bundles copyrighted game ROMs, so it is kept OUT of the default install and OUT of any distributed
+# build. The 64 Atari envs are opt-in: `pip install -r backend/requirements-atari.txt`. All other
+# ~45 environments work without it. The lazy `import ale_py` in envs/atari.py + factory.py only runs
+# when an Atari env is actually built, so a fresh install with no ale-py starts and runs fine.
 box2d==2.3.10
 cloudpickle==3.1.2
 colorama==0.4.6
