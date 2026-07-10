@@ -104,6 +104,10 @@ def make_env(
     if gid.startswith("Vizdoom"):
         from vizdoom import gymnasium_wrapper  # noqa: F401 — side effect registers the Vizdoom* ids
 
+        from app.envs.image_vec import silence_vizdoom_window
+
+        silence_vizdoom_window()  # headless SDL → no window flash on game.init() (Windows), G8b
+
     kwargs: dict[str, Any] = {}
     if spec is not None:
         kwargs.update(spec.make_kwargs)

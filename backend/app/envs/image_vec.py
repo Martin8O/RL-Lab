@@ -25,6 +25,7 @@ colour frame for the JPEG even though the CnnPolicy consumes the stacked tensor.
 
 from __future__ import annotations
 
+import os
 from typing import TYPE_CHECKING, Any
 
 # gymnasium is imported at module level (the VizDoom screen wrapper subclasses gym.ObservationWrapper,
@@ -109,6 +110,23 @@ class _VizdoomScreen(gym.ObservationWrapper):
         return observation["screen"]
 
 
+def silence_vizdoom_window() -> None:
+    """Force SDL into its headless ``dummy`` video driver before any ZDoom engine starts.
+
+    The Gymnasium wrapper already calls ``set_window_visible(False)``, but on Windows SDL still
+    creates the window *shown* and hides it a frame later, so a ViZDoom window flashes on screen
+    each time ``game.init()`` runs (every env build — trainer workers, preview/AI-play, human play,
+    the test suite). ``SDL_VIDEODRIVER=dummy`` makes SDL never open a real window at all.
+
+    Proven safe (``Local/_probe_doom_window.py``): ViZDoom renders its ``screen_buffer`` via its own
+    offscreen GL path, so the observation + ``rgb_array`` frame are **bit-identical** with the dummy
+    driver — the server never shows a real window for *any* env (all frames are streamed as JPEG), so
+    this only removes the flash. ``setdefault`` keeps any explicit override intact; setting it before
+    ``gym.make`` also reaches the ``SubprocVecEnv`` trainer workers (each re-runs this on build).
+    """
+    os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
+
+
 def _make_vizdoom_env(gym_id: str, render_mode: str = "rgb_array") -> gym.Env:
     """One fully-wrapped VizDoom env — module-level so it stays picklable for ``SubprocVecEnv``.
 
@@ -122,6 +140,7 @@ def _make_vizdoom_env(gym_id: str, render_mode: str = "rgb_array") -> gym.Env:
         gymnasium_wrapper,  # noqa: F401 — import side effect registers the Vizdoom* ids
     )
 
+    silence_vizdoom_window()  # no on-screen window flash when the ZDoom engine inits (Windows)
     env = gym.make(gym_id, render_mode=render_mode, frame_skip=_VIZDOOM_FRAME_SKIP)
     env = _VizdoomScreen(env)
     return WarpFrame(env, width=_VIZDOOM_FRAME, height=_VIZDOOM_FRAME)
