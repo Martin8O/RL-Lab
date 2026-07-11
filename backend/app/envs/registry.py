@@ -670,6 +670,11 @@ def _bipedal_spec(
         obs_type="vector",
         action_space="box",  # continuous Box(4): four leg-joint torques — the G1b seam
         supported_algos=["ppo", "sac", "td3"],  # PPO + SAC + TD3 (S5a/S5b); evolution opted out (hard 4-DoF)
+        # ★ SAC, not PPO (#2a audit): on BipedalWalker the off-policy methods are ~10× more sample-efficient
+        # — SAC solves it in ~500k steps vs PPO's 5M (the offpolicy_total_timesteps vs default_total_timesteps
+        # gap says the same). Forcing PPO on a newcomer (Simple mode locks in recommended_algo) would mean
+        # minutes of training for no visible gait; SAC gives a walking robot far sooner.
+        recommended_algo="sac",
         hyperparams=_standard_hyperparams(),
         make_kwargs=make_kwargs,
         solved_score=300.0,  # BipedalWalker-v3 reward_threshold (walk smoothly to the far end)
@@ -820,6 +825,13 @@ register(
         obs_type="vector",
         action_space="discrete",
         supported_algos=["ppo", "neuroevolution", "dqn", "a2c", "qrdqn"],  # dqn (S5c) + qrdqn (S5e) value-based; a2c on-policy actor-critic (S5d)
+        # ★ DQN, not PPO (#2a audit, empirically measured): MountainCar is the textbook exploration trap
+        # for vanilla policy-gradient — the reward is -1/step and the flag is almost never reached by
+        # chance early on, so PPO gets no learning signal. A venv probe (Local/_probe_mountaincar.py):
+        # PPO@200k → mean -200.0 (never once reaches the flag), the rl-zoo3-tuned DQN@120k → mean -112
+        # (essentially solved, in less wall-clock). Forcing PPO in Simple mode would show a newcomer a
+        # train that learns nothing; DQN (its ★ tuned recipe already lives in _DQN_TUNED) actually solves it.
+        recommended_algo="dqn",
         hyperparams=_standard_hyperparams(),
         solved_score=-110.0,  # MountainCar-v0 reward_threshold; reward is -1/step (max 200 steps)
         min_score=-200.0,  # 0% reference: never reaching the flag = -1 × 200 steps (worst case)
