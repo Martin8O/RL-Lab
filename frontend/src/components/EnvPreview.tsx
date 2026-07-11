@@ -63,6 +63,14 @@ export default function EnvPreview() {
   const speed         = useAppStore((s) => s.speed)
   const setVisual     = useAppStore((s) => s.setVisual)
   const setSpeed      = useAppStore((s) => s.setSpeed)
+  const attemptMode   = useAppStore((s) => s.attemptMode)
+  const setAttemptMode = useAppStore((s) => s.setAttemptMode)
+  // Live training-step sources for the "Real" counter mode — every algo streams `timesteps`, on its
+  // own frame type, so pick by algo/family (mirrors RewardChart's derivation).
+  const lastProgress  = useAppStore((s) => s.lastProgress)
+  const lastEvolution = useAppStore((s) => s.lastEvolution)
+  const lastQLearning = useAppStore((s) => s.lastQLearning)
+  const lastMa        = useAppStore((s) => s.lastMa)
   const trainState    = useAppStore((s) => s.trainState)
   const backendStatus = useAppStore((s) => s.backendStatus)
   const selectedEnvId = useAppStore((s) => s.selectedEnvId)
@@ -105,6 +113,20 @@ export default function EnvPreview() {
   // True once a frame has actually arrived this session — lets a finished session linger, but
   // falls back to the idle (centred) cart after a reload that reconciled a finished session.
   const [hasFrame, setHasFrame] = useState(false)
+  // "New attempt" badge (betatester #3): shows the attempt number in the stage corner while a
+  // *training-preview* episode keeps resetting, so a layman can tell the agent failed and starts over.
+  // Only training/watch frames carry `episode` (PlayFrame doesn't), so a human game never triggers it.
+  // Fast-failing envs (Toy Text: FrozenLake/Blackjack/CliffWalking — episodes of a few steps, or any
+  // run at high preview speed) reset faster than the badge's lifetime, so it must NOT re-pop per reset
+  // (that strobes). Instead it pops in ONCE, then sits calm while the counter climbs, and fades out a
+  // beat after resets stop. `key` bumps only on a fresh appearance (after a hidden gap), never mid-burst.
+  const [resetFlash, setResetFlash] = useState<{ n: number; key: number; leaving: boolean } | null>(null)
+  const lastEpisodeRef  = useRef<number | null>(null)  // last streamed episode, to detect an increment
+  const attemptModeRef  = useRef(attemptMode)          // mirror for the frame handler (avoids a stale closure)
+  const flashKeyRef     = useRef(0)                    // bumped only when the badge appears fresh
+  const flashVisibleRef = useRef(false)                // is the badge currently shown?
+  const flashHideRef    = useRef<number | null>(null)  // timer: start fade-out after resets go quiet
+  const flashDropRef    = useRef<number | null>(null)  // timer: unmount once the fade-out finishes
   // Fullscreen state of the stage box (Esc exits natively); tracked so the toggle's icon flips.
   const [isFullscreen, setIsFullscreen] = useState(false)
 
@@ -153,6 +175,9 @@ export default function EnvPreview() {
   // Board games (G6a) re-render declaratively from the streamed BoardState (low-frequency turn-based
   // moves), tagged with the env it belongs to so a stale board never flashes after an env switch.
   const [boardFrame, setBoardFrame] = useState<{ envId: string; board: BoardState } | null>(null)
+
+  // Keep the frame handler's view of the counter mode current without re-subscribing that effect.
+  useEffect(() => { attemptModeRef.current = attemptMode }, [attemptMode])
 
   // Sync persisted toggle/speed to the backend whenever it comes online (UI is source of truth).
   useEffect(() => {
@@ -329,7 +354,36 @@ export default function EnvPreview() {
         ctx.strokeStyle = edge; ctx.lineWidth = 2; ctx.stroke()
       }
     }
+    // Show/refresh the "new attempt" badge on a training-preview episode reset. Only PreviewFrame
+    // carries `episode` (a human PlayFrame doesn't), so this fires for training + AI-watch, never human
+    // play. The badge pops in once, then just updates its number on each further reset (no re-pop, so a
+    // fast-resetting env doesn't strobe); it fades out ~1.2 s after the last reset.
+    const flashReset = (n: number) => {
+      if (flashDropRef.current !== null) { clearTimeout(flashDropRef.current); flashDropRef.current = null }
+      if (!flashVisibleRef.current) flashKeyRef.current += 1  // fresh appearance → replay the pop-in
+      flashVisibleRef.current = true
+      setResetFlash({ n, key: flashKeyRef.current, leaving: false })
+      if (flashHideRef.current !== null) clearTimeout(flashHideRef.current)
+      flashHideRef.current = window.setTimeout(() => {
+        setResetFlash((f) => (f ? { ...f, leaving: true } : null))  // begin fade-out
+        flashDropRef.current = window.setTimeout(() => {
+          flashVisibleRef.current = false
+          setResetFlash(null)
+        }, 260)
+      }, 1200)
+    }
     const onFrame = (frame: PreviewFrame | PlayFrame) => {
+      if (frame.type === 'frame') {
+        // The backend's `restarts` counter is the attempt signal — fresh episodes for every env PLUS,
+        // for a Toy Text grid, each mid-episode return to start (CliffWalking cliff-falls). It's counted
+        // per step server-side (accurate at any speed), so we just flash when it climbs. Board / MA
+        // frames carry no `restarts`, so fall back to `episode` there.
+        const count = frame.restarts ?? frame.episode
+        const last = lastEpisodeRef.current
+        // Only the "Preview" mode flashes on attempts; "Real" mode shows a persistent step counter instead.
+        if (last !== null && count > last && attemptModeRef.current === 'preview') flashReset(count)
+        lastEpisodeRef.current = count
+      }
       // Multi-agent swarm (MPE): draw all agents + landmarks to the canvas from the streamed state.
       if (clientKind === 'mpe') {
         if (frame.agents) {
@@ -375,9 +429,17 @@ export default function EnvPreview() {
         img.src = `data:image/jpeg;base64,${frame.image}`
       }
     }
+    lastEpisodeRef.current = null  // fresh env → don't flash on its first streamed episode
     setFrameHandler(onFrame)
     setPlayFrameHandler(onFrame)
-    return () => { setFrameHandler(null); setPlayFrameHandler(null) }
+    return () => {
+      setFrameHandler(null)
+      setPlayFrameHandler(null)
+      if (flashHideRef.current !== null) clearTimeout(flashHideRef.current)
+      if (flashDropRef.current !== null) clearTimeout(flashDropRef.current)
+      flashVisibleRef.current = false
+      setResetFlash(null)  // in a cleanup fn (allowed) — drop any badge when the env switches
+    }
   }, [clientKind, selectedEnvId])
 
   // When nothing is live, reset to a resting pose (drop the last streamed transform): the cart
@@ -402,6 +464,9 @@ export default function EnvPreview() {
       // Multi-agent swarm: wipe the canvas back to an empty arena when nothing is live.
       const sc = swarmCanvasRef.current
       sc?.getContext('2d')?.clearRect(0, 0, sc.width, sc.height)
+      // Nothing streaming → drop the attempt tracking so a same-env restart doesn't flash on its first
+      // episode. Any visible badge hides itself via its already-scheduled timer (frames have stopped).
+      lastEpisodeRef.current = null
     }
   }, [live, clientKind])
 
@@ -618,6 +683,18 @@ export default function EnvPreview() {
 
   const hint = visual ? t('envpreview.idle_hint') : t('envpreview.visual_off_hint')
 
+  // "Real" counter mode: the live training-step count. Every algo streams `timesteps` on its own frame
+  // type, so pick by family/algo (mirrors RewardChart). Grouped for readability (locale-aware: CZ uses
+  // spaces) and the font shrinks as the number grows, so a big count stays a tidy pill, not a banner.
+  const liveSteps =
+    selectedFamily === 'petting_zoo' ? lastMa?.timesteps
+    : algo === 'neuroevolution' ? lastEvolution?.timesteps
+    : algo === 'q_learning' ? lastQLearning?.timesteps
+    : lastProgress?.timesteps  // PPO / off-policy / board (AlphaZero) all feed the 1 Hz progress frame
+  const groupLocale = locale === 'cz' ? 'cs-CZ' : 'en-US'
+  const counterFont = (text: string) =>
+    text.length <= 4 ? 'var(--fs-meta)' : text.length <= 7 ? '10px' : text.length <= 9 ? '9px' : '8px'
+
   // Grid board to draw: the live streamed one (only if it belongs to the selected env), else the
   // default board with the agent at its start — mirrors how the physics stages reset when idle.
   const gridData = live && gridFrame && gridFrame.envId === selectedEnvId ? gridFrame : null
@@ -733,6 +810,36 @@ export default function EnvPreview() {
         })()}
 
         <div style={{ flex: 1 }} />
+
+        {/* "New attempt" counter mode toggle (betatester #3): Preview (attempts shown here) vs Real (live
+            training steps). Only while a run is live — it drives the badge over the stage. ⓘ explains it. */}
+        {runLive && (
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+            <div role="group" aria-label={t('envpreview.counter_mode')} style={{
+              display: 'inline-flex', height: 'var(--control-sm)', alignItems: 'stretch',
+              border: '1px solid var(--border-default)', borderRadius: 'var(--radius-md)', overflow: 'hidden',
+            }}>
+              {(['real', 'preview'] as const).map((m) => {
+                const active = attemptMode === m
+                return (
+                  <button
+                    key={m} type="button" aria-pressed={active}
+                    onClick={() => setAttemptMode(m)}
+                    style={{
+                      padding: '0 9px', border: 'none', cursor: 'pointer',
+                      fontSize: 'var(--fs-label)', fontWeight: 'var(--fw-medium)',
+                      background: active ? 'var(--accent-surface)' : 'transparent',
+                      color: active ? 'var(--accent)' : 'var(--text-muted)', transition: 'var(--t-colors)',
+                    }}
+                  >
+                    {t(m === 'preview' ? 'envpreview.counter_preview' : 'envpreview.counter_real')}
+                  </button>
+                )
+              })}
+            </div>
+            <ParamInfo paramId="attempt_counter" label={t('envpreview.counter_mode')} />
+          </div>
+        )}
 
         {/* Visual on/off — quiet (surface, never a bright fill); the eye carries the accent */}
         <button
@@ -910,6 +1017,50 @@ export default function EnvPreview() {
             ⌨ {t('play.playing_hint')}
           </div>
         )}
+
+        {/* "New attempt" counter badge (betatester #3), top-left of the stage. Two modes (header toggle):
+            PREVIEW flashes "↻ New attempt · N" on each preview reset (the attempts you can see here — pops
+            in once, NOT per reset, so a fast env doesn't strobe; fades out a beat after resets stop; never
+            during human play, PlayFrame has no episode). REAL shows a persistent live count of training
+            steps while a run is active — the true scale, independent of the slow preview. Big numbers get
+            a smaller font (counterFont) so they stay a tidy pill. */}
+        {attemptMode === 'preview' && resetFlash !== null && (() => {
+          const num = resetFlash.n.toLocaleString(groupLocale)
+          return (
+            <div key={resetFlash.key} className={`reset-badge glass${resetFlash.leaving ? ' is-leaving' : ''}`} aria-hidden style={{
+              position: 'absolute', top: 12, left: 12, zIndex: 2,
+              display: 'inline-flex', alignItems: 'center', gap: 6,
+              padding: '4px 11px', borderRadius: 'var(--radius-pill)',
+              background: 'var(--surface-glass)', border: '1px solid var(--border-default)',
+              color: 'var(--text-strong)', boxShadow: 'var(--shadow-sm)',
+              fontSize: 'var(--fs-meta)', fontWeight: 'var(--fw-semibold)', pointerEvents: 'none',
+            }}>
+              <span aria-hidden>↻</span>
+              {t('envpreview.new_attempt')}
+              <span style={{ fontFamily: 'var(--font-mono)', fontFeatureSettings: 'var(--ff-tabular)', color: 'var(--text-muted)', fontSize: counterFont(num) }}>
+                · {num}
+              </span>
+            </div>
+          )
+        })()}
+        {attemptMode === 'real' && runLive && liveSteps != null && (() => {
+          const num = liveSteps.toLocaleString(groupLocale)
+          return (
+            <div className="reset-badge glass" aria-hidden style={{
+              position: 'absolute', top: 12, left: 12, zIndex: 2,
+              display: 'inline-flex', alignItems: 'center', gap: 6,
+              padding: '4px 11px', borderRadius: 'var(--radius-pill)',
+              background: 'var(--surface-glass)', border: '1px solid var(--border-default)',
+              color: 'var(--text-strong)', boxShadow: 'var(--shadow-sm)',
+              fontSize: 'var(--fs-meta)', fontWeight: 'var(--fw-semibold)', pointerEvents: 'none',
+            }}>
+              {t('envpreview.counter_steps')}
+              <span style={{ fontFamily: 'var(--font-mono)', fontFeatureSettings: 'var(--ff-tabular)', color: 'var(--text-muted)', fontSize: counterFont(num) }}>
+                · {num}
+              </span>
+            </div>
+          )
+        })()}
 
         {/* Skill meter floats as an overlay at the bottom of the stage (no footer row) — shown only
             while a play session is the live context, so it doesn't steal space from the panels below. */}

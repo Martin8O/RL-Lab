@@ -367,6 +367,7 @@ interface AppState {
   activeTab:       ChartTab
   visual:          boolean    // env-preview frame streaming on/off
   speed:           number     // playback speed multiplier (1×–20×)
+  attemptMode:     'preview' | 'real'  // "New attempt" counter: preview restarts vs real training steps
   playMode:        PlayMode   // E2: who plays — human at the keyboard ↔ AI watch
   playSpeed:       number     // E2: play-session pacing (0.1×–20×; slow-mo for humans)
   playerName:      string     // E2: last name used for a human leaderboard entry
@@ -437,6 +438,7 @@ interface AppState {
   setActiveTab:       (t: ChartTab)                     => void
   setVisual:          (v: boolean)                      => void
   setSpeed:           (n: number)                       => void
+  setAttemptMode:     (m: 'preview' | 'real')           => void
   setTrainState:      (s: TrainState)                   => void
   addMetrics:         (m: TrainingMetrics)              => void
   setProgress:        (p: TrainingProgress)             => void
@@ -494,6 +496,7 @@ export const useAppStore = create<AppState>()(
       activeTab:       'reward',
       visual:          true,
       speed:           1,
+      attemptMode:     'real',
       playMode:        'human',
       playSpeed:       1,
       playerName:      '',
@@ -624,6 +627,7 @@ export const useAppStore = create<AppState>()(
       setActiveTab:      (activeTab)      => set({ activeTab }),
       setVisual:         (visual)         => set({ visual }),
       setSpeed:          (speed)          => set({ speed }),
+      setAttemptMode:    (attemptMode)    => set({ attemptMode }),
       setTrainState:     (trainState)     => set({ trainState }),
       setHwStats:        (lastHwStats)    => set({ lastHwStats }),
 
@@ -817,6 +821,7 @@ export const useAppStore = create<AppState>()(
         activeTab:       s.activeTab,
         visual:          s.visual,
         speed:           s.speed,
+        attemptMode:     s.attemptMode,
         playMode:        s.playMode,
         playSpeed:       s.playSpeed,
         playerName:      s.playerName,

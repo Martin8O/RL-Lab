@@ -41,6 +41,13 @@ class EnvSpec(BaseModel):
     # TimeLimit → a poor policy would loop forever). None = use the env's own TimeLimit. Play scales
     # this by play_step_scale like every other env.
     episode_step_limit: int | None = None
+    # Per-step reward at or below which the agent was sent back to the start WITHOUT the episode ending
+    # (CliffWalking: a cliff-fall costs −100 and teleports to the start, but `terminated` stays False).
+    # The preview counts each such step as a "New attempt" (betatester #3) on top of episode resets, so a
+    # layman sees the many mid-episode restarts a grid like CliffWalking produces. None = no such mechanic
+    # (every other env's restart == a real episode reset). Position can't detect it — a fall FROM the start
+    # cell is a start→start step with no visible move; only the reward reveals it.
+    restart_penalty: float | None = None
     # Turn-based human play: the agent advances one step per key press (grid-worlds), instead of the
     # loop stepping continuously at the render rate. The AI/preview still step continuously (paced by
     # speed). False = the usual real-time control (CartPole, LunarLander, …).
@@ -1128,6 +1135,7 @@ register(
         min_score=-200.0,
         default_total_timesteps=200_000,
         episode_step_limit=200,  # CliffWalking has NO native TimeLimit — cap it so a run can't hang
+        restart_penalty=-100.0,  # a cliff-fall (−100) sends the agent back to start mid-episode → count it
         play_step_scale=1,  # turn-based; 200 steps is ample to reach the goal by hand
         turn_based=True,
         human_playable=True,

@@ -112,6 +112,11 @@ class FrameMessage(BaseModel):
     episode: int
     step: int
     reward: float
+    # "New attempt" counter the client flashes on (betatester #3): every time the agent (re)starts from
+    # its start — a fresh episode for all envs, PLUS each mid-episode return to the start cell for a Toy
+    # Text grid (e.g. a CliffWalking cliff-fall, which does NOT end the episode). None on frames from the
+    # non-generic preview paths (board / multi-agent), where the client falls back to ``episode``.
+    restarts: int | None = None
     # Either a server-rendered image (width/height/image) OR client-render state — never both.
     width: int | None = None
     height: int | None = None

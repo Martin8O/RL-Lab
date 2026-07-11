@@ -349,6 +349,31 @@ export const PARAM_INFO: Record<string, ParamInfo> = {
         + 'rozpočet), ne proto, že by běžely na GPU.',
     },
   },
+  // "New attempt" counter mode toggle (betatester #3) — explains the preview-vs-real choice. Metric-only.
+  attempt_counter: {
+    general: {
+      en: '**What the little counter over the preview shows — and why you can switch it.**\n'
+        + '**Preview** counts the attempts you actually see here. The preview is a **separate, slower copy** '
+        + 'of the game, just for watching — so on some games it only manages a handful of tries. It flashes '
+        + '**↻ New attempt** each time the agent starts over, so you can see it fail and try again.\n'
+        + '**Real** shows the true scale of training instead: the total **steps** the agent has practiced. '
+        + 'The real training runs at full speed and out of sight, racking up thousands or millions of steps '
+        + 'while the on-screen preview plays one slow round.\n'
+        + '**Why they differ so much:** training is headless and fast; the preview is a slow window onto it. '
+        + 'On long games (like CliffWalking) the preview barely finishes one round, so its attempt count stays '
+        + 'tiny — switch to **Real** to see how much the agent has actually practiced.',
+      cz: '**Co ukazuje to malé počítadlo nad náhledem — a proč se dá přepnout.**\n'
+        + '**Náhled** počítá pokusy, které tady opravdu vidíš. Náhled je **samostatná, pomalejší kopie** hry, '
+        + 'jen na koukání — takže u některých her stihne jen pár pokusů. Blikne **↻ Nový pokus** pokaždé, když '
+        + 'agent začíná znovu, takže vidíš, jak selhal a zkouší to zas.\n'
+        + '**Skutečné** místo toho ukazuje pravý rozsah tréninku: celkový počet **kroků**, které agent '
+        + 'nacvičil. Skutečný trénink běží naplno a mimo obraz a nasčítá tisíce až miliony kroků, zatímco '
+        + 'náhled na obrazovce odehraje jedno pomalé kolo.\n'
+        + '**Proč se tak liší:** trénink je bez obrazu a rychlý; náhled je jen pomalé okénko do něj. U dlouhých '
+        + 'her (třeba CliffWalking) náhled sotva dohraje jedno kolo, takže jeho počet pokusů zůstane malý — '
+        + 'přepni na **Skutečné**, ať vidíš, kolik toho agent doopravdy nacvičil.',
+    },
+  },
   // Hardware monitor panel (G4b) — a read-only explainer for the live CPU/GPU readings floated on the
   // chart during a run. Metric-only (no recommended/range/perEnv), like training_device above.
   hw_stats: {

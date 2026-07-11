@@ -313,6 +313,19 @@
 @keyframes cp-sway { 0%, 100% { transform: rotate(-7deg); } 50% { transform: rotate(7deg); } }
 .cp-pole { transform-box: fill-box; transform-origin: bottom center; animation: cp-sway 3.6s var(--ease-in-out) infinite; }
 
+/* "New attempt" badge — shown in the stage corner while a training episode keeps resetting, so a
+   layman watching (e.g.) CartPole can see the pole fell and the agent is starting over. It pops in
+   ONCE and holds (entrance only — no built-in fade-out), so a fast-resetting env (FrozenLake etc.)
+   that resets faster than the badge's lifetime doesn't strobe: the element stays mounted and only
+   its counter updates. The component adds `.is-leaving` to fade it out a beat after resets stop. */
+@keyframes reset-in {
+  from { opacity: 0; transform: translateY(-4px) scale(0.92); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes reset-out { from { opacity: 1; } to { opacity: 0; } }
+.reset-badge { animation: reset-in 0.22s var(--ease-out) both; }
+.reset-badge.is-leaving { animation: reset-out 0.26s var(--ease-in) forwards; }
+
 /* ─────────────────────────────────────────────────────────────────────────
    RESET & BASE
    ───────────────────────────────────────────────────────────────────────── */

@@ -789,6 +789,10 @@ export interface PreviewFrame {
   episode: number
   step: number
   reward: number
+  /** "New attempt" counter the client flashes on (betatester #3): fresh episodes for every env PLUS,
+   *  for a Toy Text grid, each mid-episode return to the start cell (e.g. a CliffWalking cliff-fall,
+   *  which doesn't end the episode). Absent on board / multi-agent frames — fall back to `episode`. */
+  restarts?: number
   width?: number
   height?: number
   /** base64-encoded JPEG, no data-URI prefix (the client prepends it). */

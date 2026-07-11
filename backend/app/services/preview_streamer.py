@@ -229,10 +229,21 @@ class PreviewStreamer:
         send_interval = 1.0 / _SEND_FPS_CAP
         episode = 0
         last_sent = 0.0
+        # ``restarts`` = the "New attempt" counter the client flashes on (betatester #3). It counts every
+        # time the agent (re)starts from the beginning: a fresh episode for ALL envs, PLUS — for an env
+        # with a ``restart_penalty`` (CliffWalking) — each *within-episode* teleport back to start. On
+        # CliffWalking a cliff-fall costs −100 and returns the agent to start but does NOT end the episode
+        # (terminated stays False), so an episode-only counter would miss the very thing a layman reads as
+        # "failed and started over". The reward is the reliable signal — position can't see a fall FROM the
+        # start cell (a start→start step). Counting per step here (not client-side) is accurate: the client
+        # only samples ~30 fps and would undercount the hundreds of falls a fast run produces.
+        restarts = 0
+        restart_penalty = spec.restart_penalty if spec is not None else None
         try:
             while self._active_and_visual():
                 episode += 1
                 obs, _ = env.reset()
+                restarts += 1  # a new episode = a new attempt from the start
                 ep_reward = 0.0
                 step = 0
                 done = False
@@ -245,11 +256,15 @@ class PreviewStreamer:
                     ep_reward += float(reward)
                     step += 1
                     done = bool(terminated or truncated)
+                    # A penalty teleport back to start mid-episode (CliffWalking cliff-fall) is a "new
+                    # attempt" too, even though the episode continues.
+                    if restart_penalty is not None and not done and float(reward) <= restart_penalty:
+                        restarts += 1
 
                     now = time.monotonic()
                     if now - last_sent >= send_interval or done:
                         last_sent = now
-                        self._emit_frame(env, episode, step, ep_reward, obs, action)
+                        self._emit_frame(env, episode, step, ep_reward, obs, action, restarts)
 
                     time.sleep(base_dt / self._current_speed())
         finally:
@@ -588,15 +603,18 @@ class PreviewStreamer:
             }
         )
 
-    def _emit_frame(self, env: Any, episode: int, step: int, reward: float, obs: Any, action: Any) -> None:
+    def _emit_frame(
+        self, env: Any, episode: int, step: int, reward: float, obs: Any, action: Any, restarts: int
+    ) -> None:
         # Client-rendered envs draw from raw state — skip rgb render + JPEG. ``action`` (the discrete
         # action just applied, or None) lets the client draw the firing thruster (LunarLander plumes).
+        # ``restarts`` is the "New attempt" counter the client flashes on (episodes + grid start-returns).
         act = int(action) if isinstance(action, (int, np.integer)) else None
         state = client_state(env, obs)
         if state is not None:
             frame = {
                 "type": "frame", "episode": episode, "step": step,
-                "reward": reward, "state": state, "action": act,
+                "reward": reward, "state": state, "action": act, "restarts": restarts,
             }
             scene = terrain(env)  # LunarLander streams its real moon surface; None elsewhere
             if scene is not None:
@@ -622,6 +640,7 @@ class PreviewStreamer:
                 "width": width,
                 "height": height,
                 "image": image,
+                "restarts": restarts,
             }
         )
 

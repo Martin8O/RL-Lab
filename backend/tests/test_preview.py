@@ -41,6 +41,30 @@ def test_streamer_state_defaults_and_clamps() -> None:
     assert streamer.set_visual(True).visual is True
 
 
+def test_cliffwalking_restart_penalty_matches_the_cliff_fall() -> None:
+    """The "New attempt" restart counter (betatester #3) counts mid-episode cliff-falls via the reward,
+    so the CliffWalking spec's ``restart_penalty`` must equal the actual cliff-fall reward. A real step
+    onto the cliff teleports the agent back to start at exactly that penalty WITHOUT ending the episode
+    (an episode-only counter would miss it). If a future gymnasium changes either, this fails loudly.
+    """
+    import gymnasium as gym
+    from app.envs.registry import get_env
+
+    spec = get_env("cliffwalking")
+    assert spec is not None and spec.restart_penalty == -100.0
+
+    env = gym.make("CliffWalking-v1")
+    try:
+        start, _ = env.reset(seed=0)
+        obs, reward, terminated, truncated, _ = env.step(1)  # step RIGHT off the start into the cliff
+    finally:
+        env.close()
+
+    assert obs == start  # teleported back to the start cell
+    assert reward == spec.restart_penalty  # ...at exactly the spec's restart penalty
+    assert not terminated and not truncated  # ...but the episode continues (why position alone misses it)
+
+
 def test_render_real_cartpole_frame() -> None:
     """A real CartPole rgb_array render encodes to a non-trivial JPEG of matching size."""
     import gymnasium as gym
