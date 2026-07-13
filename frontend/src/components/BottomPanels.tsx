@@ -436,6 +436,21 @@ function BlankPanel({ flex = 1, borderRight = true }: { flex?: number; borderRig
 export default function BottomPanels() {
   const showEvoLeaderboard = useShowEvoLeaderboard()
   const isQ = useAppStore((s) => s.algo === 'q_learning')
+  const simple = useAppStore((s) => s.mode === 'simple')
+
+  // #2b: Simple mode keeps only the High Scores (Human + AI play boards) — the scientist panels
+  // (Evolution Stats, the Q-table heatmap, the evolution leaderboard) are hidden. The play boards
+  // span the full width so the newcomer sees their record and the AI's, nothing more.
+  if (simple) {
+    return (
+      <div style={{
+        height: 200, flexShrink: 0, display: 'flex',
+        borderTop: '2px solid var(--border-default)',
+      }}>
+        <PlayLeaderboards />
+      </div>
+    )
+  }
 
   // Q-learning mode: the Q-table heatmap takes over the Evolution Stats slot AND the bottom-right
   // blank slot (the user's ask), so a big table has room. The leaderboard slot keeps its width.

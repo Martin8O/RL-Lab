@@ -17,6 +17,7 @@ import RewardChart from './components/RewardChart'
 import BottomPanels from './components/BottomPanels'
 import PlayScoreGate from './components/PlayScoreGate'
 import AnalysisSurface from './components/analysis/AnalysisSurface'
+import ModeChooser from './components/ModeChooser'
 
 export default function App() {
   const { locale, theme, backendStatus, setEnvs, setSelectedEnvId, setHighScores } = useAppStore()
@@ -94,6 +95,8 @@ export default function App() {
       <PlayScoreGate />
       {/* X6: fullscreen DataLab research surface — a portal over the dashboard (self-gates on analysisOpen). */}
       <AnalysisSurface />
+      {/* #2b: first-launch mode chooser — a portal over everything until the user picks Simple/Advanced. */}
+      <ModeChooser />
     </div>
   )
 }

@@ -37,6 +37,9 @@ export type Locale        = 'cz' | 'en'
 export type Theme         = 'dark' | 'light'
 export type BackendStatus = 'connecting' | 'online' | 'offline'
 export type ChartTab      = 'reward' | 'loss' | 'fitness'
+// #2b: the audience mode. `simple` = the guided "arcade" scene for newcomers (advanced controls
+// hidden, the ★ recommended algo forced); `advanced` = the full scientist UI (everything as before).
+export type AudienceMode  = 'simple' | 'advanced'
 
 // Cap on retained ~1 Hz progress frames (3 h of training); the chart's window control
 // still slices this down for display.
@@ -343,10 +346,35 @@ function envDefaults(
   }
 }
 
+// #2b (Simple mode): the state patch that forces the env's ★ recommended algorithm — the audited
+// `recommended_algo` (ADR-104). Simple mode hides the algo picker, so the algo must be snapped to the
+// recommendation on every env switch (and when entering Simple). Mirrors setAlgo: re-point the chart
+// tab to the tab that algo feeds, re-snap the step budget to that algo's ★, and (for the per-env-tuned
+// value-based algos) snap their sliders to THIS env's ★. AppState is only referenced as a type here
+// (hoisted), so declaring this above the interface is fine.
+function recommendedPatch(spec: EnvSpec | undefined, s: AppState): Partial<AppState> {
+  if (!spec) return {}
+  const algo = (spec.recommended_algo || spec.supported_algos[0] || 'ppo') as Algo
+  const d = envDefaults(spec, s)
+  const perEnvPatch =
+    algo === 'dqn'   ? (d ? { dqnParams: d.dqnParams } : {})
+    : algo === 'a2c'   ? (d ? { a2cParams: d.a2cParams } : {})
+    : algo === 'qrdqn' ? (d ? { qrdqnParams: d.qrdqnParams } : {})
+    : {}
+  return {
+    algo,
+    activeTab: (algo === 'neuroevolution' ? 'fitness' : 'reward') as ChartTab,
+    totalTimesteps: budgetFor(spec, algo),
+    ...perEnvPatch,
+  }
+}
+
 interface AppState {
   // ─ persisted ───────────────────────────────────────────────
   locale:          Locale
   theme:           Theme
+  mode:            AudienceMode   // #2b: simple (guided) ↔ advanced (full UI); persisted
+  modeChosen:      boolean        // #2b: has the user picked a mode? false ⇒ show the first-launch chooser
   selectedEnvId:   string | null
   algo:            Algo       // PPO ↔ neuroevolution ↔ Q-learning ↔ AlphaZero
   hyperparams:     PPOHyperparams
@@ -413,6 +441,7 @@ interface AppState {
   // ─ actions ────────────────────────────────────────────────
   setLocale:          (l: Locale)                       => void
   setTheme:           (t: Theme)                        => void
+  setMode:            (m: AudienceMode)                 => void
   setBackendStatus:   (s: BackendStatus)                => void
   setGpuAvailable:    (v: boolean)                      => void
   setAtariAvailable:  (v: boolean)                      => void
@@ -476,6 +505,8 @@ export const useAppStore = create<AppState>()(
     (set) => ({
       locale:          'en',
       theme:           'dark',
+      mode:            'simple',   // #2b: newcomers land in the guided scene; the chooser lets them switch
+      modeChosen:      false,      // #2b: no choice yet → first launch shows the mode chooser
       selectedEnvId:   null,
       algo:            'ppo',
       hyperparams:     DEFAULT_HYPERPARAMS,
@@ -538,6 +569,17 @@ export const useAppStore = create<AppState>()(
 
       setLocale:         (locale)         => set({ locale }),
       setTheme:          (theme)          => set({ theme }),
+      // #2b: switch audience mode (also records that a choice was made, so the first-launch chooser
+      // never reappears). Entering Simple snaps the algo to the env's ★ recommendation, since Simple
+      // hides the algo picker and must run the audited best default (ADR-104).
+      setMode:           (mode)           => set((s) => {
+        const patch: Partial<AppState> = { mode, modeChosen: true }
+        if (mode === 'simple') {
+          const spec = s.envs.find((e) => e.id === s.selectedEnvId)
+          Object.assign(patch, recommendedPatch(spec, s))
+        }
+        return patch
+      }),
       setBackendStatus:  (backendStatus)  => set({ backendStatus }),
       setGpuAvailable:   (gpuAvailable)   => set({ gpuAvailable }),
       setAtariAvailable: (atariAvailable) => set({ atariAvailable }),
@@ -548,16 +590,20 @@ export const useAppStore = create<AppState>()(
       setSelectedEnvId:  (selectedEnvId)  => set((s) => {
         const spec = s.envs.find((e) => e.id === selectedEnvId)
         const defaults = envDefaults(spec, s)
-        // Keep the algorithm valid for the new game: each env lists its supported_algos (an image
-        // env may be PPO-only), so if the current algo isn't supported, snap to the first allowed one
-        // (and re-point the chart tab, mirroring setAlgo).
+        // #2b: in Simple mode the algo picker is hidden, so every env switch forces that env's ★
+        // recommended algo (the audited best default, ADR-104) — algo + chart tab + budget snapped
+        // together. In Advanced we only keep the algorithm *valid*: each env lists its supported_algos
+        // (an image env may be PPO-only), so if the current algo isn't supported, snap to the first
+        // allowed one (and re-point the chart tab, mirroring setAlgo).
         const algoPatch =
-          spec && spec.supported_algos.length > 0 && !spec.supported_algos.includes(s.algo)
-            ? (() => {
-                const algo = spec.supported_algos[0] as Algo
-                return { algo, activeTab: (algo === 'neuroevolution' ? 'fitness' : 'reward') as ChartTab }
-              })()
-            : {}
+          s.mode === 'simple'
+            ? recommendedPatch(spec, s)
+            : spec && spec.supported_algos.length > 0 && !spec.supported_algos.includes(s.algo)
+              ? (() => {
+                  const algo = spec.supported_algos[0] as Algo
+                  return { algo, activeTab: (algo === 'neuroevolution' ? 'fitness' : 'reward') as ChartTab }
+                })()
+              : {}
         // Clear the previous run's chart/stats/skill when the game actually changes, so they don't
         // linger and get rescaled under the new game. The env selector is disabled during a run, so
         // this only fires between runs; a no-op re-select (same id) keeps the current results.
@@ -801,6 +847,8 @@ export const useAppStore = create<AppState>()(
       partialize: (s) => ({
         locale:          s.locale,
         theme:           s.theme,
+        mode:            s.mode,
+        modeChosen:      s.modeChosen,
         selectedEnvId:   s.selectedEnvId,
         algo:            s.algo,
         hyperparams:     s.hyperparams,

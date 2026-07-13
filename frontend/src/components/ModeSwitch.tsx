@@ -90,10 +90,24 @@ function Tab({ active, onClick, mark, label, ariaLabel }: {
   )
 }
 
-export default function ModeSwitch() {
+// `simple` (#2b): Simple mode hides the DataLab (a researcher surface, off the newcomer spine), so the
+// switcher collapses to just the RL Lab brand — the logo + title, non-interactive — keeping the header
+// identity without offering a view that isn't part of Simple.
+export default function ModeSwitch({ simple = false }: { simple?: boolean }) {
   const { t } = useTranslation()
   const open = useAppStore((s) => s.analysisOpen)
   const setOpen = useAppStore((s) => s.setAnalysisOpen)
+
+  if (simple) {
+    return (
+      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 9, padding: '0 4px', flexShrink: 0 }}>
+        <RlLabMark />
+        <span style={{ fontSize: 15, fontWeight: 'var(--fw-semibold)', letterSpacing: 'var(--ls-tight)', color: 'var(--text-strong)' }}>
+          {t('app.title')}
+        </span>
+      </div>
+    )
+  }
 
   return (
     <div

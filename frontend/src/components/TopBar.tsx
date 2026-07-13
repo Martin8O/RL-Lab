@@ -3,6 +3,7 @@ import { useAppStore } from '../store/useAppStore'
 import type { BackendStatus } from '../store/useAppStore'
 import ParamInfo from './ParamInfo'
 import ModeSwitch from './ModeSwitch'
+import ModeToggle from './ModeToggle'
 import LangThemeToggle from './LangThemeToggle'
 import AboutButton from './AboutButton'
 
@@ -68,6 +69,7 @@ function Chip({ label, value, title, accent, infoId, infoLabel }: {
 export default function TopBar() {
   const { t }  = useTranslation()
   const locale  = useAppStore((s) => s.locale)
+  const simple  = useAppStore((s) => s.mode === 'simple')  // #2b: Simple hides the raw training chips
 
   const algo            = useAppStore((s) => s.algo)
   const metricsHistory  = useAppStore((s) => s.metricsHistory)
@@ -104,8 +106,9 @@ export default function TopBar() {
       display: 'flex', alignItems: 'center', gap: 'var(--space-4)', padding: '0 var(--space-5)',
       background: 'var(--header-grad)', borderBottom: '2px solid var(--border-default)',
     }}>
-      {/* View switcher: RL Lab (dashboard) ⇆ DataLab (analysis surface). */}
-      <ModeSwitch />
+      {/* View switcher: RL Lab (dashboard) ⇆ DataLab (analysis surface). Simple mode collapses it to
+          the RL Lab brand (DataLab is Advanced-only). */}
+      <ModeSwitch simple={simple} />
 
       <div style={{ width: 1, height: 26, background: 'var(--border-default)' }} />
 
@@ -113,9 +116,11 @@ export default function TopBar() {
 
       <div style={{ flex: 1 }} />
 
+      {/* Raw training chips (Gen / Iter / Pop) are a scientist read — hidden in Simple; the ★ Best
+          chip stays (it's the newcomer-friendly "your record" number). */}
       <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
-        <Chip label={t('topbar.chips.gen')}  value={genValue}  infoId="topbar_gen" />
-        <Chip label={t('topbar.chips.iter')} value={iterValue} infoId="topbar_iter" />
+        {!simple && <Chip label={t('topbar.chips.gen')}  value={genValue}  infoId="topbar_gen" />}
+        {!simple && <Chip label={t('topbar.chips.iter')} value={iterValue} infoId="topbar_iter" />}
         <Chip
           label={`★ ${t('topbar.chips.best')}`}
           value={allTime !== undefined ? allTime.toFixed(1) : '—'}
@@ -124,10 +129,13 @@ export default function TopBar() {
           infoId="topbar_best"
           infoLabel={t('topbar.chips.best')}
         />
-        <Chip label={t('topbar.chips.pop')}  value={popValue} infoId="topbar_pop" />
+        {!simple && <Chip label={t('topbar.chips.pop')}  value={popValue} infoId="topbar_pop" />}
       </div>
 
       <div style={{ width: 1, height: 26, background: 'var(--border-default)' }} />
+
+      {/* #2b: the Simple ⇆ Advanced switch, always in reach. */}
+      <ModeToggle />
 
       <AboutButton />
       <LangThemeToggle />

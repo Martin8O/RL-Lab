@@ -6,7 +6,9 @@ import Sidebar from './Sidebar'
 
 describe('<Sidebar />', () => {
   beforeEach(() => {
-    useAppStore.setState({ envs: [cartpoleEnv], selectedEnvId: 'cartpole' })
+    // These cover the Advanced full-control UI (algo picker, hyperparameters, Run/sweep). The store
+    // now defaults to Simple (#2b), so pin Advanced here; the Simple layout has its own tests below.
+    useAppStore.setState({ envs: [cartpoleEnv], selectedEnvId: 'cartpole', mode: 'advanced', modeChosen: true })
   })
 
   it('renders the panel title and the algorithm options (a dropdown, env-gated)', () => {
@@ -62,5 +64,18 @@ describe('<Sidebar />', () => {
     useAppStore.setState({ envs: [], selectedEnvId: null })
     rerender(<Sidebar />)
     expect(screen.getByRole('button', { name: 'Run' })).toBeDisabled()
+  })
+
+  // #2b: Simple mode replaces the picker with a read-only algo badge, hides the hyperparameters, and
+  // offers a Quick-start button + friendly training-length instead of the raw step ladder.
+  it('Simple mode: forces the recommended algo as a badge, hides the picker + hyperparameters', () => {
+    useAppStore.setState({ mode: 'simple', modeChosen: true, algo: 'ppo' })
+    render(<Sidebar />)
+    // No algorithm dropdown, and no learning-rate slider.
+    expect(screen.queryByRole('combobox', { name: 'Algorithm' })).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Learning Rate')).not.toBeInTheDocument()
+    // Friendly training-length + Quick-start instead.
+    expect(screen.getByText('How long to train')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Quick-start' })).toBeEnabled()
   })
 })

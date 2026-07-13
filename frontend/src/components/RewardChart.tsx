@@ -596,6 +596,7 @@ function algoLabel(t: (k: string) => string, algo: string): string {
 export default function RewardChart() {
   const { t } = useTranslation()
 
+  const simple          = useAppStore((s) => s.mode === 'simple')  // #2b: one chart, plain status
   const algo            = useAppStore((s) => s.algo)
   const metricsHistory  = useAppStore((s) => s.metricsHistory)
   const progressHistory = useAppStore((s) => s.progressHistory)
@@ -885,12 +886,43 @@ export default function RewardChart() {
     return PAD.t + (1 - (chartGoal.value - min) / ((max - min) || 1)) * chartH
   })()
 
+  // #2b plain-language status (Simple mode): translate the raw skill % into one honest sentence above
+  // the chart, so a newcomer reads "how's it doing" without decoding a curve. Bands mirror the skill
+  // meter's spirit; before any data it invites the first run.
+  const statusKey =
+    !hasChart && !hasStats ? 'idle'
+    : solvePct == null      ? 'measuring'
+    : solvePct >= 100       ? 'mastered'
+    : solvePct >= 75        ? 'strong'
+    : solvePct >= 40        ? 'learning'
+    : solvePct >= 12        ? 'early'
+    : 'start'
+
   return (
     <section style={{
       flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden',
       background: 'var(--chart-plot-bg)',
     }}>
-      {/* Tab bar + chart controls (Smooth / Window) */}
+      {/* Tab bar + chart controls (Smooth / Window) — Advanced. Simple mode replaces this whole row
+          with a single plain-language status line (no tabs, no EMA/Window/Compare). */}
+      {simple ? (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 8, borderBottom: '1px solid var(--border-default)',
+          background: 'var(--header-grad)', flexShrink: 0, padding: '0 var(--space-4)',
+          minHeight: 'var(--panel-head-h)',
+        }}>
+          <span aria-hidden style={{
+            width: 7, height: 7, borderRadius: '50%', flexShrink: 0,
+            background: statusKey === 'mastered' ? 'var(--success)' : statusKey === 'idle' ? 'var(--text-faint)' : 'var(--accent)',
+          }} />
+          <span style={{ fontSize: 'var(--fs-sm)', fontWeight: 'var(--fw-medium)', color: 'var(--text-default)' }}>
+            {t(`mode.chart_status_${statusKey}`)}
+          </span>
+          <span style={{ display: 'inline-flex', alignItems: 'center' }}>
+            <ParamInfo paramId="reward" label={t('chart.tab_reward')} />
+          </span>
+        </div>
+      ) : (
       <div style={{
         display: 'flex', alignItems: 'center', borderBottom: '1px solid var(--border-default)',
         background: 'var(--header-grad)', flexShrink: 0, padding: '0 var(--space-3) 0 var(--space-1)',
@@ -991,6 +1023,7 @@ export default function RewardChart() {
           )}
         </div>
       </div>
+      )}
 
       {/* Chart area + skill meter — the meter reserves a strip BELOW the plot (not an overlay), so
           the chart shrinks to sit above it and the meter never covers the curve / x-axis / solved markers. */}

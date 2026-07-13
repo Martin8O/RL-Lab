@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import { useAppStore } from '../store/useAppStore'
 import { categoryLabel, categoryOrder } from '../content/envCategories'
+import { capabilityFor } from '../content/capabilities'
 
 // Game picker as a category → games flyout: the trigger lists the current game; clicking it opens a
 // panel of *categories* (the registry `family`), and hovering a category reveals its games to the
@@ -176,10 +177,20 @@ export default function EnvSelector({ disabled }: { disabled?: boolean }) {
                 className={locked ? undefined : (e.id === selectedEnvId ? 'menu-row is-selected' : 'menu-row')}
                 style={{ ...rowStyle(e.id === selectedEnvId, true), ...(locked ? lockedRow : null) }}
               >
-                <span style={ellipsis}>
+                <span style={{ ...ellipsis, flex: 1, minWidth: 0 }}>
                   {locked && <span aria-hidden style={{ marginRight: 5 }}>🔒</span>}
                   {e.display_name[locale]}
                 </span>
+                {/* #2b: capability badge — a quick "what can I do with this game?" read before clicking.
+                    Shown in both modes (useful everywhere; a scannable "solo / vs AI / watch" tag). */}
+                {!locked && (() => {
+                  const b = capabilityFor(e)
+                  return (
+                    <span style={capBadge} title={t(b.labelKey)}>
+                      <span aria-hidden>{b.icon}</span>{t(b.labelKey)}
+                    </span>
+                  )
+                })()}
                 {e.id === selectedEnvId && <span aria-hidden style={{ color: 'var(--accent)', fontSize: 11, flexShrink: 0 }}>✓</span>}
               </button>
               )
@@ -233,6 +244,13 @@ const triggerStyle: CSSProperties = {
   transition: 'var(--t-colors)',
 }
 const ellipsis: CSSProperties = { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }
+// #2b capability badge pill (🕹 solo / 🤖 vs AI / 👀 watch) — a quiet mono chip on the right of a game row.
+const capBadge: CSSProperties = {
+  flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 3,
+  padding: '0 6px', height: 16, borderRadius: 'var(--radius-pill)',
+  background: 'var(--surface-inset)', border: '1px solid var(--border-default)',
+  fontSize: 'var(--fs-micro)', color: 'var(--text-muted)', whiteSpace: 'nowrap',
+}
 // A locked row (R1: Atari with no ale-py) — greyed + not-allowed, no hover highlight (className is
 // dropped so the .menu-row :hover can't imply it's clickable).
 const lockedRow: CSSProperties = { opacity: 0.55, cursor: 'not-allowed', color: 'var(--text-faint)' }

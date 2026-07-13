@@ -6,7 +6,9 @@ import RewardChart from './RewardChart'
 
 describe('<RewardChart />', () => {
   beforeEach(() => {
-    useAppStore.setState({ envs: [cartpoleEnv], selectedEnvId: 'cartpole' })
+    // The tab bar is Advanced-only; Simple mode (the new default, #2b) shows a single plain-language
+    // status line instead. Pin Advanced for the tab tests; Simple has its own case below.
+    useAppStore.setState({ envs: [cartpoleEnv], selectedEnvId: 'cartpole', mode: 'advanced', modeChosen: true })
   })
 
   it('renders the Reward / Loss / Fitness tabs', () => {
@@ -33,5 +35,15 @@ describe('<RewardChart />', () => {
     expect(screen.getByText('Start training to see the live chart')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Loss' }))
     expect(screen.getByText("Q-learning doesn't use the Loss chart — see Reward")).toBeInTheDocument()
+  })
+
+  // #2b: Simple mode drops the tab bar + smoothing/window/compare controls for one plain status line.
+  it('Simple mode: hides the tabs and shows a plain-language status', () => {
+    useAppStore.setState({ mode: 'simple', modeChosen: true, algo: 'ppo' })
+    render(<RewardChart />)
+    expect(screen.queryByRole('button', { name: 'Reward' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Loss' })).not.toBeInTheDocument()
+    // With no data yet, the status invites the first run.
+    expect(screen.getByText('Press Quick-start to teach the AI this game.')).toBeInTheDocument()
   })
 })

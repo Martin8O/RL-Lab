@@ -5,6 +5,8 @@ import { useAppStore } from '../store/useAppStore'
 import { useRunControls } from '../api/trainingControls'
 import type { Algo } from '../api/types'
 import { formatCount } from '../format'
+import { TRAIN_LENGTHS, LENGTH_FACTOR, trainTier, needsPatience, TIER_DOT, type TrainLength } from '../content/trainingTime'
+import type { Difficulty } from '../api/types'
 import ParamInfo from './ParamInfo'
 import SaveLoadControls from './SaveLoadControls'
 import EnvSelector from './EnvSelector'
@@ -330,6 +332,84 @@ function recHint(color: string): CSSProperties {
   }
 }
 
+// ── Simple-mode algo badge ────────────────────────────────────────────────────
+// Simple mode hides the algorithm picker and forces the env's ★ recommended algo (audited, ADR-104),
+// so instead of a dropdown the newcomer just sees which method will teach the game — a read-only badge
+// with the same ⓘ popup, no decision to make.
+function AlgoBadge({ algo }: { algo: Algo }) {
+  const { t } = useTranslation()
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <span style={fieldLabel}>
+        {t('sidebar.algorithm')}
+        <ParamInfo paramId="algorithm" label={t('sidebar.algorithm')} />
+      </span>
+      <div style={{
+        display: 'inline-flex', alignItems: 'center', gap: 7, alignSelf: 'flex-start',
+        height: 'var(--control-md)', padding: '0 12px',
+        background: 'var(--surface-inset)', border: '1px solid var(--border-default)',
+        borderRadius: 'var(--radius-md)',
+      }}>
+        <span aria-hidden style={recStar}>★</span>
+        <span style={{ fontSize: 'var(--fs-sm)', fontWeight: 'var(--fw-medium)', color: 'var(--text-strong)' }}>
+          {ALGO_LABEL(t, algo)}
+        </span>
+      </div>
+      <span style={{ fontSize: 'var(--fs-meta)', color: 'var(--text-faint)' }}>
+        {t('mode.algo_auto')}
+      </span>
+    </div>
+  )
+}
+
+// ── Simple-mode training length + expectation ─────────────────────────────────
+// Replaces the ×0.2…×8 step ladder with three friendly choices (Short / Normal / Long ★) mapped to
+// real multiples of the env's ★ budget, plus a qualitative "how long will this take" cue (🟢/🟡/🔴,
+// derived from the env difficulty + the chosen length) and — for the slow ones — an explicit
+// "you won't see much for a while, that's normal" note so a newcomer doesn't think it froze.
+function SimpleTrainLength({ difficulty, defaultSteps, totalTimesteps, disabled, onChange }: {
+  difficulty: Difficulty
+  defaultSteps: number
+  totalTimesteps: number
+  disabled?: boolean
+  onChange: (n: number) => void
+}) {
+  const { t } = useTranslation()
+  const budgetFor = (len: TrainLength) => Math.round((defaultSteps * LENGTH_FACTOR[len]) / 1000) * 1000
+  const current: TrainLength = TRAIN_LENGTHS.find((l) => budgetFor(l) === totalTimesteps) ?? 'normal'
+  const tier = trainTier(difficulty, current)
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <span style={fieldLabel}>
+        {t('mode.train_length')}
+        <ParamInfo paramId="total_steps" label={t('mode.train_length')} />
+      </span>
+      <Segmented
+        value={current}
+        disabled={disabled}
+        onChange={(l) => onChange(budgetFor(l))}
+        options={TRAIN_LENGTHS.map((l) => ({
+          id: l,
+          label: l === 'normal' ? `★ ${t(`mode.len_${l}`)}` : t(`mode.len_${l}`),
+        }))}
+      />
+      {/* Qualitative time cue + honest expectation. */}
+      <div style={{
+        display: 'flex', alignItems: 'flex-start', gap: 7, padding: '7px 10px',
+        background: 'var(--surface-inset)', border: '1px solid var(--border-default)',
+        borderRadius: 'var(--radius-md)', fontSize: 'var(--fs-meta)', lineHeight: 1.45,
+        color: 'var(--text-muted)',
+      }}>
+        <span aria-hidden style={{ flexShrink: 0 }}>{TIER_DOT[tier]}</span>
+        <span>
+          {t(`mode.eta_${tier}`)}
+          {needsPatience(tier) && <> {t('mode.eta_patience')}</>}
+        </span>
+      </div>
+    </div>
+  )
+}
+
 // ── Run controls ─────────────────────────────────────────────────────────────
 
 type BtnKind = 'primary' | 'pause' | 'resume' | 'stop' | 'disabled'
@@ -370,6 +450,7 @@ const formatSteps = formatCount  // shared "use M past 1000k" formatter
 export default function Sidebar() {
   const { t } = useTranslation()
 
+  const simple          = useAppStore((s) => s.mode === 'simple')  // #2b: hide the scientist controls
   const envs            = useAppStore((s) => s.envs)
   const selectedEnvId   = useAppStore((s) => s.selectedEnvId)
 
@@ -466,18 +547,35 @@ export default function Sidebar() {
       }}>
         <EnvSelector disabled={isActive} />
 
-        <AlgoSwitch
-          value={algo}
-          options={selectedEnv?.supported_algos ?? ['ppo', 'neuroevolution']}
-          recommended={selectedEnv?.recommended_algo}
-          algoCount={algoCount}
-          disabled={isActive}
-          onChange={setAlgo}
-        />
+        {/* #2b: Simple forces the ★ recommended algo (read-only badge); Advanced keeps the full picker. */}
+        {simple ? (
+          <AlgoBadge algo={algo} />
+        ) : (
+          <AlgoSwitch
+            value={algo}
+            options={selectedEnv?.supported_algos ?? ['ppo', 'neuroevolution']}
+            recommended={selectedEnv?.recommended_algo}
+            algoCount={algoCount}
+            disabled={isActive}
+            onChange={setAlgo}
+          />
+        )}
       </div>
 
       {/* Scrollable params */}
       <div style={{ flex: 1, overflowY: 'auto', padding: 'var(--space-5)' }}>
+        {/* #2b: Simple mode hides every hyperparameter slider + the seed + the raw step ladder, and
+            shows only the friendly training-length + expectation cue. Advanced keeps the full set. */}
+        {simple && selectedEnv && (
+          <SimpleTrainLength
+            difficulty={selectedEnv.difficulty}
+            defaultSteps={defaultSteps}
+            totalTimesteps={totalTimesteps}
+            disabled={isActive}
+            onChange={setTotalTimesteps}
+          />
+        )}
+        {!simple && (<>
         <div style={{ ...sectionEyebrow, marginBottom: 'var(--space-4)' }}>
           {isEvo ? t('sidebar.evo_params_title') : isQ ? t('sidebar.q_params_title') : isAz ? t('sidebar.az_params_title') : isSac ? t('sidebar.sac_params_title') : isTd3 ? t('sidebar.td3_params_title') : isDqn ? t('sidebar.dqn_params_title') : isA2c ? t('sidebar.a2c_params_title') : isQrdqn ? t('sidebar.qrdqn_params_title') : t('sidebar.params_title')}
         </div>
@@ -1219,6 +1317,7 @@ export default function Sidebar() {
             />
           </div>
         )}
+        </>)}
       </div>
 
       {/* Train-gated note: the game can't be trained here yet. Reasons — the optional ale-py package
@@ -1273,10 +1372,15 @@ export default function Sidebar() {
         ) : (
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
             <button onClick={handleRun} disabled={!canRun} className={canRun ? 'btn-cta' : undefined} style={canRun ? runBtn('primary', true) : runBtn('disabled', true)}>
-              {PlayGlyph} {t('sidebar.run')}
+              {/* #2b: in Simple the run button reads "Quick-start" when it's the zero-decision default
+                  (★ budget, recommended algo already forced) → the fastest path to "it's moving!"; it
+                  relabels to "Train" once the newcomer picks a non-default length. */}
+              {PlayGlyph} {simple ? (totalTimesteps === defaultSteps ? t('mode.quick_start') : t('mode.train')) : t('sidebar.run')}
             </button>
             {/* Seed sweep (X3): run the current config across N seeds (seed … seed+N−1), queued
-                sequentially, for multi-seed analysis (X4). The seed input above is the first seed. */}
+                sequentially, for multi-seed analysis (X4). The seed input above is the first seed.
+                Advanced-only — a scientist tool, hidden in Simple. */}
+            {!simple && (
             <div style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'center' }}>
               <div style={{
                 display: 'flex', alignItems: 'center', gap: 6, height: 'var(--control-md)',
@@ -1312,6 +1416,7 @@ export default function Sidebar() {
                 {t('sidebar.run_sweep', { count: sweepCount })}
               </button>
             </div>
+            )}
           </div>
         )}
       </div>
