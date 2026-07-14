@@ -35,7 +35,7 @@ $Python   = "$Venv\python.exe"
 $Frontend = "$Root\frontend"
 
 if (-not (Test-Path $Python)) {
-    throw "Python venv not found at $Python. Create it first (see CLAUDE.md > Running)."
+    throw "Python venv not found at $Python. Create it first (see README > Running)."
 }
 
 # 1. Frontend build ----------------------------------------------------------------------------

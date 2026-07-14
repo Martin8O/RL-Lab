@@ -1,7 +1,6 @@
 # Architecture
 
-> Living document (seeded in Phase F4). It describes the system as built; update it when a structural
-> piece changes. Decision history lives in [`dev_history.md`](../dev_history.md) (ADR-001…NNN).
+> Living document. It describes the system as built; update it when a structural piece changes.
 
 The **RL All-in-One Dashboard** is a full-stack app to build, train, watch, and play reinforcement-learning
 agents across many games. A Python/FastAPI backend runs the ML — **seven peer trainers**: Stable-Baselines3
@@ -104,7 +103,7 @@ broadcast by the training manager for *any* active run, so the CPU/GPU panel wor
 ## The extensibility seams
 
 Adding a *vector-obs + discrete-action* game is data-only (a registry row + content). Beyond that, a set of
-typed seams need real code — see [`adding-an-environment.md`](adding-an-environment.md) and `CLAUDE.md`:
+typed seams need real code — see [`adding-an-environment.md`](adding-an-environment.md):
 
 1. **Policy/device** — `trainer_ppo._build_model` (image obs → `CnnPolicy`+CUDA vs `MlpPolicy`+CPU). **Landed
    for Atari in G4b / ADR-044**; the image preview policy is an SB3 `save`/`load` CPU snapshot (ADR-019 holds).
@@ -178,4 +177,3 @@ finds the bundled SPA under `sys._MEIPASS`. Overridable via `RL_DASHBOARD_DATA_D
 - [`adding-an-algorithm.md`](adding-an-algorithm.md) — the peer-trainer contract.
 - [`api.md`](api.md) — REST endpoints + the WebSocket frame union.
 - [`reproducibility.md`](reproducibility.md) — seeds, recorded config, the run archive.
-- [`adr.md`](adr.md) — the architecture-decision index (full text in [`dev_history.md`](../dev_history.md)).

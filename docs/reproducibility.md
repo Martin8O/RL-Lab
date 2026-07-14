@@ -36,7 +36,7 @@ finished run can be reproduced from its archived config alone.
 Human play passes a **random** seed so that environments with a randomized scene (e.g. LunarLander's
 procedurally-generated moon) vary each game — otherwise a person would replay the identical layout every
 time. **AI** play keeps its configured seed, so an AI demo stays a reproducible demo. This is the only
-place a random seed is intentional; see `CLAUDE.md` → Reproducibility and ADR-022.
+place a random seed is intentional.
 
 ## Multi-agent caveat (PettingZoo, G7a)
 

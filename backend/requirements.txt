@@ -10,7 +10,7 @@
 #
 # DESKTOP (RTX 5070) NOTE: torch/torchvision below are the +cpu wheels. On the
 # desktop, install from these pins, then swap Torch to the CUDA (Blackwell sm_120)
-# build per docs/MIGRATION.md:
+# build:
 #   pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128
 # Box2D (LunarLander, G3a) is CPU-friendly and installed from a prebuilt wheel — no
 # compiler needed on Windows/py3.11. Atari (G4a) and MuJoCo (G5a) are installed and

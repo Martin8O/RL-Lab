@@ -6,7 +6,7 @@ prove the whole stack (Gymnasium env -> SB3 PPO -> PyTorch) works end to end.
 Hardware note: the current laptop (AMD Ryzen 5 2500U, Vega 8, no NVIDIA GPU) is
 CPU-only, so ``CUDA available`` is expected to be **False** here. On the RTX 5070
 desktop (PyTorch built for cu128) the same script should print ``True`` and a
-device capability of ``(12, 0)``. See docs/MIGRATION.md.
+device capability of ``(12, 0)``.
 
 Run:
     .\\.venv\\Scripts\\Activate.ps1

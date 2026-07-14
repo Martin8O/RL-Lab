@@ -1,7 +1,7 @@
 """Reliable screenshot of the running app — the escape hatch for the MCP ``preview_screenshot`` timeout.
 
-WHY THIS EXISTS (ADR-099): the agent's MCP ``preview_screenshot`` times out (30 s) whenever another
-Claude session also runs a preview server — this session's preview tab is then a *background* surface
+WHY THIS EXISTS: the MCP ``preview_screenshot`` times out (30 s) whenever another
+dev session also runs a preview server — this session's preview tab is then a *background* surface
 (``document.visibilityState==="hidden"``), the browser pauses ``requestAnimationFrame`` / compositor
 frames, and the tool's wait-for-a-fresh-frame never resolves. A **headless Playwright page is never a
 hidden background tab**, so it always paints and always captures — regardless of how many other

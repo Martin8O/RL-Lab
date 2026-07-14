@@ -44,4 +44,4 @@ Or directly in this folder: `npm install`, then `npm run dev` / `npm run lint` /
 - **The frontend is hand-formatted** — Prettier is installed but **not** in the gate; never run it over
   the existing tree.
 
-See [`../CLAUDE.md`](../CLAUDE.md) and [`../docs/`](../docs) for the full conventions and architecture.
+See [`../docs/`](../docs) for the full conventions and architecture.

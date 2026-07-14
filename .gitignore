@@ -1,5 +1,5 @@
 # ──────────────────────────────────────────────────────────────
-#  Claude's private working area — NEVER sync to GitHub
+#  Private working area — NEVER sync to GitHub
 # ──────────────────────────────────────────────────────────────
 Local/
 
@@ -50,3 +50,10 @@ _vizdoom/
 .vscode/
 .DS_Store
 Thumbs.db
+
+# ── Internal dev-process docs — kept local, NOT public ──────
+CLAUDE.md
+LEARNING_PROTOCOL.md
+dev_history.md
+docs/adr.md
+docs/MIGRATION.md

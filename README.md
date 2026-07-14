@@ -267,8 +267,6 @@ CORS_ORIGINS=http://localhost:5173
 | [`docs/adding-an-algorithm.md`](docs/adding-an-algorithm.md) | How a trainer plugs into the one manager |
 | [`docs/api.md`](docs/api.md) | REST endpoint + WebSocket frame reference |
 | [`docs/reproducibility.md`](docs/reproducibility.md) | Seeds, recorded config, the run archive, "reproduce this run" |
-| [`docs/adr.md`](docs/adr.md) | Curated architecture-decision index |
-| [`dev_history.md`](dev_history.md) | The changelog of record + full ADRs |
 
 ---
 
@@ -288,10 +286,9 @@ RL/
 │   └── verify_env.py
 ├── frontend/
 │   └── src/{components, api, store, i18n, content}
-├── docs/                 # public docs (architecture, guides, API, ADRs) + media
+├── docs/                 # public docs (architecture, guides, API) + media
 ├── data/                 # models + checkpoints + runs (gitignored)
-├── tasks.ps1             # dev shortcuts
-└── CLAUDE.md             # project guidance
+└── tasks.ps1             # dev shortcuts
 ```
 
 ---
