@@ -84,7 +84,7 @@ export default function EnvSelector({ disabled }: { disabled?: boolean }) {
   }, [open])
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+    <div data-tour="env" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
       <label style={labelStyle}>
         <span>{t('sidebar.game_selector')}</span>
         {envs.length > 0 && (

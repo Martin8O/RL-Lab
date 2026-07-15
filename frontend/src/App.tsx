@@ -18,6 +18,7 @@ import BottomPanels from './components/BottomPanels'
 import PlayScoreGate from './components/PlayScoreGate'
 import AnalysisSurface from './components/analysis/AnalysisSurface'
 import ModeChooser from './components/ModeChooser'
+import Tour from './components/Tour'
 
 export default function App() {
   const { locale, theme, backendStatus, setEnvs, setSelectedEnvId, setHighScores } = useAppStore()
@@ -97,6 +98,9 @@ export default function App() {
       <AnalysisSurface />
       {/* #2b: first-launch mode chooser — a portal over everything until the user picks Simple/Advanced. */}
       <ModeChooser />
+      {/* #1: guided tour — a spotlight overlay; auto-opens once after a mode is picked, re-openable
+          from the TopBar. Self-gates on the store's tourOpen. */}
+      <Tour />
     </div>
   )
 }

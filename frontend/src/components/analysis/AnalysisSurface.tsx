@@ -25,6 +25,7 @@ import SourcePicker from './SourcePicker'
 import ModeSwitch from '../ModeSwitch'
 import LangThemeToggle from '../LangThemeToggle'
 import AboutButton from '../AboutButton'
+import TourButton from '../TourButton'
 import ParamInfo from '../ParamInfo'
 
 // Overlay palette (the run-compare hues + two viz colours) — assigned by selection order.
@@ -368,14 +369,14 @@ export default function AnalysisSurface() {
           {t('analysis.subtitle')}
         </span>
         <div style={{ flex: 1 }} />
-        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+        <div data-tour="dl-pivot" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
           <Segmented ariaLabel={t('analysis.mode')} value={mode} onChange={setMode} options={[
             { id: 'game', label: t('analysis.mode_game') },
             { id: 'algo', label: t('analysis.mode_algo') },
           ]} />
           <ParamInfo paramId="analysis_mode" label={t('analysis.mode')} />
         </div>
-        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+        <div data-tour="dl-axis" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
           <Segmented ariaLabel={t('analysis.axis')} value={axis} onChange={setAxis} options={[
             { id: 'env_steps', label: t('analysis.axis_steps') },
             { id: 'wall_clock', label: t('analysis.axis_time') },
@@ -383,6 +384,7 @@ export default function AnalysisSurface() {
           <ParamInfo paramId="analysis_axis" label={t('analysis.axis')} />
         </div>
         <div style={{ width: 1, height: 26, background: 'var(--border-default)' }} />
+        <TourButton flow="datalab" />
         <AboutButton />
         <LangThemeToggle />
       </header>
@@ -390,7 +392,7 @@ export default function AnalysisSurface() {
       {/* ── body ── */}
       <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
         {/* left: source picker */}
-        <aside style={{
+        <aside data-tour="dl-sources" style={{
           width: 306, flexShrink: 0, display: 'flex', flexDirection: 'column', minHeight: 0,
           padding: '12px 12px 8px', borderRight: '2px solid var(--border-default)', background: 'var(--surface-1)',
         }}>
@@ -466,7 +468,7 @@ export default function AnalysisSurface() {
         {/* center: chart + controls */}
         <main style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, padding: '12px 16px' }}>
           {/* control bar */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap', marginBottom: 8, minHeight: 30 }}>
+          <div data-tour="dl-controls" style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap', marginBottom: 8, minHeight: 30 }}>
             <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 'var(--fs-label)', color: 'var(--text-muted)' }}>
               {t('chart.ema_alpha')}
               <input type="range" min={0.02} max={1} step={0.02} value={emaAlpha}
@@ -518,7 +520,7 @@ export default function AnalysisSurface() {
           </div>
 
           {/* the chart */}
-          <div style={{
+          <div data-tour="dl-chart" style={{
             flex: 1, minHeight: 0, position: 'relative',
             border: '1px solid var(--border-default)', borderRadius: 'var(--radius-lg)',
             background: 'var(--chart-plot-bg)', padding: 4,
@@ -584,7 +586,7 @@ export default function AnalysisSurface() {
 
           {/* Zone 4 — sortable summary table (X2 stats per selected run) */}
           {selected.length > 0 && (
-            <div style={{ marginTop: 12, flexShrink: 0, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+            <div data-tour="dl-table" style={{ marginTop: 12, flexShrink: 0, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 5 }}>
                 <span style={{ fontSize: 'var(--fs-heading)', fontWeight: 'var(--fw-semibold)', color: 'var(--text-strong)' }}>
                   {t('analysis.table_title')}
@@ -610,7 +612,7 @@ export default function AnalysisSurface() {
           borderLeft: '2px solid var(--border-default)', background: 'var(--surface-1)',
         }}>
           {/* Zone 3 — rliable aggregate panel */}
-          <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '12px 12px 10px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div data-tour="dl-rliable" style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '12px 12px 10px', display: 'flex', flexDirection: 'column', gap: 10 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               <span style={{ fontSize: 'var(--fs-heading)', fontWeight: 'var(--fw-semibold)', color: 'var(--text-strong)' }}>
                 {t('analysis.rliable_title')}
@@ -620,7 +622,7 @@ export default function AnalysisSurface() {
             <RliablePanel result={shownRliable} loading={statsLoading} />
           </div>
           {/* Zone 5 — export */}
-          <div style={{ flexShrink: 0, borderTop: '2px solid var(--border-default)', padding: '10px 12px 12px' }}>
+          <div data-tour="dl-export" style={{ flexShrink: 0, borderTop: '2px solid var(--border-default)', padding: '10px 12px 12px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
               <span style={{ fontSize: 'var(--fs-heading)', fontWeight: 'var(--fw-semibold)', color: 'var(--text-strong)' }}>
                 {t('analysis.export_title')}

@@ -6,6 +6,7 @@ import ModeSwitch from './ModeSwitch'
 import ModeToggle from './ModeToggle'
 import LangThemeToggle from './LangThemeToggle'
 import AboutButton from './AboutButton'
+import TourButton from './TourButton'
 
 const DOT_COLOR: Record<BackendStatus, string> = {
   online:     'var(--success)',
@@ -135,10 +136,15 @@ export default function TopBar() {
       <div style={{ width: 1, height: 26, background: 'var(--border-default)' }} />
 
       {/* #2b: the Simple ⇆ Advanced switch, always in reach. */}
-      <ModeToggle />
+      <span data-tour="mode" style={{ display: 'inline-flex' }}>
+        <ModeToggle />
+      </span>
 
+      <TourButton />
       <AboutButton />
-      <LangThemeToggle />
+      <span data-tour="langtheme" style={{ display: 'inline-flex', alignItems: 'center' }}>
+        <LangThemeToggle />
+      </span>
     </header>
   )
 }

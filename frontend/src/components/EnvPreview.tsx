@@ -767,7 +767,7 @@ export default function EnvPreview() {
   const onBoardCellClick = (action: number) => { if (boardHumanTurn) sendPlayAction(action) }
 
   return (
-    <section ref={sectionRef} style={{
+    <section ref={sectionRef} data-tour="preview" style={{
       flex: '0 0 55%', display: 'flex', flexDirection: 'column',
       borderRight: '2px solid var(--border-default)', overflow: 'hidden',
     }}>

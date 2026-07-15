@@ -121,7 +121,9 @@ export default function ModeSwitch({ simple = false }: { simple?: boolean }) {
     >
       <Tab active={!open} onClick={() => setOpen(false)} mark={<RlLabMark />} label={t('app.title')} ariaLabel={t('nav.dashboard')} />
       <div style={{ width: 1, height: 22, background: 'var(--border-default)' }} />
-      <Tab active={open} onClick={() => setOpen(true)} mark={<DataLabMark />} label={t('analysis.title')} ariaLabel={t('nav.datalab')} />
+      <span data-tour="datalab" style={{ display: 'inline-flex' }}>
+        <Tab active={open} onClick={() => setOpen(true)} mark={<DataLabMark />} label={t('analysis.title')} ariaLabel={t('nav.datalab')} />
+      </span>
     </div>
   )
 }

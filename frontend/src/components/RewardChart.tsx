@@ -899,7 +899,7 @@ export default function RewardChart() {
     : 'start'
 
   return (
-    <section style={{
+    <section data-tour="chart" style={{
       flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden',
       background: 'var(--chart-plot-bg)',
     }}>
@@ -1120,8 +1120,12 @@ export default function RewardChart() {
 
       </div>
       {/* Skill meter as a reserved strip below the plot (shown only while training is the live
-          context; otherwise it self-gates to null and the chart uses the full height). */}
-      <SkillMeter slot="train" />
+          context; otherwise it self-gates to null and the chart uses the full height). The
+          data-tour="skill" wrapper anchors the guided tour; it self-skips when the meter is null
+          (zero-size), so the tour only spotlights it when there's actually a meter to show. */}
+      <div data-tour="skill">
+        <SkillMeter slot="train" />
+      </div>
       </div>
 
       {/* Stats row — fixed height so the panel's bottom line never shifts between PPO and

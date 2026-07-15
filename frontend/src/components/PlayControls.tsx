@@ -170,7 +170,7 @@ export default function PlayControls() {
   )
 
   return (
-    <div style={{
+    <div data-tour="play" style={{
       flexShrink: 0, borderTop: '1px solid var(--border-default)',
       // Board games carry the most controls (Play + Watch + side picker + opponent + difficulty), which
       // wrap to TWO rows once a saved checkpoint adds the opponent picker — while the *playing* bar is one

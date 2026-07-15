@@ -32,6 +32,7 @@ import type {
   TrainState,
 } from '../api/types'
 import { boardMetaFor } from '../content/boardGames'
+import type { TourFlow } from '../content/tourSteps'
 
 export type Locale        = 'cz' | 'en'
 export type Theme         = 'dark' | 'light'
@@ -375,6 +376,8 @@ interface AppState {
   theme:           Theme
   mode:            AudienceMode   // #2b: simple (guided) ↔ advanced (full UI); persisted
   modeChosen:      boolean        // #2b: has the user picked a mode? false ⇒ show the first-launch chooser
+  tourSeen:        boolean        // #1: has the dashboard tour auto-opened once? true ⇒ never auto-opens again (persisted)
+  datalabTourSeen: boolean        // #1: has the Data Lab tour auto-opened once? (persisted)
   selectedEnvId:   string | null
   algo:            Algo       // PPO ↔ neuroevolution ↔ Q-learning ↔ AlphaZero
   hyperparams:     PPOHyperparams
@@ -424,6 +427,9 @@ interface AppState {
   highScores:      Record<string, HighScore>  // all-time best per env id
   checkpointsNonce: number                     // bumped on save/delete so other pickers (AI-play) re-fetch
   analysisOpen:    boolean               // X6: the fullscreen DataLab surface is open (over the dashboard)
+  tourOpen:        boolean               // #1: the guided-tour overlay is up (ephemeral — never persisted)
+  tourStep:        number                // #1: current tour step index (ephemeral; reset to 0 on open)
+  tourFlow:        TourFlow              // #1: which tour is running — dashboard or the Data Lab (ephemeral)
 
   // ─ play vs AI (E2) ─────────────────────────────────────────
   playState:        PlayState            // idle until a session starts
@@ -483,6 +489,9 @@ interface AppState {
   setHighScores:      (list: HighScore[])               => void
   bumpCheckpoints:    ()                                => void
   setAnalysisOpen:    (v: boolean)                      => void
+  startTour:          (flow?: TourFlow)                 => void
+  closeTour:          ()                                => void
+  setTourStep:        (n: number)                       => void
   clearMetrics:       ()                                => void
 
   // play vs AI (E2)
@@ -507,6 +516,8 @@ export const useAppStore = create<AppState>()(
       theme:           'dark',
       mode:            'simple',   // #2b: newcomers land in the guided scene; the chooser lets them switch
       modeChosen:      false,      // #2b: no choice yet → first launch shows the mode chooser
+      tourSeen:        false,      // #1: dashboard tour hasn't auto-opened yet → it opens once after a mode is picked
+      datalabTourSeen: false,      // #1: Data Lab tour hasn't auto-opened yet → opens once on first Data Lab visit
       selectedEnvId:   null,
       algo:            'ppo',
       hyperparams:     DEFAULT_HYPERPARAMS,
@@ -555,6 +566,9 @@ export const useAppStore = create<AppState>()(
       highScores:      {},
       checkpointsNonce: 0,
       analysisOpen:    false,
+      tourOpen:        false,
+      tourStep:        0,
+      tourFlow:        'dashboard',
 
       playState:        'idle',
       playScore:        0,
@@ -803,6 +817,17 @@ export const useAppStore = create<AppState>()(
       // mounted underneath so a live run keeps streaming while the overlay is up.
       setAnalysisOpen: (analysisOpen) => set({ analysisOpen }),
 
+      // #1: open a guided tour (from a first-launch auto-open or a re-open button), always from the
+      // first step. `flow` picks the dashboard tour (default) or the Data Lab tour.
+      startTour: (flow = 'dashboard') => set({ tourOpen: true, tourStep: 0, tourFlow: flow }),
+      // #1: close the active tour — and mark THAT flow seen so it never auto-opens again (a manual
+      // re-open still works). Which flag depends on which tour was running.
+      closeTour: () => set((s) => ({
+        tourOpen: false,
+        ...(s.tourFlow === 'datalab' ? { datalabTourSeen: true } : { tourSeen: true }),
+      })),
+      setTourStep: (tourStep) => set({ tourStep }),
+
       clearMetrics: () => set({ ...EMPTY_RUN_RESULTS }),
 
       // ─ play vs AI (E2) ────────────────────────────────────────
@@ -849,6 +874,8 @@ export const useAppStore = create<AppState>()(
         theme:           s.theme,
         mode:            s.mode,
         modeChosen:      s.modeChosen,
+        tourSeen:        s.tourSeen,
+        datalabTourSeen: s.datalabTourSeen,
         selectedEnvId:   s.selectedEnvId,
         algo:            s.algo,
         hyperparams:     s.hyperparams,

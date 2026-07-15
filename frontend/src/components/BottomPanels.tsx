@@ -439,15 +439,18 @@ export default function BottomPanels() {
   const simple = useAppStore((s) => s.mode === 'simple')
 
   // #2b: Simple mode keeps only the High Scores (Human + AI play boards) — the scientist panels
-  // (Evolution Stats, the Q-table heatmap, the evolution leaderboard) are hidden. The play boards
-  // span the full width so the newcomer sees their record and the AI's, nothing more.
+  // (Evolution Stats, the Q-table heatmap, the evolution leaderboard) are hidden. The boards are
+  // centered in a constrained-width column rather than stretched edge-to-edge (on a wide screen the
+  // full-width board leaves a huge gap between each name and its score, which reads as broken).
   if (simple) {
     return (
-      <div style={{
-        height: 200, flexShrink: 0, display: 'flex',
+      <div data-tour="records" style={{
+        height: 200, flexShrink: 0, display: 'flex', justifyContent: 'center',
         borderTop: '2px solid var(--border-default)',
       }}>
-        <PlayLeaderboards />
+        <div style={{ width: '100%', maxWidth: 620, display: 'flex', minWidth: 0 }}>
+          <PlayLeaderboards standalone />
+        </div>
       </div>
     )
   }
@@ -456,7 +459,7 @@ export default function BottomPanels() {
   // blank slot (the user's ask), so a big table has room. The leaderboard slot keeps its width.
   if (isQ) {
     return (
-      <div style={{
+      <div data-tour="records" style={{
         height: 200, flexShrink: 0, display: 'flex',
         borderTop: '2px solid var(--border-default)',
       }}>
@@ -473,7 +476,7 @@ export default function BottomPanels() {
   }
 
   return (
-    <div style={{
+    <div data-tour="records" style={{
       height: 200, flexShrink: 0, display: 'flex',
       borderTop: '2px solid var(--border-default)',
     }}>

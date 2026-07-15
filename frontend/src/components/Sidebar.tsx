@@ -379,7 +379,7 @@ function SimpleTrainLength({ difficulty, defaultSteps, totalTimesteps, disabled,
   const current: TrainLength = TRAIN_LENGTHS.find((l) => budgetFor(l) === totalTimesteps) ?? 'normal'
   const tier = trainTier(difficulty, current)
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+    <div data-tour="length" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
       <span style={fieldLabel}>
         {t('mode.train_length')}
         <ParamInfo paramId="total_steps" label={t('mode.train_length')} />
@@ -547,23 +547,26 @@ export default function Sidebar() {
       }}>
         <EnvSelector disabled={isActive} />
 
-        {/* #2b: Simple forces the ★ recommended algo (read-only badge); Advanced keeps the full picker. */}
-        {simple ? (
-          <AlgoBadge algo={algo} />
-        ) : (
-          <AlgoSwitch
-            value={algo}
-            options={selectedEnv?.supported_algos ?? ['ppo', 'neuroevolution']}
-            recommended={selectedEnv?.recommended_algo}
-            algoCount={algoCount}
-            disabled={isActive}
-            onChange={setAlgo}
-          />
-        )}
+        {/* #2b: Simple forces the ★ recommended algo (read-only badge); Advanced keeps the full picker.
+            data-tour="algo" anchors the guided tour to whichever renders. */}
+        <div data-tour="algo">
+          {simple ? (
+            <AlgoBadge algo={algo} />
+          ) : (
+            <AlgoSwitch
+              value={algo}
+              options={selectedEnv?.supported_algos ?? ['ppo', 'neuroevolution']}
+              recommended={selectedEnv?.recommended_algo}
+              algoCount={algoCount}
+              disabled={isActive}
+              onChange={setAlgo}
+            />
+          )}
+        </div>
       </div>
 
-      {/* Scrollable params */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: 'var(--space-5)' }}>
+      {/* Scrollable params — data-tour="params" anchors the (Advanced) guided-tour step to the tunables. */}
+      <div data-tour="params" style={{ flex: 1, overflowY: 'auto', padding: 'var(--space-5)' }}>
         {/* #2b: Simple mode hides every hyperparameter slider + the seed + the raw step ladder, and
             shows only the friendly training-length + expectation cue. Advanced keeps the full set. */}
         {simple && selectedEnv && (
@@ -1353,7 +1356,7 @@ export default function Sidebar() {
       )}
 
       {/* Run controls — outer div is always the flex row so flex:1 works in every branch */}
-      <div style={{
+      <div data-tour="run" style={{
         padding: 'var(--space-4) var(--space-5)', borderTop: '1px solid var(--border-default)',
         flexShrink: 0, display: 'flex', gap: 'var(--space-2)',
       }}>

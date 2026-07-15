@@ -8,7 +8,7 @@ import type { PlayScoreEntry } from '../api/types'
 // The persistent high-score slot (E2): one shared "High Scores" header over two boards — a
 // named Human hall of fame and an AI one (keyed by model). Same footprint as the bottom row,
 // sized so the top-N fits without scrolling.
-export default function PlayLeaderboards() {
+export default function PlayLeaderboards({ standalone = false }: { standalone?: boolean }) {
   const { t } = useTranslation()
   const playScores = useAppStore((s) => s.playScores)
   const selectedEnvId = useAppStore((s) => s.selectedEnvId)
@@ -25,7 +25,11 @@ export default function PlayLeaderboards() {
   return (
     <div className={panelDimClass(dimmed)} style={{
       flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column',
-      background: 'var(--surface)', borderRight: '2px solid var(--border)', overflow: 'hidden',
+      background: 'var(--surface)',
+      // Standalone (Simple mode, full-width): drop the right divider — it's not sitting left of another
+      // panel there, so the border would draw a stray line down the middle of the centered board.
+      borderRight: standalone ? undefined : '2px solid var(--border)',
+      overflow: 'hidden',
       ...PANEL_DIM_BASE,
     }}>
       {/* Shared title — makes it clear both columns below are high-score boards */}
