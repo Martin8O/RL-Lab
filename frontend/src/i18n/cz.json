@@ -55,7 +55,7 @@
     "tagline": "Vytvářej, trénuj, sleduj a testuj agenty posilovaného učení (reinforcement learning) napříč mnoha hrami — vše v jedné nástěnce.",
     "app_body": "Vyber prostředí, nastav parametry pomocí info popupů pro začátečníky a trénuj pomocí PPO, neuroevoluce nebo Q-learningu. Sleduj, jak se agenti učí naživo, porovnávej běhy a zahraj si proti natrénované AI s měřičem dovednosti. Dvojjazyčně (CZ/EN), tmavý i světlý režim.",
     "author_title": "Autor",
-    "author_body": "Vytvořil Martin Svoboda — nezávislý open-source projekt, zdarma pro všechny. Vznikl v jednom člověku jako opravdový ponor do AI a reinforcement learningu.",
+    "author_body": "Vytvořil Martin Svoboda — nezávislý open-source projekt, zdarma pro všechny. Vznikl jako opravdový ponor do AI a reinforcement learningu.",
     "support_note": "Zdarma a otevřeně pod licencí AGPL-3.0. Pokud ti RL Lab + Data Lab pomáhá, můžeš podpořit jeho další vývoj:",
     "sponsor": "Podpořit na GitHubu",
     "website": "Web",

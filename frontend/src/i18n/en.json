@@ -55,7 +55,7 @@
     "tagline": "Build, train, watch, and test reinforcement-learning agents across many games — all in one dashboard.",
     "app_body": "Pick an environment, tune parameters with beginner-friendly info popups, and train with PPO, neuroevolution, or Q-learning. Watch agents learn live, compare runs, and play against the trained AI with a skill meter. Bilingual (CZ/EN), dark & light.",
     "author_title": "Author",
-    "author_body": "Made by Martin Svoboda — an independent, open-source project, free for learners. Built solo as a hands-on deep dive into AI and reinforcement learning.",
+    "author_body": "Made by Martin Svoboda — an independent, open-source project, free for learners. Built as a hands-on deep dive into AI and reinforcement learning.",
     "support_note": "Free and open under AGPL-3.0. If RL Lab + Data Lab helps you, you can support its upkeep:",
     "sponsor": "Sponsor on GitHub",
     "website": "Website",
