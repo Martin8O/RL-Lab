@@ -25,7 +25,7 @@ import threading
 import uuid
 import zipfile
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from app.core.logging import get_logger
@@ -41,7 +41,14 @@ _DEFAULT_ROOT = data_dir() / "checkpoints"
 
 
 def _utc_now_iso() -> str:
-    return datetime.now(UTC).isoformat()
+    # Fixed-width microseconds so ISO-8601 strings compare lexically == chronologically (a zero-µs
+    # instant would otherwise omit the ".ffffff" field and sort inconsistently against one that has it).
+    return datetime.now(UTC).isoformat(timespec="microseconds")
+
+
+def _bump_iso(iso: str) -> str:
+    """The next distinct instant after ``iso`` (one microsecond later), same fixed-width format."""
+    return (datetime.fromisoformat(iso) + timedelta(microseconds=1)).isoformat(timespec="microseconds")
 
 
 def _is_safe_id(cid: str) -> bool:
@@ -98,6 +105,11 @@ class CheckpointStore:
     def __init__(self, root: Path) -> None:
         self.root = root
         self._lock = threading.Lock()
+        # Newest-first ordering (list) keys off created_at. The Windows wall clock only advances every
+        # ~15 ms, so two back-to-back saves would otherwise share a timestamp and the sort would fall
+        # back to nondeterministic filesystem order. This remembers the last minted created_at so save()
+        # can nudge each one strictly forward within the process.
+        self._last_created_at = ""
 
     def _slot_dir(self, cid: str) -> Path:
         return self.root / cid
@@ -113,22 +125,29 @@ class CheckpointStore:
     ) -> CheckpointMeta:
         """Persist a new slot from a trainer snapshot; returns its :class:`CheckpointMeta`."""
         cid = datetime.now(UTC).strftime("%Y%m%d-%H%M%S-") + uuid.uuid4().hex[:6]
-        meta = CheckpointMeta(
-            id=cid,
-            label=label or _default_label(config, artifact),
-            env_id=config.env_id,
-            algo=config.algo,
-            seed=config.seed,
-            created_at=_utc_now_iso(),
-            reward=artifact.reward,
-            timesteps=artifact.timesteps,
-            total_timesteps=artifact.total_timesteps,
-            iteration=artifact.iteration,
-            generation=artifact.generation,
-            total_generations=artifact.total_generations,
-            artifact=artifact.artifact_name,
-        )
         with self._lock:
+            # Strictly-monotonic created_at so newest-first listing is deterministic even for saves
+            # inside one coarse clock tick (see __init__). Across process restarts the real clock has
+            # advanced past _last_created_at, so genuine time gaps are preserved.
+            created_at = _utc_now_iso()
+            if created_at <= self._last_created_at:
+                created_at = _bump_iso(self._last_created_at)
+            self._last_created_at = created_at
+            meta = CheckpointMeta(
+                id=cid,
+                label=label or _default_label(config, artifact),
+                env_id=config.env_id,
+                algo=config.algo,
+                seed=config.seed,
+                created_at=created_at,
+                reward=artifact.reward,
+                timesteps=artifact.timesteps,
+                total_timesteps=artifact.total_timesteps,
+                iteration=artifact.iteration,
+                generation=artifact.generation,
+                total_generations=artifact.total_generations,
+                artifact=artifact.artifact_name,
+            )
             slot = self._slot_dir(cid)
             slot.mkdir(parents=True, exist_ok=True)
             (slot / artifact.artifact_name).write_bytes(artifact.blob)

@@ -62,7 +62,8 @@ def test_list_newest_first_and_traversal_guard(tmp_path: Path) -> None:
     cfg = TrainConfig(env_id="cartpole", algo="ppo")
     a = store.save(cfg, _artifact(), [])
     b = store.save(cfg, _artifact(), [])
-    # created_at carries microsecond precision, so the second save sorts first.
+    # save() mints a strictly-monotonic created_at, so the later save always sorts first — even for
+    # back-to-back saves inside one coarse clock tick (the Windows wall clock advances only ~15 ms).
     assert [m.id for m in store.list()] == [b.id, a.id]
     # Path-traversal ids are rejected, never resolved against the filesystem.
     assert store.load("../secret") is None
