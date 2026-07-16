@@ -94,7 +94,7 @@ describe('<Tour />', () => {
     act(() => useAppStore.getState().startTour())
     expect(screen.getByRole('dialog')).toBeInTheDocument()
 
-    fireEvent.click(screen.getByText('Skip tour'))
+    fireEvent.click(screen.getByText('Skip'))
     expect(screen.queryByRole('dialog')).toBeNull()
     expect(useAppStore.getState().tourOpen).toBe(false)
     expect(useAppStore.getState().tourSeen).toBe(true)
@@ -130,7 +130,7 @@ describe('<Tour /> — Data Lab flow', () => {
     useAppStore.setState({ mode: 'advanced', tourSeen: false, datalabTourSeen: false })
     render(<Harness />)
     act(() => useAppStore.getState().startTour('datalab'))
-    fireEvent.click(screen.getByText('Skip tour'))
+    fireEvent.click(screen.getByText('Skip'))
     expect(useAppStore.getState().datalabTourSeen).toBe(true)
     expect(useAppStore.getState().tourSeen).toBe(false)
   })
