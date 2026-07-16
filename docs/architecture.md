@@ -169,7 +169,7 @@ writable state to `%LOCALAPPDATA%\RLDashboard\data` (vs repo-root `data/` in dev
 finds the bundled SPA under `sys._MEIPASS`. Overridable via `RL_DASHBOARD_DATA_DIR` for portable/test use.
 
 **CPU edition:** GPU games are absent on hardware without CUDA via the registry's `hw_requirement` + 
-`torch.cuda.is_available()` — no crash, just the CPU catalogue. See `rl_dashboard.spec` + `Local/standalone-build.md` for build notes and the clean-machine test checklist.
+`torch.cuda.is_available()` — no crash, just the CPU catalogue. See `rl_dashboard.spec` + `build-standalone.ps1` for the build definition.
 
 ## Related documentation
 

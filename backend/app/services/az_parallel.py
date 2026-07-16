@@ -14,8 +14,7 @@ replay buffer + live games counter — the *same* counters the G6h ticker, eval 
 processes give **~1.6× chess self-play** (in-proc actor 3.3–3.8 → 2 procs 5.3–5.9 games/s) at **GPU
 49 → 94 %**, peak VRAM ~4.5 GB. Separate processes escape both the GIL contention and add a CPU core for
 the pure-Python MCTS tree-glue (the real bottleneck). **2 is the Windows sweet spot** — 3 ≈ worse, 4
-collapses (Windows WDDM has no MPS to share the GPU across many contexts). See
-``Local/memory/reference_az_parallel_selfplay_windows.md``.
+collapses (Windows WDDM has no MPS to share the GPU across many contexts).
 
 **Decoupled net sync (ADR-008/019 preserved):** the learner publishes its freshly trained weights as a
 shared file (an atomic ``torch.save`` of the CPU ``state_dict``) once per iteration; workers

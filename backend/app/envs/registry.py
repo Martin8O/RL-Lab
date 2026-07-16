@@ -2107,9 +2107,9 @@ for _mpe_tag_row in _MPE_TAG_GAMES:
 # Multi-agent — SISL "cooperative swarm" (Stanford Intelligent Systems Lab) — ADR-075.
 #
 # A second PettingZoo family alongside MPE, the user's ⭐ cooperative-swarm deep-dive. SISL ships three
-# worlds; **Pursuit** is the canonical cooperative swarm and lands first (the seam-builder), with
-# Multiwalker (continuous Box2D) and Waterworld (continuous, needs ``pymunk``) PARKED for follow-up
-# sessions (see Local/memory). Pursuit is **homogeneous + cooperative** — eight identical pursuers
+# worlds; **Pursuit** is the canonical cooperative swarm and landed first (the seam-builder);
+# Multiwalker (continuous Box2D, ADR-076) and Waterworld (continuous, *vendored*, needs ``pymunk``,
+# ADR-077) followed, completing the family. Pursuit is **homogeneous + cooperative** — eight identical pursuers
 # share one reward and one brain — so it rides the EXISTING parameter-sharing path verbatim: the
 # manager's cooperative-MA branch → ``trainer_ppo`` → ``ma_env.make_vec_env`` (SuperSuit
 # ``pettingzoo_env_to_vec_env_v1`` + ``concat_vec_envs_v1``), with NO new trainer. The two things SISL
