@@ -12,6 +12,12 @@
 # desktop, install from these pins, then swap Torch to the CUDA (Blackwell sm_120)
 # build:
 #   pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128
+#
+# Why 2.11.0 and not the latest: the cu128 (Blackwell) index tops out at
+# torch 2.11.0+cu128 / torchvision 0.26.0+cu128, while PyPI's default CPU wheels
+# run ahead. Both lanes are pinned to the SAME version so the CPU freeze and the
+# GPU build differ only in the build tag, not the version — and 2.11.0 is what the
+# desktop actually trains on. Raise this pin only when cu128 catches up.
 # Box2D (LunarLander, G3a) is CPU-friendly and installed from a prebuilt wheel — no
 # compiler needed on Windows/py3.11. Atari (G4a) and MuJoCo (G5a) are installed and
 # human-playable on CPU now; only their *training* (CnnPolicy / millions of steps) is GPU-gated.
@@ -93,8 +99,8 @@ swig==4.4.1
 sympy==1.14.0
 tensorboard==2.20.0
 tensorboard-data-server==0.7.2
-torch==2.12.0
-torchvision==0.27.0
+torch==2.11.0
+torchvision==0.26.0
 tqdm==4.68.2
 typing_extensions==4.15.0
 tzdata==2026.2

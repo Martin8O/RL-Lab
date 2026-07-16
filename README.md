@@ -25,7 +25,7 @@
   <img alt="100+ environments" src="https://img.shields.io/badge/environments-100%2B-6e7bff">
   <img alt="9 families" src="https://img.shields.io/badge/families-9-6e7bff">
   <img alt="9 algorithms" src="https://img.shields.io/badge/algorithms-9-6e7bff">
-  <img alt="tests" src="https://img.shields.io/badge/tests-421%20py%20%C2%B7%2074%20ts-3fb950">
+  <img alt="tests" src="https://img.shields.io/badge/tests-470%20py%20%C2%B7%2090%20ts-3fb950">
   <img alt="i18n" src="https://img.shields.io/badge/CZ%20%2F%20EN-bilingual-e3b341">
   <img alt="License AGPL-3.0" src="https://img.shields.io/badge/license-AGPL--3.0-4c1">
 </p>
@@ -95,8 +95,8 @@ navigating the grid, the skill meter rising from *Child* to *Superhuman*, and th
 | 📈 **Live training** | Realtime reward / loss / fitness charts with EMA smoothing, a "solved @" marker, and a multi-run compare overlay. |
 | 👀 **Watch it learn** | The running policy renders live — client-side SVG for vector envs, server-streamed frames for pixels / MuJoCo — with visual on/off and time-acceleration. |
 | 🕹️ **Play vs your AI** | Take control over WebSocket and go head-to-head with the trained agent; a skill meter grades you Child → Below avg → Average → Above avg → Superhuman, with named leaderboards. |
-| 🔬 **Data Lab** | A full experiment-analysis surface: seed sweeps, `rliable` aggregation (IQM, bootstrap CIs, performance profiles), a ranked summary table, and one-click export to CSV / Excel / LaTeX / TensorBoard / repro-card. |
-| 💾 **Save / resume / export** | A filterable checkpoint manager — resume training from any snapshot, or export a run as a citable dataset. |
+| 🔬 **Data Lab** | A full experiment-analysis surface: seed sweeps, rliable-style aggregation (IQM, bootstrap CIs, performance profiles) reimplemented in-repo, a ranked summary table, and one-click export to CSV / Excel / LaTeX / TensorBoard / repro-card. |
+| 💾 **Save / resume / export** | A filterable checkpoint manager — resume training from any snapshot (extending or retuning its config), or export one as a self-contained zip: the model plus the exact config that produced it. |
 | 📚 **Learn as you go** | Every tunable ships a bilingual info popup (what it is, ★ recommended value, range, and a note for *this* game). |
 | 🌍 **Bilingual &amp; themed** | CZ / EN and dark / light toggles, persisted; accessibility (aria-labels) enforced by a checker. |
 | 🔁 **Reproducible** | Every run records its full config + seed; "reproduce this run" is a `curl` command in the repro card. |
@@ -121,7 +121,7 @@ row does most of the work, so most new games are a data-only addition.
 | **Box2D** | 4 | LunarLander, BipedalWalker, CarRacing | continuous control; CarRacing is image + box |
 | **Atari** | 64 | Pong, Breakout, Ms. Pac-Man, Enduro … | image obs → CNN policy on CUDA |
 | **MuJoCo** | 7 | Hopper, Walker2d, HalfCheetah, Ant, Humanoid … | continuous torques; SAC is the ★ pick |
-| **Board games** | 6 | Tic-Tac-Toe, Connect Four, Othello, Breakthrough, Checkers, Chess | OpenSpiel; MaskablePPO / AlphaZero vs an MCTS teacher |
+| **Board games** | 6 | Tic-Tac-Toe, Connect Four, Othello, Breakthrough, Checkers, Chess | OpenSpiel; MaskablePPO vs an MCTS teacher, or AlphaZero by pure self-play |
 | **Multi-agent** | 7 | simple_spread, simple_tag, Pursuit, Multiwalker, Waterworld | PettingZoo + SuperSuit param-sharing / self-play |
 | **Doom** | 7 | Basic, Defend the Center, Defend the Line, Health Gathering, Take Cover, Predict Position | 3D FPS from pixels (ViZDoom) → CNN policy on CUDA |
 
@@ -140,7 +140,7 @@ declares which algorithms it supports, and which one is ★ recommended.
 | **PPO** | on-policy policy-gradient | almost everything | Stable-Baselines3; the universal baseline |
 | **Neuroevolution** | evolutionary | small vector envs | custom numpy; no gradients, population-based |
 | **Q-learning** | tabular value-based | discrete Toy Text | numpy; ships a `<canvas>` Q-table heatmap |
-| **AlphaZero** | self-play + MCTS | board games | reimplemented in-repo, trained vs an MCTS teacher |
+| **AlphaZero** | self-play + MCTS | board games | reimplemented in-repo — no teacher, no human data; scored vs a reference MCTS |
 | **SAC** | off-policy actor-critic | continuous control (MuJoCo) | the ★ pick for robotics |
 | **TD3** | off-policy deterministic | continuous control | twin critics + delayed updates |
 | **DQN** | off-policy value-based | discrete + Atari | ε-greedy; the original deep-RL Atari algorithm (Mnih et al., 2015) |
@@ -155,8 +155,11 @@ New algorithms follow [`docs/adding-an-algorithm.md`](docs/adding-an-algorithm.m
 
 Training gives you curves; the **Data Lab** gives you *conclusions*. Select any runs on disk and it overlays
 their learning curves, collapses multiple seeds into a mean ± CI band, and — crucially — lets you **compare
-algorithms head-to-head**. It computes the `rliable` metrics a modern RL paper reports — IQM, mean, median,
+algorithms head-to-head**. It computes the robust metrics a modern RL paper reports — IQM, mean, median,
 optimality gap (all with 95% stratified-bootstrap CIs), plus performance profiles and probability-of-improvement.
+These are the [rliable](https://github.com/google-research/rliable) estimators (Agarwal et al., NeurIPS 2021),
+reimplemented here in pure numpy/scipy rather than taken as a dependency — small, well-specified maths, unit-tested,
+with a seeded bootstrap so every confidence interval is reproducible.
 A ranked summary table sorts by AUC / final-% / time-to-solve, and one click exports the selection as CSV, Excel
 (with native charts), a LaTeX booktabs table, a TensorBoard log dir, a standalone SVG figure, or a
 reproducibility card with a config hash + BibTeX.
@@ -165,7 +168,7 @@ reproducibility card with a config hash + BibTeX.
   <img src="docs/media/data-lab.gif" width="100%" alt="Data Lab in action: runs are added one by one to a head-to-head comparison of PPO vs Neuroevolution on CartPole — learning curves overlay, seeds collapse into mean ± CI bands, and the rliable aggregate (IQM/mean/median/optimality-gap), performance profile, probability-of-improvement, and ranked summary table update live as the selection grows">
 </p>
 
-<p align="center"><i>Building a comparison live: pick runs on the left and the Data Lab overlays their curves, collapses seeds into a mean ± CI band, and recomputes the full <code>rliable</code> aggregate, performance profile, and ranked table on the fly — here <b>PPO</b> vs <b>Neuroevolution</b> on CartPole. Wide bands on few seeds are shown honestly; that width <b>is</b> the message.</i></p>
+<p align="center"><i>Building a comparison live: pick runs on the left and the Data Lab overlays their curves, collapses seeds into a mean ± CI band, and recomputes the full rliable-style aggregate, performance profile, and ranked table on the fly — here <b>PPO</b> vs <b>Neuroevolution</b> on CartPole. Wide bands on few seeds are shown honestly; that width <b>is</b> the message.</i></p>
 
 > See [`docs/reproducibility.md`](docs/reproducibility.md) for how runs are recorded and reproduced.
 
@@ -184,9 +187,11 @@ a ★ recommended value, the sane range, and a note specific to the game you're 
 
 ## Board games &amp; self-play
 
-Board games route through OpenSpiel and train with MaskablePPO or AlphaZero against a Monte-Carlo-Tree-Search
-teacher whose strength you can dial. Watch two AIs play it out, or take a side yourself and test your skill
-against the trained agent.
+Board games route through OpenSpiel and train two different ways. **MaskablePPO** learns by playing a
+Monte-Carlo-Tree-Search teacher whose strength you can dial. **AlphaZero** takes no teacher and no human data at
+all — a policy+value CNN guides the search, and the search's own visit counts train the net back. Both are scored
+against the *same* reference MCTS, so the two curves compare head-to-head on one yardstick. Watch two AIs play it
+out, or take a side yourself and test your skill against the trained agent.
 
 <p align="center">
   <img src="docs/media/board.png" width="100%" alt="Connect Four mid-game between two AIs, with AlphaZero marked as the recommended algorithm">
@@ -198,7 +203,7 @@ against the trained agent.
 
 | Layer | Technology |
 |---|---|
-| **Backend** | Python 3.11 · FastAPI (REST + WebSocket) · PyTorch · Stable-Baselines3 + `sb3-contrib` (MaskablePPO) · custom numpy neuroevolution · Gymnasium · OpenSpiel · PettingZoo · SuperSuit |
+| **Backend** | Python 3.11 · FastAPI (REST + WebSocket) · PyTorch · Stable-Baselines3 + `sb3-contrib` (MaskablePPO) · custom numpy neuroevolution + AlphaZero · Gymnasium · MiniGrid · MuJoCo · ViZDoom · OpenSpiel · PettingZoo · SuperSuit · numpy / scipy |
 | **Frontend** | React 19 · TypeScript · Vite · Tailwind · zustand · react-i18next · hand-rolled SVG charts |
 | **Tooling** | ruff · mypy · pytest (backend) · eslint · vitest (frontend) · an i18n parity checker |
 
@@ -209,7 +214,7 @@ against the trained agent.
 ### Prerequisites
 
 - **Python 3.11** — `winget install -e --id Python.Python.3.11` (the system 3.14 is too new for the ML stack)
-- **Node 20+** — `winget install OpenJS.NodeJS.LTS`
+- **Node 20.19+ or 22.12+** — `winget install OpenJS.NodeJS.LTS` (Vite 8's engine requirement)
 
 ### One-time setup
 
@@ -220,8 +225,9 @@ python -m pip install --upgrade pip
 pip install -r backend/requirements.txt
 pip install -r backend/requirements-atari.txt      # optional: enables the 64 Atari envs (GPL ale-py)
 pip install ruff mypy pytest                       # dev tools
-# GPU: swap the torch wheels to the CUDA 12.8 (Blackwell) index
-pip install --index-url https://download.pytorch.org/whl/cu128 torch
+# GPU: swap the torch wheels to the CUDA 12.8 (Blackwell) index — both, together,
+# or a CPU torchvision ends up mismatched against a CUDA torch
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128
 python backend/verify_env.py                       # expects CUDA True + a PPO smoke test
 cd frontend; npm install; cd ..
 ```
@@ -288,7 +294,9 @@ RL/
 │   └── src/{components, api, store, i18n, content}
 ├── docs/                 # public docs (architecture, guides, API) + media
 ├── data/                 # models + checkpoints + runs (gitignored)
-└── tasks.ps1             # dev shortcuts
+├── tools/                # dev utilities (headless screenshot capture)
+├── tasks.ps1             # dev shortcuts
+└── build-standalone.ps1  # single-executable build
 ```
 
 ---
@@ -310,9 +318,13 @@ human-play paths and every CPU-trainable environment identically (only GPU train
 
 Built on the shoulders of [Gymnasium](https://gymnasium.farama.org/),
 [Stable-Baselines3](https://stable-baselines3.readthedocs.io/), [PyTorch](https://pytorch.org/),
-[OpenSpiel](https://github.com/google-deepmind/open_spiel),
+[MiniGrid](https://minigrid.farama.org/), [MuJoCo](https://mujoco.org/),
+[ViZDoom](https://vizdoom.farama.org/), [OpenSpiel](https://github.com/google-deepmind/open_spiel),
 [PettingZoo](https://pettingzoo.farama.org/) + [SuperSuit](https://github.com/Farama-Foundation/SuperSuit),
-and the [`rliable`](https://github.com/google-research/rliable) methodology (Agarwal et al., NeurIPS 2021).
+and the [rliable](https://github.com/google-research/rliable) methodology (Agarwal et al., NeurIPS 2021).
+
+The Doom environments run on ViZDoom, which bundles the ZDoom engine and ships the
+[Freedoom](https://freedoom.github.io/) game data (BSD-licensed) — **RL Lab ships no Doom WADs of its own**.
 
 ## License
 
@@ -334,7 +346,6 @@ package, which is deliberately **not** a dependency of this project — it is no
 pip install -r backend/requirements-atari.txt   # (or: pip install ale-py)
 ```
 
-Everything else — ~45 environments across Classic Control, Box2D, Toy Text, MiniGrid, MuJoCo,
-board games, and multi-agent — runs with no extra install. **RL&nbsp;Lab ships no game ROMs**; `ale-py`
-supplies its own under its own terms. This project is not affiliated with or endorsed by Atari or the
-Farama Foundation.
+Everything else — 45 environments across Classic Control, Box2D, Toy Text, MiniGrid, MuJoCo, board games,
+multi-agent, and Doom — runs with no extra install. **RL&nbsp;Lab ships no Atari ROMs**; `ale-py` supplies its
+own under its own terms. This project is not affiliated with or endorsed by Atari or the Farama Foundation.
