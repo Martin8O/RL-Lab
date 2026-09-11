@@ -1,0 +1,24 @@
+cff-version: 1.2.0
+message: "If you use RL Lab in your teaching or research, please cite it as below."
+title: "RL Lab: an open-source workbench for training, watching and playing against reinforcement-learning agents"
+abstract: >-
+  RL Lab is a browser-based dashboard for reinforcement learning. It trains agents across 109
+  environments with 9 algorithms (PPO, SAC, TD3, DQN, A2C, QR-DQN, tabular Q-learning, a from-scratch
+  neuroevolution and an in-repo AlphaZero), streams the learning process live, lets a human take the
+  controls and be graded against their own agent, and aggregates runs across seeds with rliable-style
+  statistics (IQM, stratified-bootstrap confidence intervals, performance profiles) exportable to CSV,
+  Excel, LaTeX and TensorBoard.
+authors:
+  - family-names: Svoboda
+    given-names: Martin
+type: software
+license: AGPL-3.0-or-later
+repository-code: "https://github.com/Martin8O/RL-Lab"
+url: "https://martin8o.github.io/rl-lab-showcase/"
+keywords:
+  - reinforcement learning
+  - deep reinforcement learning
+  - education
+  - teaching
+  - machine learning
+  - open source
