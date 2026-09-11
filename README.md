@@ -5,13 +5,13 @@
 <h1 align="center">RL Lab</h1>
 
 <p align="center">
-  <b>Build, train, watch, and play against reinforcement-learning agents across 100+ environments — from one browser dashboard.</b>
+  <b>Build, train and watch reinforcement-learning agents across 100+ environments — then take the controls yourself — from one browser dashboard.</b>
 </p>
 
 <p align="center">
   Pick a game, tune the knobs with beginner-friendly info popups, train with one of 9 algorithms,
-  watch the agent learn in real time, compare runs like a research paper, then <i>play against your own AI</i>
-  with a skill meter. Bilingual&nbsp;(CZ/EN), dark&nbsp;/&nbsp;light.
+  watch the agent learn in real time, compare runs like a research paper, then <i>play the game yourself</i>
+  and see how your score ranks against your own agent. Bilingual&nbsp;(CZ/EN), dark&nbsp;/&nbsp;light.
 </p>
 
 <p align="center">
@@ -94,7 +94,7 @@ navigating the grid, the skill meter rising from *Child* to *Superhuman*, and th
 | 🧠 **9 algorithms** | PPO · neuroevolution · tabular Q-learning · AlphaZero · SAC · TD3 · DQN · A2C · QR-DQN, gated per-environment with a ★ recommended pick for each game. |
 | 📈 **Live training** | Realtime reward / loss / fitness charts with EMA smoothing, a "solved @" marker, and a multi-run compare overlay. |
 | 👀 **Watch it learn** | The running policy renders live — client-side SVG for vector envs, server-streamed frames for pixels / MuJoCo — with visual on/off and time-acceleration. |
-| 🕹️ **Play vs your AI** | Take control over WebSocket and go head-to-head with the trained agent; a skill meter grades you Child → Below avg → Average → Above avg → Superhuman, with named leaderboards. |
+| 🕹️ **Play it yourself** | Take control over WebSocket in **102 of the environments** and see your score graded on the same scale as your agent's — Child → Below avg → Average → Above avg → Superhuman, with named leaderboards. The **six board games** are played head-to-head against the trained agent, move for move; the seven cooperative multi-agent environments are watch-only. |
 | 🔬 **Data Lab** | A full experiment-analysis surface: seed sweeps, rliable-style aggregation (IQM, bootstrap CIs, performance profiles) reimplemented in-repo, a ranked summary table, and one-click export to CSV / Excel / LaTeX / TensorBoard / repro-card. |
 | 💾 **Save / resume / export** | A filterable checkpoint manager — resume training from any snapshot (extending or retuning its config), or export one as a self-contained zip: the model plus the exact config that produced it. |
 | 📚 **Learn as you go** | Every tunable ships a bilingual info popup (what it is, ★ recommended value, range, and a note for *this* game). |
